@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Planstratiq – od nacrta do 3D modela i šetnje kroz kuću.">
+  <title>Planstratiq</title>
+
+  <!-- Three.js (za produkciju: preuzmi lokalno u web/vendor/ i promijeni putanje) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <!-- Privremeni "stub": bilježi pozive dok se 3D modul ne učita -->
+  <script>
+    window.Planstratiq3D = {
+      _q: [],
+      mount(el) { this._q.push(['mount', [el]]); },
+      setPlan(j) { this._q.push(['setPlan', [j]]); },
+      setMode(m) { this._q.push(['setMode', [m]]); },
+      frame() { this._q.push(['frame', []]); },
+    };
+  </script>
+  <script type="module" src="planstratiq3d.js"></script>
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #fafaf7; }
+  </style>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

@@ -30,6 +30,7 @@ jobs:
           cp web/index.html /tmp/index.html
           flutter create . --platforms web --project-name planstratiq
           cp /tmp/index.html web/index.html
+          rm -rf test
 
       - run: flutter pub get
 

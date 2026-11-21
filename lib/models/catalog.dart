@@ -21,6 +21,10 @@ class CatalogItem {
     this.retailer,
     this.productUrl,
     this.modelUrl,
+    this.style,
+    this.legs,
+    this.modelId,
+    this.variant,
   });
 
   final String id;
@@ -39,6 +43,18 @@ class CatalogItem {
   final String? productUrl;
   final String? modelUrl;
 
+  /// Stil (utječe na noge/detalje u 3D-u), npr. 'skandi', 'industrijski'.
+  final String? style;
+
+  /// Izvedba nogu: 'wood', 'metal', 'chrome', 'plinth'.
+  final String? legs;
+
+  /// Model kojem varijanta pripada (za grupiranje u katalogu).
+  final String? modelId;
+
+  /// Opis varijante, npr. "210 cm, siva, metalne noge".
+  final String? variant;
+
   String get dims => '${(w * 100).round()} × ${(d * 100).round()} × ${(h * 100).round()} cm';
 
   Map<String, dynamic> toSceneJson() => {
@@ -51,8 +67,13 @@ class CatalogItem {
         'd': d,
         'h': h,
         'color': color,
+        if (style != null) 'style': style,
+        if (legs != null) 'legs': legs,
         if (modelUrl != null) 'modelUrl': modelUrl,
       };
+
+  /// Ključ za sličicu: varijante istog izgleda dijele sličicu.
+  String get thumbKey => '$shape|$style|$legs|${(w * 100).round()}|${(d * 100).round()}|${(h * 100).round()}|$color|$modelUrl';
 }
 
 const catLiving = 'Dnevni boravak';
@@ -67,7 +88,8 @@ const catYard = 'Dvorište';
 const _i = CatalogZone.interior;
 const _e = CatalogZone.exterior;
 
-const List<CatalogItem> catalog = [
+/// Izvorni (stari) katalog – čuva se zbog predložaka i ranije spremljenih projekata.
+const List<CatalogItem> legacyCatalog = [
   // Dnevni boravak
   CatalogItem(id: 'sofa_3', name: 'Trosjed', category: catLiving, zone: _i, shape: 'sofa', w: 2.20, d: 0.95, h: 0.85, color: 0xFF7C8B99, price: 650),
   CatalogItem(id: 'sofa_corner', name: 'Kutna garnitura', category: catLiving, zone: _i, shape: 'sofa_corner', w: 2.80, d: 1.90, h: 0.85, color: 0xFF8E8A84, price: 1100),
@@ -146,12 +168,6 @@ const List<CatalogItem> catalog = [
   CatalogItem(id: 'car', name: 'Automobil', category: catYard, zone: _e, shape: 'car', w: 1.8, d: 4.5, h: 1.5, color: 0xFF8899AA),
 ];
 
-CatalogItem? catalogById(String id) {
-  for (final c in catalog) {
-    if (c.id == id) return c;
-  }
-  return null;
-}
 
 /// Oblici koji leže na podu (ne zauzimaju prostor, imaju niži prioritet odabira).
 const floorShapes = {'rug', 'rug_round', 'deck', 'pool', 'path'};

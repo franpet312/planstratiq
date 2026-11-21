@@ -204,12 +204,13 @@ const darker = (c, f = 0.35) => new THREE.Color(rgb(c)).lerp(new THREE.Color(0x0
 function buildItem(it, g, loader) {
   const W = it.w, D = it.d, H = it.h;
   const color = it.color;
+  let tgt = g;
   const b = (w, h, d, x, y, z, c = color, opts) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(Math.max(w, 0.002), Math.max(h, 0.002), Math.max(d, 0.002)), mat(c, opts));
     m.position.set(x, y, z);
     m.castShadow = h > 0.03;
     m.receiveShadow = true;
-    g.add(m);
+    tgt.add(m);
     return m;
   };
   const cyl = (rt, rbot, h, x, y, z, c, seg = 24, opts) => {
@@ -217,7 +218,7 @@ function buildItem(it, g, loader) {
     m.position.set(x, y, z);
     m.castShadow = true;
     m.receiveShadow = true;
-    g.add(m);
+    tgt.add(m);
     return m;
   };
   const sphere = (r, x, y, z, c, sy = 1, opts = { roughness: 1 }) => {
@@ -225,13 +226,37 @@ function buildItem(it, g, loader) {
     m.position.set(x, y, z);
     m.scale.y = sy;
     m.castShadow = true;
-    g.add(m);
+    tgt.add(m);
     return m;
   };
-  const legs = (w, d, h, inset = 0.05, t = 0.045, c = color) => {
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b(t, h, t, sx * (w / 2 - inset), h / 2, sz * (d / 2 - inset), c);
-  };
   const metal = { metalness: 0.6, roughness: 0.35 };
+
+  // noge prema izvedbi i stilu
+  const legType = it.legs || 'wood';
+  const legColor = legType === 'metal' ? 0x2a2a2a
+    : legType === 'chrome' ? 0xcfd2d4
+    : ({ klasicni: 0x5a3e2b, rustikalni: 0x7a5236, retro: 0x8a5a3a, industrijski: 0x6b4a33 })[it.style] || 0xc9a77c;
+  const legOpts = legType === 'metal' || legType === 'chrome' ? { metalness: 0.7, roughness: 0.3 } : { roughness: 0.6 };
+  const legs = (w, d, h, inset = 0.05, t = 0.045, c = null) => {
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const x = sx * (w / 2 - inset), z = sz * (d / 2 - inset);
+      if (c !== null) { b(t, h, t, x, h / 2, z, c); continue; }
+      if (legType === 'metal' || legType === 'chrome') b(Math.min(t, 0.03), h, Math.min(t, 0.03), x, h / 2, z, legColor, legOpts);
+      else cyl(t * 0.6, t * 0.38, h, x, h / 2, z, legColor, 10, legOpts);
+    }
+  };
+  // podigni tijelo objekta na noge (ili na uvučeno postolje)
+  const lift = (h, w, d) => {
+    if (legType === 'plinth') {
+      const ph = h > 0.25 ? h : Math.min(h, 0.06);
+      b(w - 0.08, ph, d - 0.08, 0, ph / 2, 0, h > 0.25 ? color : 0x2a2a2a);
+      const sub = new THREE.Group(); sub.position.y = ph; g.add(sub); tgt = sub;
+      return ph;
+    }
+    legs(w, d, h, 0.07, 0.045);
+    const sub = new THREE.Group(); sub.position.y = h; g.add(sub); tgt = sub;
+    return h;
+  };
 
   if (it.modelUrl && loader) {
     loadModel(loader, it.modelUrl, g, W, D, H, color);
@@ -241,6 +266,7 @@ function buildItem(it, g, loader) {
   switch (it.shape) {
     case 'bed':
     case 'bunk': {
+      if (it.shape === 'bed' && it.legs) lift(0.12, W - 0.1, D - 0.1);
       const levels = it.shape === 'bunk' ? [0, 1.1] : [0];
       for (const y0 of levels) {
         b(W, 0.3, D, 0, y0 + 0.15, 0);
@@ -255,7 +281,9 @@ function buildItem(it, g, loader) {
       break;
     }
     case 'sofa': {
-      const sh = 0.26;
+      const lh = lift(it.legs ? 0.1 : 0.0001, W - 0.1, D - 0.15);
+      const Hs = H - lh;
+      const sh = 0.2;
       b(W, sh, D, 0, sh / 2, 0, darker(color, 0.12));
       const arm = Math.min(0.18, W * 0.2);
       const seatW = W - arm * 2;
@@ -264,19 +292,20 @@ function buildItem(it, g, loader) {
         const cw = seatW / n;
         b(cw - 0.015, 0.17, D - 0.26, -seatW / 2 + cw * (i + 0.5), sh + 0.085, 0.11, lighter(color, 0.08), { roughness: 1 });
       }
-      b(W, H - sh, 0.22, 0, sh + (H - sh) / 2, -D / 2 + 0.11);
-      for (const sx of [-1, 1]) b(arm, 0.62, D, sx * (W / 2 - arm / 2), 0.31, 0);
+      b(W, Hs - sh, 0.22, 0, sh + (Hs - sh) / 2, -D / 2 + 0.11);
+      for (const sx of [-1, 1]) b(arm, Math.min(0.62, Hs - 0.18), D, sx * (W / 2 - arm / 2), Math.min(0.62, Hs - 0.18) / 2, 0);
       break;
     }
     case 'sofa_corner': {
-      const sd = Math.min(0.95, D), cw = Math.min(0.95, W), sh = 0.26;
+      const lh = lift(it.legs ? 0.1 : 0.0001, W - 0.1, D - 0.1);
+      const sd = Math.min(0.95, D), cw = Math.min(0.95, W), sh = 0.22;
       b(W, sh, sd, 0, sh / 2, -D / 2 + sd / 2, darker(color, 0.12));
       b(cw, sh, D - sd, W / 2 - cw / 2, sh / 2, -D / 2 + sd + (D - sd) / 2, darker(color, 0.12));
       b(W - 0.4, 0.17, sd - 0.24, -0.1, sh + 0.085, -D / 2 + 0.22 + (sd - 0.24) / 2, lighter(color, 0.08), { roughness: 1 });
       b(cw - 0.24, 0.17, D - sd, W / 2 - 0.22 - (cw - 0.24) / 2, sh + 0.085, -D / 2 + sd + (D - sd) / 2, lighter(color, 0.08), { roughness: 1 });
-      b(W, H - sh, 0.22, 0, sh + (H - sh) / 2, -D / 2 + 0.11);
-      b(0.22, H - sh, D, W / 2 - 0.11, sh + (H - sh) / 2, 0);
-      b(0.18, 0.62, sd, -W / 2 + 0.09, 0.31, -D / 2 + sd / 2);
+      b(W, H - lh - sh, 0.22, 0, sh + (H - lh - sh) / 2, -D / 2 + 0.11);
+      b(0.22, H - lh - sh, D, W / 2 - 0.11, sh + (H - lh - sh) / 2, 0);
+      b(0.18, 0.5, sd, -W / 2 + 0.09, 0.25, -D / 2 + sd / 2);
       break;
     }
     case 'table':
@@ -284,6 +313,9 @@ function buildItem(it, g, loader) {
       if (it.shape === 'island') {
         b(W, H - 0.04, D - 0.3, 0, (H - 0.04) / 2, -0.15);
         b(W, 0.04, D, 0, H - 0.02, 0, 0x3f4244, { roughness: 0.35 });
+      } else if (legType === 'plinth') {
+        b(W, 0.04, D, 0, H - 0.02, 0);
+        b(Math.max(0.12, W * 0.18), H - 0.04, Math.max(0.12, D * 0.5), 0, (H - 0.04) / 2, 0, legColor === 0xc9a77c ? darker(color, 0.15) : legColor);
       } else {
         b(W, 0.04, D, 0, H - 0.02, 0);
         legs(W, D, H - 0.04, 0.06, 0.05);
@@ -299,7 +331,8 @@ function buildItem(it, g, loader) {
     case 'chair': {
       const seat = Math.min(0.46, H * 0.5);
       b(W, 0.05, D, 0, seat, 0);
-      legs(W, D, seat - 0.025, 0.03, 0.035);
+      if (legType === 'plinth') b(0.05, seat - 0.025, 0.05, 0, (seat - 0.025) / 2, 0, 0x555555, metal);
+      else legs(W, D, seat - 0.025, 0.03, 0.035);
       b(W, H - seat, 0.04, 0, seat + (H - seat) / 2, -D / 2 + 0.02);
       break;
     }
@@ -320,12 +353,64 @@ function buildItem(it, g, loader) {
       break;
     }
     case 'dresser':
+    case 'tv_stand':
     case 'box': {
-      b(W, H, D, 0, H / 2, 0);
+      const lh = it.legs && H > 0.3 ? lift(Math.min(0.14, H * 0.2), W, D) : 0;
+      const Hb = H - lh;
+      b(W, Hb, D, 0, Hb / 2, 0);
       if (it.shape === 'dresser') {
-        const rows = Math.max(1, Math.round(H / 0.22));
-        for (let i = 1; i < rows; i++) b(W - 0.02, 0.006, 0.006, 0, (i * H) / rows, D / 2 + 0.003, darker(color, 0.35));
-        for (let i = 0; i < rows; i++) b(Math.min(0.2, W * 0.3), 0.015, 0.02, 0, ((i + 0.5) * H) / rows, D / 2 + 0.01, 0x9a9a9a, metal);
+        const rows = Math.max(1, Math.round(Hb / 0.22));
+        for (let i = 1; i < rows; i++) b(W - 0.02, 0.006, 0.006, 0, (i * Hb) / rows, D / 2 + 0.003, darker(color, 0.35));
+        for (let i = 0; i < rows; i++) b(Math.min(0.2, W * 0.3), 0.015, 0.02, 0, ((i + 0.5) * Hb) / rows, D / 2 + 0.01, 0x9a9a9a, metal);
+      } else if (it.shape === 'tv_stand') {
+        const n = Math.max(2, Math.round(W / 0.5));
+        for (let i = 1; i < n; i++) b(0.006, Hb - 0.04, 0.006, -W / 2 + (i * W) / n, Hb / 2, D / 2 + 0.003, darker(color, 0.35));
+        b(W * 0.3, Hb * 0.5, 0.01, 0, Hb / 2, D / 2 + 0.004, 0x222222, { roughness: 0.4 });
+      }
+      break;
+    }
+    case 'pouf': {
+      if (Math.abs(W - D) < 0.05) cyl(W / 2, W / 2, H, 0, H / 2, 0, color, 28, { roughness: 1 });
+      else b(W, H, D, 0, H / 2, 0, color, { roughness: 1 });
+      break;
+    }
+    case 'bench': {
+      const lh = lift(H - 0.08, W - 0.04, D - 0.04);
+      b(W, 0.06, D, 0, 0.03, 0);
+      if (it.style) b(W - 0.04, 0.05, D - 0.04, 0, 0.085, 0, lighter(color, 0.08), { roughness: 1 });
+      break;
+    }
+    case 'vitrine': {
+      b(W, H, 0.02, 0, H / 2, -D / 2 + 0.01);
+      for (const sx of [-1, 1]) b(0.03, H, D, sx * (W / 2 - 0.015), H / 2, 0);
+      b(W, 0.04, D, 0, 0.02, 0);
+      b(W, 0.04, D, 0, H - 0.02, 0);
+      const n = Math.max(2, Math.round(H / 0.4));
+      for (let i = 1; i < n; i++) b(W - 0.06, 0.012, D - 0.04, 0, (i * H) / n, 0, 0, { glass: true });
+      b(W - 0.06, H - 0.08, 0.01, 0, H / 2, D / 2 - 0.005, 0, { glass: true });
+      b(0.008, H - 0.08, 0.012, 0, H / 2, D / 2, darker(color, 0.3));
+      break;
+    }
+    case 'crib': {
+      b(W, 0.04, D, 0, 0.35, 0);
+      b(W - 0.04, 0.1, D - 0.04, 0, 0.42, 0, 0xf4f1ea, { roughness: 1 });
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) b(0.04, H, 0.04, sx * (W / 2 - 0.02), H / 2, sz * (D / 2 - 0.02));
+      for (const sx of [-1, 1]) b(0.03, 0.03, D, sx * (W / 2 - 0.02), H - 0.015, 0);
+      for (const sz of [-1, 1]) b(W, 0.03, 0.03, 0, H - 0.015, sz * (D / 2 - 0.02));
+      const bars = Math.round(D / 0.08);
+      for (let i = 1; i < bars; i++) for (const sx of [-1, 1]) b(0.015, H - 0.4, 0.015, sx * (W / 2 - 0.02), 0.4 + (H - 0.4) / 2, -D / 2 + (i * D) / bars);
+      break;
+    }
+    case 'dishwasher':
+    case 'tall': {
+      b(W, H, D, 0, H / 2, 0, color, { roughness: it.shape === 'dishwasher' ? 0.3 : 0.6 });
+      if (it.shape === 'dishwasher') {
+        b(W - 0.02, 0.1, 0.01, 0, H - 0.07, D / 2 + 0.005, darker(color, 0.25));
+        b(W * 0.5, 0.02, 0.025, 0, H - 0.16, D / 2 + 0.012, 0x888888, metal);
+      } else {
+        b(W - 0.01, 0.006, 0.006, 0, H * 0.45, D / 2 + 0.003, darker(color, 0.35));
+        b(0.015, 0.25, 0.025, W / 2 - 0.06, H * 0.6, D / 2 + 0.012, 0x8a8a8a, metal);
+        b(0.015, 0.2, 0.025, W / 2 - 0.06, H * 0.3, D / 2 + 0.012, 0x8a8a8a, metal);
       }
       break;
     }
@@ -703,6 +788,13 @@ class Engine {
     this.fpv.addEventListener('lock', () => this._updateHint());
     this.fpv.addEventListener('unlock', () => { this.keys.clear(); this._updateHint(); });
 
+    this.avatar = this._makeAvatar();
+    this.avatar.root.visible = false;
+    scene.add(this.avatar.root);
+    this.tp = { x: 0, z: 0, heading: 0, yaw: 0, pitch: 0.42, dist: 4.4, speed: 0, phase: 0 };
+    this.kbd = false;
+    this.wallMeshes = [];
+
     this.mode = 'orbit';
     this.keys = new Set();
     this.colliders = [];
@@ -724,12 +816,19 @@ class Engine {
     this.onEvent = null;
     this.setTime(this.time);
 
+    const moveKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
     window.addEventListener('keydown', (e) => {
-      if (this.mode === 'walk' && this.fpv.isLocked) {
+      const fp = this.mode === 'walk' && this.fpv.isLocked;
+      const tp = this.mode === 'third' && this.kbd && moveKeys.has(e.code) && !e.ctrlKey && !e.metaKey;
+      if (fp || tp) {
         this.keys.add(e.code);
         e.preventDefault();
         e.stopPropagation();
       }
+    }, true);
+    window.addEventListener('blur', () => this.keys.clear());
+    document.addEventListener('pointerdown', (e) => {
+      if (e.target !== this.renderer.domElement) { this.kbd = false; this.keys.clear(); }
     }, true);
     window.addEventListener('keyup', (e) => this.keys.delete(e.code), true);
     this._bindPointer();
@@ -809,11 +908,24 @@ class Engine {
 
   setMode(mode) {
     if (mode === this.mode) return;
-    if (mode === 'walk') {
-      this.savedOrbit = { pos: this.camera.position.clone(), target: this.orbit.target.clone() };
+    if (this.mode === 'orbit') this.savedOrbit = { pos: this.camera.position.clone(), target: this.orbit.target.clone() };
+    if (this.fpv.isLocked) this.fpv.unlock();
+    this.keys.clear();
+    if (mode === 'walk' || mode === 'third') {
       this.orbit.enabled = false;
-      this.mode = 'walk';
-      this._spawn();
+      const from = this.mode;
+      this.mode = mode;
+      if (mode === 'third' && from === 'walk') {
+        const d = new THREE.Vector3();
+        this.camera.getWorldDirection(d);
+        this._placeAvatar(this.camera.position.x, this.camera.position.z, Math.atan2(d.x, d.z));
+      } else if (mode === 'walk' && from === 'third') {
+        this.camera.position.set(this.tp.x, EYE, this.tp.z);
+        this.camera.quaternion.setFromEuler(new THREE.Euler(-0.05, this.tp.heading + Math.PI, 0, 'YXZ'));
+        this._emitPose(true);
+      } else {
+        this._spawn();
+      }
     } else {
       if (this.fpv.isLocked) this.fpv.unlock();
       this.mode = 'orbit';
@@ -826,7 +938,8 @@ class Engine {
       this.camera.lookAt(this.orbit.target);
       this.emit('pose', null);
     }
-    this.camera.fov = mode === 'walk' ? 72 : 60;
+    this.avatar.root.visible = mode === 'third';
+    this.camera.fov = mode === 'walk' ? 72 : mode === 'third' ? 62 : 60;
     this.camera.updateProjectionMatrix();
     this._applyVisibility();
     this._updateHint();
@@ -834,8 +947,34 @@ class Engine {
   }
 
   walkTo(x, y) {
-    if (this.mode !== 'walk') this.setMode('walk');
-    this._placeViewer(x, y);
+    if (this.mode === 'orbit') this.setMode('walk');
+    if (this.mode === 'third') {
+      const v = this._bestView(x, y);
+      this._placeAvatar(v.x, v.z, Math.atan2(v.dx, v.dz));
+    } else {
+      this._placeViewer(x, y);
+    }
+    this._emitPose(true);
+  }
+
+  // najbolje mjesto i smjer pogleda oko točke (najduži slobodan pogled)
+  _bestView(x, z) {
+    let best = { d: -1, dx: 0, dz: -1 };
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const dx = Math.sin(a), dz = -Math.cos(a);
+      const d = this._rayDist(x, z, dx, dz);
+      if (d > best.d) best = { d, dx, dz };
+    }
+    const back = Math.min(1.6, Math.max(0, this._rayDist(x, z, -best.dx, -best.dz) - 0.5));
+    return { x: x - best.dx * back, z: z - best.dz * back, dx: best.dx, dz: best.dz };
+  }
+
+  _placeAvatar(x, z, heading) {
+    Object.assign(this.tp, { x, z, heading, yaw: heading + Math.PI, speed: 0 });
+    this.avatar.root.position.set(x, 0, z);
+    this.avatar.root.rotation.y = heading;
+    this._thirdCamera(1, true);
     this._emitPose(true);
   }
 
@@ -979,6 +1118,10 @@ class Engine {
       text = touch
         ? 'Jedan prst okreće pogled, dva prsta pomiču i zumiraju. Dodirni objekt za odabir.'
         : 'Povuci za okretanje, desni klik za pomak, kotačić za zoom. Klikni objekt za odabir, pa ga povuci.';
+    } else if (this.mode === 'third') {
+      text = touch
+        ? (this.touch.move || this.touch.look ? '' : 'Lijevi palac za hodanje, desni za okretanje kamere.')
+        : 'Klikni u prikaz, pa W A S D za hodanje (Shift trčanje). Povuci mišem za okretanje kamere, kotačić za udaljenost.';
     } else if (touch) {
       text = this.touch.move || this.touch.look ? '' : 'Lijevi palac za hodanje, desni za gledanje okolo.';
     } else if (!this.fpv.isLocked) {
@@ -1012,6 +1155,7 @@ class Engine {
     this.colliders = [];
     this.ceilings = [];
     this.roofs = [];
+    this.wallMeshes = [];
     this.itemGroups.clear();
     this.wallGroups.clear();
     this.selHelper = null;
@@ -1049,6 +1193,7 @@ class Engine {
 
   _applyVisibility() {
     for (const c of this.ceilings) c.visible = this.mode === 'walk';
+    for (const r of this.roofs) r.visible = this.mode !== 'third';
   }
 
   _buildWall(w, nodes, degree, openings) {
@@ -1080,6 +1225,7 @@ class Engine {
       m.castShadow = true;
       m.receiveShadow = true;
       g.add(m);
+      if (!Array.isArray(material) || material === faces) this.wallMeshes.push(m);
       return m;
     };
     const ops = openings.map((o) => ({ ...o, s: o.t * L - o.width / 2, e: o.t * L + o.width / 2 })).sort((a, b) => a.s - b.s);
@@ -1286,7 +1432,19 @@ class Engine {
 
   _bindPointer() {
     const el = this.renderer.domElement;
+    el.addEventListener('wheel', (e) => {
+      if (this.mode !== 'third') return;
+      e.preventDefault();
+      this.tp.dist = clamp(this.tp.dist * Math.exp(e.deltaY / 600), 1.4, 12);
+    }, { passive: false });
     el.addEventListener('pointerdown', (e) => {
+      this.kbd = true;
+      if (this.mode === 'third') {
+        if (e.pointerType === 'touch') { this._touchStart(e); return; }
+        this.tpDrag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+        try { el.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+        return;
+      }
       if (this.mode === 'walk') {
         if (e.pointerType === 'touch') { this._touchStart(e); return; }
         if (!this.fpv.isLocked) this.fpv.lock();
@@ -1306,6 +1464,16 @@ class Engine {
       }
     }, { capture: true });
     el.addEventListener('pointermove', (e) => {
+      if (this.mode === 'third') {
+        if (e.pointerType === 'touch') { this._touchMove(e); return; }
+        const d = this.tpDrag;
+        if (!d) return;
+        this.tp.yaw -= (e.clientX - d.x) * 0.006;
+        this.tp.pitch = clamp(this.tp.pitch + (e.clientY - d.y) * 0.005, 0.05, 1.35);
+        d.x = e.clientX;
+        d.y = e.clientY;
+        return;
+      }
       if (this.mode === 'walk') { if (e.pointerType === 'touch') this._touchMove(e); return; }
       const d = this.dragItem;
       if (!d) return;
@@ -1317,6 +1485,11 @@ class Engine {
       d.moved = true;
     });
     const up = (e) => {
+      if (this.mode === 'third') {
+        if (e.pointerType === 'touch') { this._touchEnd(e); return; }
+        this.tpDrag = null;
+        return;
+      }
       if (this.mode === 'walk') { if (e.pointerType === 'touch') this._touchEnd(e); return; }
       const d = this.dragItem;
       if (d) {
@@ -1371,6 +1544,11 @@ class Engine {
       const dx = x - t.look.x, dy = y - t.look.y;
       t.look.x = x;
       t.look.y = y;
+      if (this.mode === 'third') {
+        this.tp.yaw -= dx * 0.007;
+        this.tp.pitch = clamp(this.tp.pitch + dy * 0.006, 0.05, 1.35);
+        return;
+      }
       const eu = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(this.camera.quaternion);
       eu.y -= dx * 0.005;
       eu.x = clamp(eu.x - dy * 0.005, -1.3, 1.3);
@@ -1402,7 +1580,12 @@ class Engine {
       x = (b.min.x + b.max.x) / 2;
       z = (b.min.z + b.max.z) / 2;
     }
-    this._placeViewer(x, z);
+    if (this.mode === 'third') {
+      const v = this._bestView(x, z);
+      this._placeAvatar(v.x, v.z, Math.atan2(v.dx, v.dz));
+    } else {
+      this._placeViewer(x, z);
+    }
     this._emitPose(true);
   }
 
@@ -1451,16 +1634,132 @@ class Engine {
     const now = performance.now();
     if (!force && now - this.lastPose < 90) return;
     this.lastPose = now;
+    if (this.mode === 'third') {
+      const h = this.tp.heading;
+      this.emit('pose', { x: this.tp.x, y: this.tp.z, yaw: Math.atan2(Math.sin(h), -Math.cos(h)) });
+      return;
+    }
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
     this.emit('pose', { x: this.camera.position.x, y: this.camera.position.z, yaw: Math.atan2(dir.x, -dir.z) });
     this.indoor.position.set(this.camera.position.x, 2.2, this.camera.position.z);
   }
 
+  _makeAvatar() {
+    const root = new THREE.Group();
+    const skin = mat(0xe2b993, { roughness: 0.7 });
+    const shirt = mat(ACCENT, { roughness: 0.85 });
+    const pants = mat(0x2f3437, { roughness: 0.9 });
+    const shoe = mat(0x1d1d1d, { roughness: 0.6 });
+    const hair = mat(0x3b2a1e, { roughness: 1 });
+    const add = (parent, geo, m, x, y, z) => {
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      parent.add(mesh);
+      return mesh;
+    };
+    const legs = [], arms = [];
+    for (const sx of [-1, 1]) {
+      const hip = new THREE.Group();
+      hip.position.set(sx * 0.1, 0.9, 0);
+      root.add(hip);
+      add(hip, new THREE.CapsuleGeometry(0.068, 0.7, 4, 10), pants, 0, -0.43, 0);
+      add(hip, new THREE.BoxGeometry(0.11, 0.07, 0.24), shoe, 0, -0.865, 0.04);
+      legs.push(hip);
+      const sh = new THREE.Group();
+      sh.position.set(sx * 0.245, 1.43, 0);
+      root.add(sh);
+      add(sh, new THREE.CapsuleGeometry(0.05, 0.46, 4, 10), shirt, 0, -0.27, 0);
+      add(sh, new THREE.SphereGeometry(0.052, 12, 10), skin, 0, -0.56, 0);
+      arms.push(sh);
+    }
+    const torso = add(root, new THREE.CapsuleGeometry(0.19, 0.38, 6, 16), shirt, 0, 1.2, 0);
+    torso.scale.set(1.08, 1, 0.68);
+    add(root, new THREE.CylinderGeometry(0.05, 0.06, 0.08, 12), skin, 0, 1.5, 0);
+    const head = add(root, new THREE.SphereGeometry(0.115, 20, 16), skin, 0, 1.62, 0);
+    head.scale.set(0.92, 1.05, 1);
+    const cap = add(root, new THREE.SphereGeometry(0.122, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair, 0, 1.64, -0.012);
+    cap.scale.set(0.95, 1.05, 1.05);
+    add(root, new THREE.SphereGeometry(0.018, 8, 6), mat(0x1d1d1d), -0.04, 1.64, 0.105);
+    add(root, new THREE.SphereGeometry(0.018, 8, 6), mat(0x1d1d1d), 0.04, 1.64, 0.105);
+    return { root, legs, arms, torso };
+  }
+
+  _thirdUpdate(dt) {
+    const k = this.keys, tp = this.tp;
+    let f = 0, s = 0;
+    if (k.has('KeyW') || k.has('ArrowUp')) f += 1;
+    if (k.has('KeyS') || k.has('ArrowDown')) f -= 1;
+    if (k.has('KeyD') || k.has('ArrowRight')) s += 1;
+    if (k.has('KeyA') || k.has('ArrowLeft')) s -= 1;
+    f -= this.touch.vz;
+    s += this.touch.vx;
+    const fx = -Math.sin(tp.yaw), fz = -Math.cos(tp.yaw);
+    const rx = Math.cos(tp.yaw), rz = -Math.sin(tp.yaw);
+    let mx = fx * f + rx * s, mz = fz * f + rz * s;
+    const len = Math.hypot(mx, mz);
+    const run = k.has('ShiftLeft') || k.has('ShiftRight');
+    const target = len > 0.05 ? (run ? RUN : WALK * 1.1) * Math.min(1, len) : 0;
+    tp.speed += (target - tp.speed) * Math.min(1, dt * 10);
+    if (len > 0.05) {
+      mx /= len;
+      mz /= len;
+      const want = Math.atan2(mx, mz);
+      let diff = want - tp.heading;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      tp.heading += diff * Math.min(1, dt * 12);
+    }
+    if (tp.speed > 0.01) {
+      const hx = Math.sin(tp.heading), hz = Math.cos(tp.heading);
+      const dx = hx * tp.speed * dt, dz = hz * tp.speed * dt;
+      const stuck = this._blocked(tp.x, tp.z);
+      if (stuck || !this._blocked(tp.x + dx, tp.z)) tp.x += dx;
+      if (stuck || !this._blocked(tp.x, tp.z + dz)) tp.z += dz;
+      this._emitPose(false);
+    }
+    // animacija hoda
+    const a = this.avatar;
+    const amt = Math.min(1, tp.speed / WALK);
+    tp.phase += dt * (4 + tp.speed * 3.2) * (amt > 0.02 ? 1 : 0);
+    const sw = Math.sin(tp.phase) * 0.62 * amt;
+    a.legs[0].rotation.x = sw;
+    a.legs[1].rotation.x = -sw;
+    a.arms[0].rotation.x = -sw * 0.8;
+    a.arms[1].rotation.x = sw * 0.8;
+    a.root.position.set(tp.x, Math.abs(Math.cos(tp.phase)) * 0.035 * amt, tp.z);
+    a.root.rotation.y = tp.heading;
+    this._thirdCamera(dt, false);
+  }
+
+  _thirdCamera(dt, snap) {
+    const tp = this.tp;
+    const target = new THREE.Vector3(tp.x, 1.45, tp.z);
+    const off = new THREE.Vector3(Math.sin(tp.yaw) * Math.cos(tp.pitch), Math.sin(tp.pitch), Math.cos(tp.yaw) * Math.cos(tp.pitch));
+    let dist = tp.dist;
+    if (this.wallMeshes.length) {
+      this.raycaster.set(target, off);
+      this.raycaster.far = dist;
+      const hit = this.raycaster.intersectObjects(this.wallMeshes, false)[0];
+      this.raycaster.far = Infinity;
+      if (hit) dist = Math.max(0.5, hit.distance - 0.25);
+    }
+    const desired = target.clone().addScaledVector(off, dist);
+    if (snap) this.camera.position.copy(desired);
+    else this.camera.position.lerp(desired, 1 - Math.exp(-dt * 14));
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(target);
+  }
+
   _loop() {
     requestAnimationFrame(this._loop);
     const dt = Math.min(this.clock.getDelta(), 0.05);
-    if (this.mode === 'walk') {
+    if (this.mode === 'third') {
+      this._thirdUpdate(dt);
+      this.indoor.intensity = 0;
+      this.ambient.intensity = 0.25;
+    } else if (this.mode === 'walk') {
       const active = this.fpv.isLocked || this.touch.move || this.touch.look;
       if (this.fpv.isLocked || this.touch.move) this._walk(dt);
       if (active) this._emitPose(false);

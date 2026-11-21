@@ -11,7 +11,8 @@ import '../ui/common.dart';
 import '../ui/web_files.dart';
 import 'engine_bridge.dart';
 
-enum ViewMode3D { orbit, walk }
+/// Izvana (orbit), treće lice (lik) i prvo lice (šetnja).
+enum ViewMode3D { orbit, third, walk }
 
 class Viewer3D extends StatefulWidget {
   const Viewer3D({super.key, required this.c, this.compact = false});
@@ -95,7 +96,7 @@ class _Viewer3DState extends State<Viewer3D> {
 
   void _setMode(ViewMode3D m) {
     setState(() => _mode = m);
-    engine.setMode(m == ViewMode3D.walk ? 'walk' : 'orbit');
+    engine.setMode(m.name);
   }
 
   void _snapshot() {
@@ -123,7 +124,7 @@ class _Viewer3DState extends State<Viewer3D> {
               el.style.width = '100%';
               el.style.height = '100%';
               engine.mount(el);
-              engine.setMode(_mode == ViewMode3D.walk ? 'walk' : 'orbit');
+              engine.setMode(_mode.name);
               engine.setTime(_hour);
               _push();
             },
@@ -144,16 +145,24 @@ class _Viewer3DState extends State<Viewer3D> {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               IconBtn(
                 icon: Icons.threed_rotation,
-                tooltip: 'Pregled izvana: okretanje, zoom, odabir i pomicanje namještaja',
-                label: widget.compact ? null : 'Pregled',
+                tooltip: 'Pogled izvana: okretanje, zoom, odabir i pomicanje namještaja',
+                label: widget.compact ? null : 'Izvana',
                 active: _mode == ViewMode3D.orbit,
                 onTap: () => _setMode(ViewMode3D.orbit),
               ),
               const SizedBox(width: 2),
               IconBtn(
-                icon: Icons.directions_walk,
-                tooltip: 'Šetnja u prvom licu',
-                label: widget.compact ? null : 'Šetnja',
+                icon: Icons.person_outline,
+                tooltip: 'Treće lice: lik hoda kućom, kamera ga prati',
+                label: widget.compact ? null : 'Treće lice',
+                active: _mode == ViewMode3D.third,
+                onTap: () => _setMode(ViewMode3D.third),
+              ),
+              const SizedBox(width: 2),
+              IconBtn(
+                icon: Icons.visibility_outlined,
+                tooltip: 'Prvo lice: gledaš kroz oči osobe',
+                label: widget.compact ? null : 'Prvo lice',
                 active: _mode == ViewMode3D.walk,
                 onTap: () => _setMode(ViewMode3D.walk),
               ),
@@ -213,7 +222,7 @@ class _Viewer3DState extends State<Viewer3D> {
             ],
           ]),
         ),
-        if (_mode == ViewMode3D.walk && rooms.isNotEmpty)
+        if (_mode != ViewMode3D.orbit && rooms.isNotEmpty)
           Positioned(
             left: 12,
             right: 12,

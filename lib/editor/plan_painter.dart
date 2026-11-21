@@ -790,8 +790,35 @@ class ItemSymbols {
           ln(Offset(x - m(0.05), y - d * 0.3), Offset(x + m(0.05), y + d * 0.3), thin);
         }
       case 'dresser':
+      case 'tv_stand':
+      case 'tall':
+      case 'dishwasher':
         box(r, 1);
         ln(Offset(r.left, r.bottom - m(0.04)), Offset(r.right, r.bottom - m(0.04)), thin);
+        if (shape == 'dishwasher') ln(r.topLeft, r.bottomRight, thin);
+      case 'pouf':
+        if ((w - d).abs() < m(0.05)) {
+          oval();
+        } else {
+          box(r, m(0.06));
+        }
+      case 'bench':
+        box(r, m(0.02));
+        for (var i = 1; i < 3; i++) {
+          ln(Offset(r.left, r.top + d * i / 3), Offset(r.right, r.top + d * i / 3), thin);
+        }
+      case 'vitrine':
+        box(r, 1);
+        c.drawRect(r.deflate(m(0.03)), thin);
+        ln(Offset(0, r.bottom - m(0.03)), Offset(0, r.top + m(0.03)), thin);
+      case 'crib':
+        box(r, 1);
+        c.drawRect(r.deflate(m(0.04)), thin);
+        final bars = math.max(2, (d / m(0.1)).floor());
+        for (var i = 1; i < bars; i++) {
+          ln(Offset(r.left, r.top + d * i / bars), Offset(r.left + m(0.04), r.top + d * i / bars), thin);
+          ln(Offset(r.right - m(0.04), r.top + d * i / bars), Offset(r.right, r.top + d * i / bars), thin);
+        }
       case 'shelf':
       case 'box':
         box(r, 1);

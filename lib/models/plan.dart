@@ -184,6 +184,9 @@ class PlacedItem {
     this.price,
     this.modelUrl,
     this.retailer,
+    this.style,
+    this.legs,
+    this.productUrl,
   });
 
   final String id;
@@ -201,6 +204,9 @@ class PlacedItem {
   double? price;
   final String? modelUrl;
   final String? retailer;
+  final String? style;
+  final String? legs;
+  final String? productUrl;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -217,6 +223,9 @@ class PlacedItem {
         if (price != null) 'price': price,
         if (modelUrl != null) 'modelUrl': modelUrl,
         if (retailer != null) 'retailer': retailer,
+        if (style != null) 'style': style,
+        if (legs != null) 'legs': legs,
+        if (productUrl != null) 'productUrl': productUrl,
       };
 
   factory PlacedItem.fromJson(Map<String, dynamic> j) => PlacedItem(
@@ -233,6 +242,9 @@ class PlacedItem {
         price: j['price'] is num ? (j['price'] as num).toDouble() : null,
         modelUrl: j['modelUrl'] as String?,
         retailer: j['retailer'] as String?,
+        style: j['style'] as String?,
+        legs: j['legs'] as String?,
+        productUrl: j['productUrl'] as String?,
       );
 }
 

@@ -1,9 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 
 import '../app/theme.dart';
-import '../models/catalog.dart';
+import '../models/catalog_gen.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
@@ -214,6 +215,19 @@ class PropertiesPanel extends StatelessWidget {
       const SizedBox(height: 6),
       Text('Na tlocrtu povuci kružić iznad objekta za slobodnu rotaciju, strelicama ga pomakni za 1 cm.',
           style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+      if (cat?.variant != null || it.productUrl != null) ...[
+        const SizedBox(height: 10),
+        if (cat?.variant != null) Text('Varijanta: ${cat!.variant}', style: AppText.ui(size: 12, color: Pal.inkSoft)),
+        if (it.productUrl != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: OutlinedButton.icon(
+              onPressed: () => web.window.open(it.productUrl!, '_blank'),
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: Text(it.retailer == null ? 'Otvori proizvod' : 'Otvori u trgovini ${it.retailer}'),
+            ),
+          ),
+      ],
       const SectionTitle('Boja'),
       Swatches(colors: itemColors, value: it.color, onPick: (v) => c.updateItem(it.id, color: v)),
       const SizedBox(height: 14),

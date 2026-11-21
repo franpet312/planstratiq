@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show Offset, Rect;
 
 import '../state/plan_controller.dart';
-import 'catalog.dart';
+import 'catalog_gen.dart';
 import 'plan.dart';
 
 class PlanTemplate {

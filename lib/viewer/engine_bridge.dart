@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:typed_data';
@@ -148,42 +149,66 @@ class Engine3D {
   }
 }
 
-/// Sličice kataloga renderirane u 3D engineu (jednom po sesiji).
+/// Sličice kataloga renderirane u 3D engineu, na zahtjev (samo vidljive), s predmemorijom.
 class Thumbnails extends ChangeNotifier {
   Thumbnails._();
   static final instance = Thumbnails._();
 
-  final Map<String, Uint8List> _cache = {};
-  bool _started = false;
+  // ignore: prefer_collection_literals
+  final LinkedHashMap<String, Uint8List> _cache = LinkedHashMap();
+  final List<CatalogItem> _queue = [];
+  final Set<String> _queued = {};
+  bool _running = false;
+  static const _max = 900;
 
-  Uint8List? get(String id) => _cache[id];
-
-  void ensure() {
-    if (_started) return;
-    _started = true;
-    _tryStart(0);
-  }
-
-  void _tryStart(int attempt) {
-    if (!Engine3D.instance.ready) {
-      if (attempt < 100) Timer(const Duration(milliseconds: 300), () => _tryStart(attempt + 1));
-      return;
+  /// Vrati sličicu ako postoji; inače je zatraži (stigne kroz notifyListeners).
+  Uint8List? get(CatalogItem it) {
+    final k = it.thumbKey;
+    final v = _cache.remove(k);
+    if (v != null) {
+      _cache[k] = v; // LRU: na kraj
+      return v;
     }
-    _run();
+    if (_queued.add(k)) {
+      _queue.add(it);
+      if (!_running) Future.microtask(_pump);
+    }
+    return null;
   }
 
-  Future<void> _run() async {
-    var n = 0;
-    for (final it in catalog) {
-      try {
-        final png = Engine3D.instance.thumbnail(it);
-        if (png != null) _cache[it.id] = png;
-      } catch (_) {}
-      if (++n % 6 == 0) {
-        notifyListeners();
-        await Future<void>.delayed(const Duration(milliseconds: 16));
+  /// Zaboravi zahtjeve za sličicama koje više nisu vidljive.
+  void cancelPending() {
+    _queue.clear();
+    _queued.clear();
+  }
+
+  Future<void> _pump() async {
+    if (_running) return;
+    _running = true;
+    var waited = 0;
+    while (_queue.isNotEmpty) {
+      if (!Engine3D.instance.ready) {
+        if (waited++ > 200) break;
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        continue;
       }
+      final sw = Stopwatch()..start();
+      while (_queue.isNotEmpty && sw.elapsedMilliseconds < 24) {
+        final it = _queue.removeLast(); // najnoviji zahtjev prvi (ono što je sad na ekranu)
+        final k = it.thumbKey;
+        _queued.remove(k);
+        if (_cache.containsKey(k)) continue;
+        try {
+          final png = Engine3D.instance.thumbnail(it);
+          if (png != null) _cache[k] = png;
+        } catch (_) {}
+        while (_cache.length > _max) {
+          _cache.remove(_cache.keys.first);
+        }
+      }
+      notifyListeners();
+      await Future<void>.delayed(const Duration(milliseconds: 16));
     }
-    notifyListeners();
+    _running = false;
   }
 }

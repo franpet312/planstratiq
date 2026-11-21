@@ -524,6 +524,9 @@ class PlanController extends ChangeNotifier {
       price: c.price,
       modelUrl: c.modelUrl,
       retailer: c.retailer,
+      style: c.style,
+      legs: c.legs,
+      productUrl: c.productUrl,
     );
     plan.items.add(it);
     selection = Selection(SelKind.item, it.id);

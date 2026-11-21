@@ -817,20 +817,30 @@ class Engine {
     this.setTime(this.time);
 
     const moveKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
+    const keyCodes = { w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD', ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', Shift: 'ShiftLeft' };
+    const codeOf = (e) => e.code || keyCodes[e.key] || keyCodes[(e.key || '').toLowerCase()] || '';
     window.addEventListener('keydown', (e) => {
+      const code = codeOf(e);
       const fp = this.mode === 'walk' && this.fpv.isLocked;
-      const tp = this.mode === 'third' && this.kbd && moveKeys.has(e.code) && !e.ctrlKey && !e.metaKey;
+      const tp = this.mode === 'third' && this.kbd && moveKeys.has(code) && !e.ctrlKey && !e.metaKey;
       if (fp || tp) {
-        this.keys.add(e.code);
+        this.keys.add(code);
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
       }
     }, true);
     window.addEventListener('blur', () => this.keys.clear());
     document.addEventListener('pointerdown', (e) => {
       if (e.target !== this.renderer.domElement) { this.kbd = false; this.keys.clear(); }
     }, true);
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code), true);
+    window.addEventListener('keyup', (e) => {
+      const code = codeOf(e);
+      if (this.keys.has(code)) {
+        this.keys.delete(code);
+        if (this.mode === 'third' && this.kbd) { e.preventDefault(); e.stopPropagation(); }
+      }
+    }, true);
     this._bindPointer();
 
     this.hint = this._div({
@@ -1783,6 +1793,7 @@ const engine = new Engine();
 const prev = window.Planstratiq3D || {};
 const api = {
   ready: true,
+  wantsKeys: () => !!(engine && ((engine.mode === 'third' && engine.kbd) || (engine.mode === 'walk' && engine.fpv && engine.fpv.isLocked))),
   mount: (el) => engine.mount(el),
   setPlan: (json) => engine.setPlan(json),
   setMode: (mode) => engine.setMode(mode),

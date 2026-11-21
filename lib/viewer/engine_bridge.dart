@@ -18,6 +18,7 @@ external _Engine get _js;
 
 extension type _Engine._(JSObject _) implements JSObject {
   external bool? get ready;
+  external JSFunction? get wantsKeys;
   external void mount(web.HTMLElement el);
   external void setPlan(String json);
   external void setMode(String mode);
@@ -51,6 +52,14 @@ class Engine3D {
   final _listeners = <EngineListener>[];
 
   bool get ready => _js.ready == true;
+
+  /// True kad 3D prikaz (treće/prvo lice) preuzima tipkovnicu – editor tada ne smije reagirati.
+  bool get wantsKeys {
+    final f = _js.wantsKeys;
+    if (f == null) return false;
+    final r = f.callAsFunction();
+    return r is JSBoolean && r.toDart;
+  }
 
   void addListener(EngineListener l) => _listeners.add(l);
   void removeListener(EngineListener l) => _listeners.remove(l);

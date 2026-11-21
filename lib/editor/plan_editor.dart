@@ -10,6 +10,7 @@ import '../models/geometry.dart';
 import '../models/plan.dart';
 import '../state/plan_controller.dart';
 import 'plan_painter.dart';
+import '../viewer/engine_bridge.dart';
 
 enum _DragKind { pan, node, wall, room, item, rotate, resize, opening, image }
 
@@ -604,6 +605,7 @@ class PlanEditorState extends State<PlanEditor> {
   // ---------------------------------------------------------------- tipkovnica
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (Engine3D.instance.wantsKeys) return KeyEventResult.ignored;
     final k = e.logicalKey;
     final ctrl = HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed;
     final shift = HardwareKeyboard.instance.isShiftPressed;

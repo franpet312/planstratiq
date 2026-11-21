@@ -225,10 +225,11 @@ class PlanPainter extends CustomPainter {
         _text(canvas, r.name, at, AppText.ui(size: 9, weight: FontWeight.w600, color: Pal.inkSoft), halo: true);
         continue;
       }
-      final big = pxArea > 12000;
-      _text(canvas, r.name, at - Offset(0, big ? 10 : 6), AppText.ui(size: big ? 13 : 11, weight: FontWeight.w600, color: color),
+      final big = pxArea > 12000 && scale > 30;
+      final fs = (scale * 0.26).clamp(9.0, 13.0);
+      _text(canvas, r.name, at - Offset(0, fs * 0.75), AppText.ui(size: fs, weight: FontWeight.w600, color: color),
           halo: true, maxWidth: math.sqrt(pxArea) * 1.4);
-      _text(canvas, 'P = ${fmtM2(area)}', at + const Offset(0, 7), AppText.narrow(size: big ? 12 : 10.5, color: color), halo: true);
+      _text(canvas, 'P = ${fmtM2(area)}', at + Offset(0, fs * 0.55), AppText.narrow(size: fs - 1, color: color), halo: true);
       if (big) {
         _text(canvas, floorById(r.floor).name, at + const Offset(0, 22), AppText.narrow(size: 10, color: Pal.muted), halo: true);
       }
@@ -562,7 +563,7 @@ class PlanPainter extends CustomPainter {
     }
     if (st.typedLength != null && st.cursor != null) {
       final at = s(st.wallEnd ?? st.cursor!) + const Offset(30, -26);
-      final tp = _layout('${st.typedLength!} m  ↵', AppText.narrow(size: 13, weight: FontWeight.w700, color: Colors.white));
+      final tp = _layout('${st.typedLength!.replaceAll('.', ',')} m   Enter', AppText.narrow(size: 13, weight: FontWeight.w700, color: Colors.white));
       final r = Rect.fromCenter(center: at, width: tp.width + 16, height: tp.height + 8);
       canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(6)), Paint()..color = Pal.accent);
       _paintText(canvas, tp, at);

@@ -328,8 +328,8 @@ class _EditorPageState extends State<EditorPage> {
   Widget _editorArea() => Stack(children: [
         Positioned.fill(child: PlanEditor(key: editorKey, c: c, onEmptyAction: _emptyAction, zoom: zoom)),
         Positioned(left: 12, top: 12, child: _ToolDock(c: c, onCancel: () => editorKey.currentState?.cancelTool())),
-        Positioned(top: 12, left: 72, right: 12, child: Center(child: _ToolHint(c: c))),
         Positioned(left: 12, bottom: 12, child: _ZoomControls(editorKey: editorKey, zoom: zoom)),
+        Positioned(bottom: 64, left: 72, right: 12, child: Center(child: _ToolHint(c: c))),
         if (c.plan.isEmpty && c.plan.image == null && c.tool == Tool.select)
           Positioned.fill(child: Center(child: _EmptyState(onAction: _emptyAction))),
       ]);

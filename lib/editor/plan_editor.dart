@@ -570,11 +570,30 @@ class PlanEditorState extends State<PlanEditor> {
     final ctrl = HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed;
     final shift = HardwareKeyboard.instance.isShiftPressed;
 
+    if (ctrl && k == LogicalKeyboardKey.keyZ) {
+      shift ? c.redo() : c.undo();
+      return KeyEventResult.handled;
+    }
+    if (ctrl && k == LogicalKeyboardKey.keyY) {
+      c.redo();
+      return KeyEventResult.handled;
+    }
+
     // unos duljine zida tipkovnicom
-    if (c.tool == Tool.wall && wallStart != null) {
+    if (c.tool == Tool.wall && wallStart != null && !ctrl) {
       final ch = e.character;
-      if (ch != null && RegExp(r'^[0-9.,]$').hasMatch(ch)) {
-        setState(() => typed += ch == ',' ? '.' : ch);
+      final isDecimal = k == LogicalKeyboardKey.period ||
+          k == LogicalKeyboardKey.comma ||
+          k == LogicalKeyboardKey.numpadDecimal ||
+          k == LogicalKeyboardKey.numpadComma ||
+          ch == '.' ||
+          ch == ',';
+      if (isDecimal) {
+        if (!typed.contains('.')) setState(() => typed += typed.isEmpty ? '0.' : '.');
+        return KeyEventResult.handled;
+      }
+      if (ch != null && RegExp(r'^[0-9]$').hasMatch(ch)) {
+        setState(() => typed += ch);
         return KeyEventResult.handled;
       }
       if (k == LogicalKeyboardKey.backspace && typed.isNotEmpty) {

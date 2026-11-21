@@ -271,7 +271,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           child: LayoutBuilder(builder: (context, box) {
             final cols = (box.maxWidth / 270).floor().clamp(1, 4);
             final w = (box.maxWidth - (cols - 1) * 16) / cols;
-            return Wrap(spacing: 16, runSpacing: 16, children: [for (final c in children) SizedBox(width: w, child: c)]);
+            return SizedBox(
+              width: box.maxWidth,
+              child: Wrap(spacing: 16, runSpacing: 16, children: [for (final c in children) SizedBox(width: w, child: c)]),
+            );
           }),
         )),
       );

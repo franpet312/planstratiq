@@ -420,11 +420,11 @@ function buildItem(it, g, loader) {
     case 'rug':
     case 'path': {
       const h = Math.max(H, 0.01);
-      b(W, h, D, 0, h / 2 + 0.022, 0, color, it.shape === 'path' ? { tex: 'stone' } : { tex: 'carpet', roughness: 1 });
+      b(W, h, D, 0, h / 2 + 0.034, 0, color, it.shape === 'path' ? { tex: 'stone' } : { tex: 'carpet', roughness: 1 });
       break;
     }
     case 'rug_round': {
-      cyl(W / 2, W / 2, 0.012, 0, 0.028, 0, color, 48, { tex: 'carpet', roughness: 1 });
+      cyl(W / 2, W / 2, 0.012, 0, 0.04, 0, color, 48, { tex: 'carpet', roughness: 1 });
       break;
     }
     case 'fireplace': {
@@ -657,7 +657,7 @@ class Engine {
     scene.fog = new THREE.Fog(0xcfdbe3, 90, 320);
 
     this.sky = new Sky();
-    this.sky.scale.setScalar(4000);
+    this.sky.scale.setScalar(900);
     const u = this.sky.material.uniforms;
     u.turbidity.value = 3.5;
     u.rayleigh.value = 1.1;
@@ -665,8 +665,8 @@ class Engine {
     u.mieDirectionalG.value = 0.8;
     scene.add(this.sky);
 
-    this.camera = new THREE.PerspectiveCamera(60, 1, 0.05, 6000);
-    this.camera.position.set(14, 16, 20);
+    this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1200);
+    this.camera.position.set(14, 7, 20);
 
     this.hemi = new THREE.HemisphereLight(0xdfeeff, 0x6b6250, 0.55);
     scene.add(this.hemi);
@@ -1112,6 +1112,13 @@ class Engine {
   }
 
   _buildFloors(p, nodes, maxH) {
+    if (!this.slabMat) {
+      this.slabMat = mat(0xbab5ad, { tex: 'concrete', double: true }).clone();
+      this.slabMat.polygonOffset = true;
+      this.slabMat.polygonOffsetFactor = 2;
+      this.slabMat.polygonOffsetUnits = 2;
+    }
+    const slabMat = this.slabMat;
     const mk = (pts, material, y, opts = {}) => {
       const geo = new THREE.ShapeGeometry(this._shapeFrom(pts)).rotateX(-Math.PI / 2);
       const m = new THREE.Mesh(geo, material);
@@ -1123,12 +1130,12 @@ class Engine {
       return m;
     };
     for (const o of p.outlines || []) {
-      if (o.length >= 3) mk(o.map(([x, y]) => ({ x, y })), mat(0xbab5ad, { tex: 'concrete', double: true }), 0.012);
+      if (o.length >= 3) mk(o.map(([x, y]) => ({ x, y })), slabMat, 0.004);
     }
     for (const r of p.rooms || []) {
       const pts = (r.nodeIds || []).map((id) => nodes[id]).filter(Boolean);
       if (pts.length < 3) continue;
-      mk(pts, mat(r.floorColor, { tex: r.floorTexture, roughness: r.floorTexture === 'wood' ? 0.6 : 0.75, double: true }), 0.022,
+      mk(pts, mat(r.floorColor, { tex: r.floorTexture, roughness: r.floorTexture === 'wood' ? 0.6 : 0.75, double: true }), 0.03,
         { userData: { kind: 'room', id: r.id } });
       mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true });
     }

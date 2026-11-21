@@ -11,7 +11,7 @@ import '../models/plan.dart';
 import '../state/plan_controller.dart';
 import 'plan_painter.dart';
 
-enum _DragKind { pan, node, wall, room, item, rotate, opening, image }
+enum _DragKind { pan, node, wall, room, item, rotate, resize, opening, image }
 
 class _Drag {
   _Drag(this.kind,
@@ -164,6 +164,18 @@ class PlanEditorState extends State<PlanEditor> {
       if ((n.pos - w).distance < tol) return n.pos;
     }
     if (from != null) {
+      // kraj zida blizu postojećeg zida: zalijepi se točno na njega
+      for (final wl in plan.walls) {
+        if (wl.a == excludeNode || wl.b == excludeNode) continue;
+        final a = plan.nodePos(wl.a), b = plan.nodePos(wl.b);
+        if (distToSegment(w, a, b) < tol + wl.thickness / 2 && distToSegment(from, a, b) > 0.02) {
+          final len = (b - a).distance;
+          if (len > 0) {
+            final t = roundTo(projectT(w, a, b) * len, 0.05) / len;
+            return a + (b - a) * t.clamp(0.0, 1.0);
+          }
+        }
+      }
       final d = w - from;
       var len = d.distance;
       if (len == 0) return w;
@@ -345,13 +357,28 @@ class PlanEditorState extends State<PlanEditor> {
   }
 
   void _selectDown(PointerDownEvent e, Offset w) {
-    // ručica za rotaciju odabranog objekta
+    // ručice odabranog objekta: rotacija i promjena veličine (kutovi)
     if (c.selection.kind == SelKind.item) {
       final it = plan.itemById(c.selection.id);
       if (it != null && (PlanPainter.rotationHandle(it, scale, pan) - e.localPosition).distance < 12) {
         c.beginChange();
         drag = _Drag(_DragKind.rotate, startWorld: w, startScreen: e.localPosition, id: it.id, startRot: it.rotation);
         return;
+      }
+      if (it != null) {
+        final pad = 3 / scale;
+        for (final sx in const [-1.0, 1.0]) {
+          for (final sy in const [-1.0, 1.0]) {
+            final corner = it.pos + rotate(Offset(sx * (it.w / 2 + pad), sy * (it.d / 2 + pad)), it.rotation);
+            if ((corner * scale + pan - e.localPosition).distance < 9) {
+              c.beginChange();
+              final anchor = it.pos + rotate(Offset(-sx * it.w / 2, -sy * it.d / 2), it.rotation);
+              drag = _Drag(_DragKind.resize,
+                  startWorld: w, startScreen: e.localPosition, id: it.id, startPos: anchor, normal: Offset(sx, sy));
+              return;
+            }
+          }
+        }
       }
     }
     final hit = _hitTest(w);
@@ -427,6 +454,17 @@ class PlanEditorState extends State<PlanEditor> {
             var ang = math.atan2(v.dx, -v.dy);
             if (!HardwareKeyboard.instance.isShiftPressed) ang = roundTo(ang, math.pi / 12);
             it.rotation = ang % (2 * math.pi);
+            c.liveUpdate();
+          }
+        case _DragKind.resize:
+          final ri = plan.itemById(d.id);
+          if (ri != null) {
+            final rv = rotate(w - d.startPos, -ri.rotation);
+            final nw = roundTo(math.max(0.1, rv.dx * d.normal.dx), 0.01);
+            final nd = roundTo(math.max(0.05, rv.dy * d.normal.dy), 0.01);
+            ri.w = nw;
+            ri.d = nd;
+            ri.pos = d.startPos + rotate(Offset(d.normal.dx * nw / 2, d.normal.dy * nd / 2), ri.rotation);
             c.liveUpdate();
           }
         case _DragKind.opening:
@@ -685,6 +723,7 @@ class PlanEditorState extends State<PlanEditor> {
       return switch (d.kind) {
         _DragKind.pan => SystemMouseCursors.grabbing,
         _DragKind.rotate => SystemMouseCursors.grabbing,
+        _DragKind.resize => SystemMouseCursors.resizeUpLeftDownRight,
         _ => SystemMouseCursors.move,
       };
     }

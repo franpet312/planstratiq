@@ -11,6 +11,12 @@ external JSPromise<JSString> _pack(String s);
 @JS('psqShare.unpack')
 external JSPromise<JSString> _unpack(String s);
 
+@JS('psqShare.pending')
+external String? get _pending;
+
+@JS('psqShare.pending')
+external set _pending(String? v);
+
 /// Poveznica koja sadrži cijeli projekt (bez slike nacrta), sažet u adresu.
 Future<String> shareLink(Plan plan) async {
   final json = jsonEncode(plan.toJson(includeImage: false));
@@ -21,15 +27,13 @@ Future<String> shareLink(Plan plan) async {
 
 /// Ako je stranica otvorena podijeljenom poveznicom, vrati projekt i očisti adresu.
 Future<Plan?> planFromLocation() async {
-  final hash = web.window.location.hash;
-  if (!hash.startsWith('#p=')) return null;
+  final data = _pending;
+  if (data == null || data.isEmpty) return null;
+  _pending = null;
   try {
-    final json = (await _unpack(hash.substring(3)).toDart).toDart;
-    final plan = Plan.fromJson(jsonDecode(json) as Map<String, dynamic>);
-    web.window.history.replaceState(null, '', web.window.location.pathname);
-    return plan;
+    final json = (await _unpack(data).toDart).toDart;
+    return Plan.fromJson(jsonDecode(json) as Map<String, dynamic>);
   } catch (_) {
-    web.window.history.replaceState(null, '', web.window.location.pathname);
     return null;
   }
 }

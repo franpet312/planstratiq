@@ -35,6 +35,8 @@
   <!-- Dijeljenje projekta poveznicom: JSON -> gzip -> base64url -->
   <script>
     window.psqShare = {
+      // podaci iz poveznice uhvaćeni prije pokretanja Fluttera (koji koristi # za navigaciju)
+      pending: (location.hash.indexOf('#p=') === 0) ? location.hash.substring(3) : null,
       async pack(str) {
         const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
         const bytes = new Uint8Array(await new Response(stream).arrayBuffer());

@@ -863,15 +863,21 @@ class Engine {
   }
 
   frame() {
-    const b = this._bounds();
-    const size = Math.max(b.max.x - b.min.x, b.max.z - b.min.z, 6);
+    // kadriraj zgradu (zidove); ako zidova nema, sve objekte
+    const b = this._bounds(true);
+    const w = b.max.x - b.min.x, d = b.max.z - b.min.z;
+    const size = Math.max(w, d, 6);
     const c = new THREE.Vector3((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2);
     this.orbit.target.copy(c);
-    const k = (0.45 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) * Math.pow(Math.max(1, 1.2 / Math.max(this.camera.aspect, 0.3)), 0.6);
-    this.camera.position.set(c.x + size * 0.42 * k, size * 0.62 * k, c.z + size * 0.72 * k);
+    const r = 0.5 * Math.hypot(w, d) + 2;
+    const vfov = THREE.MathUtils.degToRad(this.camera.fov);
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * this.camera.aspect);
+    const dist = (r / Math.sin(Math.min(vfov, hfov) / 2)) * 0.9;
+    const dir = new THREE.Vector3(0.42, 0.62, 0.72).normalize();
+    this.camera.position.copy(c).addScaledVector(dir, dist);
     this.camera.lookAt(c);
     this.center = c;
-    this.extent = size;
+    this.extent = Math.max(size, this._bounds(false).max.distanceTo(this._bounds(false).min) / 1.4);
     this.setTime(this.time);
   }
 
@@ -983,7 +989,7 @@ class Engine {
     this.cross.style.display = this.mode === 'walk' && this.fpv.isLocked ? 'block' : 'none';
   }
 
-  _bounds() {
+  _bounds(structureOnly = false) {
     const p = this.plan || {};
     const b = new THREE.Box3();
     let any = false;
@@ -991,7 +997,7 @@ class Engine {
       if (!any) { b.min.set(x, 0, z); b.max.set(x, 0, z); any = true; } else b.expandByPoint(new THREE.Vector3(x, 0, z));
     };
     for (const n of Object.values(p.nodes || {})) add(n.x, n.y);
-    for (const it of p.items || []) {
+    if (!(structureOnly && any)) for (const it of p.items || []) {
       const r = Math.max(it.w, it.d) / 2;
       add(it.x - r, it.y - r);
       add(it.x + r, it.y + r);

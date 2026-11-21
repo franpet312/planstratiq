@@ -867,7 +867,7 @@ class Engine {
     const size = Math.max(b.max.x - b.min.x, b.max.z - b.min.z, 6);
     const c = new THREE.Vector3((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2);
     this.orbit.target.copy(c);
-    const k = (0.62 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) * Math.pow(Math.max(1, 1.2 / Math.max(this.camera.aspect, 0.3)), 0.6);
+    const k = (0.45 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) * Math.pow(Math.max(1, 1.2 / Math.max(this.camera.aspect, 0.3)), 0.6);
     this.camera.position.set(c.x + size * 0.42 * k, size * 0.62 * k, c.z + size * 0.72 * k);
     this.camera.lookAt(c);
     this.center = c;

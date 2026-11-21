@@ -791,7 +791,7 @@ class Engine {
     this.avatar = this._makeAvatar();
     this.avatar.root.visible = false;
     scene.add(this.avatar.root);
-    this.tp = { x: 0, z: 0, heading: 0, yaw: 0, pitch: 0.42, dist: 4.4, speed: 0, phase: 0 };
+    this.tp = { x: 0, z: 0, heading: 0, yaw: 0, pitch: 0.78, dist: 5.2, speed: 0, phase: 0 };
     this.kbd = false;
     this.wallMeshes = [];
 
@@ -1746,6 +1746,11 @@ class Engine {
       if (hit) dist = Math.max(0.5, hit.distance - 0.25);
     }
     const desired = target.clone().addScaledVector(off, dist);
+    if (dist < tp.dist * 0.6) {
+      // zid je preblizu: podigni kameru iznad zidova i gledaj odozgo
+      const lift = Math.min(2.4, (tp.dist - dist) * 0.6);
+      desired.y += lift;
+    }
     if (snap) this.camera.position.copy(desired);
     else this.camera.position.lerp(desired, 1 - Math.exp(-dt * 14));
     this.camera.up.set(0, 1, 0);

@@ -11,7 +11,6 @@ import 'package:web/web.dart' as web;
 import '../models/catalog.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
-import '../models/plan.dart';
 import '../state/plan_controller.dart';
 
 @JS('Planstratiq3D')

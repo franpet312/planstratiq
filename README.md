@@ -23,7 +23,9 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Učitavanje slike nacrta kao podloge i kalibracija mjerila (dvije točke + stvarna udaljenost).
 
 **Namještaj i okućnica**
-- Katalog s ~60 objekata (dnevni boravak, spavaća, kuhinja, kupaonica, dječja, vrt, dvorište), 3D sličicama, mjerama i okvirnim cijenama.
+- Katalog s **~24.600 varijanti u 464 modela**: ~90 vrsta namještaja i opreme × 8 stilova (skandinavski, moderni, klasični, industrijski, rustikalni, minimalistički, boho, retro) × veličine × boje × izvedbe nogu. Realne mjere, okvirne cijene, 3D sličice.
+- Pretraga, filtri po prostoriji i stilu, poredak po cijeni; detalj modela s odabirom veličine, boje i nogu.
+- **Uvoz kataloga trgovine** (CSV ili JSON): naziv, mjere, cijena, boja, link na proizvod i GLB 3D model. Vrsta namještaja se prepoznaje iz naziva. Predložak CSV-a preuzima se iz kataloga.
 - Povuci objekt na tlocrt ili u 3D; uz zid se sam okrene leđima prema zidu.
 - Rotacija ručicom (korak 15°), strelice za pomak 1 cm, dupliciranje, promjena mjera i boje.
 
@@ -31,6 +33,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Zidovi s otvorima, fasada, podovi s teksturama (parket, laminat, pločice, kamen, beton, tepison), nebo, sjene.
 - Doba dana (položaj sunca), krov, snimka prikaza kao slika.
 - Odabir i povlačenje namještaja izravno u 3D-u.
+- Tri načina pogleda: **izvana** (orbit), **treće lice** (animirani lik hoda kućom, kamera ga prati i ne prolazi kroz zidove; povlačenje mišem okreće kameru, kotačić mijenja udaljenost) i **prvo lice**.
 - **Šetnja u prvom licu**: W A S D + miš, ili na mobitelu lijevi palac za hodanje i desni za gledanje; ne prolazi se kroz zidove, kroz vrata da. Položaj osobe vidi se uživo na tlocrtu. Brzi skok u prostoriju.
 
 **Pregled i cijene**

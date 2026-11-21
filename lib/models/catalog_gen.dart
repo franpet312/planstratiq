@@ -163,7 +163,6 @@ class Family {
   final bool legVariants;
 }
 
-const _i = CatalogZone.interior;
 const _e = CatalogZone.exterior;
 
 const families = <Family>[

@@ -5,7 +5,8 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Planstratiq – od nacrta do 3D modela i šetnje kroz kuću.">
+  <meta name="description" content="Planstratiq – nacrtaj tlocrt, opremi ga namještajem i prošeći kroz svoj budući dom u 3D-u.">
+  <meta name="theme-color" content="#0e6b66">
   <title>Planstratiq</title>
 
   <!-- Three.js (za produkciju: preuzmi lokalno u web/vendor/ i promijeni putanje) -->
@@ -20,18 +21,21 @@
 
   <!-- Privremeni "stub": bilježi pozive dok se 3D modul ne učita -->
   <script>
-    window.Planstratiq3D = {
-      _q: [],
-      mount(el) { this._q.push(['mount', [el]]); },
-      setPlan(j) { this._q.push(['setPlan', [j]]); },
-      setMode(m) { this._q.push(['setMode', [m]]); },
-      frame() { this._q.push(['frame', []]); },
-    };
+    (function () {
+      const q = [];
+      const later = (name) => function () { q.push([name, Array.from(arguments)]); };
+      window.Planstratiq3D = {
+        _q: q, ready: false, onEvent: null,
+        mount: later('mount'), setPlan: later('setPlan'), setMode: later('setMode'),
+        setSelection: later('setSelection'), setOptions: later('setOptions'), frame: later('frame'), walkTo: later('walkTo'),
+        screenshot: () => null, thumbnail: () => null, groundPoint: () => null,
+      };
+    })();
   </script>
   <script type="module" src="planstratiq3d.js"></script>
 
   <style>
-    html, body { margin: 0; height: 100%; background: #fafaf7; }
+    html, body { margin: 0; height: 100%; background: #eff2f0; }
   </style>
 </head>
 <body>

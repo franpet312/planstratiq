@@ -42,3 +42,16 @@ void downloadText(String text, String filename, {String mime = 'application/json
   a.remove();
   web.URL.revokeObjectURL(url);
 }
+
+/// Preuzimanje binarnih podataka (npr. PNG slike) kao datoteke.
+void downloadBytes(Uint8List bytes, String filename, {String mime = 'application/octet-stream'}) {
+  final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: mime));
+  final url = web.URL.createObjectURL(blob);
+  final a = web.HTMLAnchorElement()
+    ..href = url
+    ..download = filename;
+  web.document.body?.append(a);
+  a.click();
+  a.remove();
+  web.URL.revokeObjectURL(url);
+}

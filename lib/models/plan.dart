@@ -16,6 +16,7 @@ String newId(String prefix) {
 double _r3(double v) => (v * 1000).roundToDouble() / 1000;
 double _d(dynamic v, double fallback) => v is num ? v.toDouble() : fallback;
 int _i(dynamic v, int fallback) => v is num ? v.toInt() : fallback;
+bool _b(dynamic v) => v == true;
 
 List<T> _list<T>(dynamic v, T Function(Map<String, dynamic>) f) => v is List
     ? v.map((e) => f(Map<String, dynamic>.from(e as Map))).toList()
@@ -28,8 +29,7 @@ class PlanNode {
   final String id;
   Offset pos;
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'x': _r3(pos.dx), 'y': _r3(pos.dy)};
+  Map<String, dynamic> toJson() => {'id': id, 'x': _r3(pos.dx), 'y': _r3(pos.dy)};
   factory PlanNode.fromJson(Map<String, dynamic> j) =>
       PlanNode(j['id'] as String, Offset(_d(j['x'], 0), _d(j['y'], 0)));
 }
@@ -41,7 +41,7 @@ class Wall {
     required this.b,
     this.thickness = 0.2,
     this.height = 2.6,
-    this.color = 0xFFF3EFE9,
+    this.color = 0xFFF6F5F1,
   });
 
   final String id;
@@ -51,14 +51,11 @@ class Wall {
   double height;
   int color;
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'a': a,
-        'b': b,
-        'thickness': thickness,
-        'height': height,
-        'color': color,
-      };
+  Wall copyWith({required String id, String? a, String? b}) => Wall(
+      id: id, a: a ?? this.a, b: b ?? this.b, thickness: thickness, height: height, color: color);
+
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'a': a, 'b': b, 'thickness': thickness, 'height': height, 'color': color};
 
   factory Wall.fromJson(Map<String, dynamic> j) => Wall(
         id: j['id'] as String,
@@ -66,13 +63,25 @@ class Wall {
         b: j['b'] as String,
         thickness: _d(j['thickness'], 0.2),
         height: _d(j['height'], 2.6),
-        color: _i(j['color'], 0xFFF3EFE9),
+        color: _i(j['color'], 0xFFF6F5F1),
       );
 }
 
-enum OpeningType { door, window }
+enum OpeningType { door, window, balcony, passage }
 
-/// Vrata ili prozor na zidu. [t] je položaj središta duž zida (0..1).
+extension OpeningTypeX on OpeningType {
+  String get label => switch (this) {
+        OpeningType.door => 'Vrata',
+        OpeningType.window => 'Prozor',
+        OpeningType.balcony => 'Balkonska vrata',
+        OpeningType.passage => 'Prolaz',
+      };
+
+  /// Može li se kroz otvor proći (za šetnju u 3D-u).
+  bool get walkable => this != OpeningType.window;
+}
+
+/// Vrata, prozor ili prolaz na zidu. [t] je položaj središta duž zida (0..1).
 class Opening {
   Opening({
     required this.id,
@@ -82,34 +91,33 @@ class Opening {
     required this.width,
     required this.height,
     required this.sill,
+    this.flip = false,
+    this.swingOut = false,
   });
 
-  factory Opening.preset(String wallId, OpeningType type, double t) =>
-      type == OpeningType.door
-          ? Opening(
-              id: newId('o'),
-              wallId: wallId,
-              type: type,
-              t: t,
-              width: 0.9,
-              height: 2.1,
-              sill: 0)
-          : Opening(
-              id: newId('o'),
-              wallId: wallId,
-              type: type,
-              t: t,
-              width: 1.2,
-              height: 1.2,
-              sill: 0.9);
+  factory Opening.preset(String wallId, OpeningType type, double t) {
+    final (w, h, s) = switch (type) {
+      OpeningType.door => (0.9, 2.05, 0.0),
+      OpeningType.window => (1.2, 1.4, 0.9),
+      OpeningType.balcony => (1.8, 2.2, 0.0),
+      OpeningType.passage => (1.2, 2.2, 0.0),
+    };
+    return Opening(id: newId('o'), wallId: wallId, type: type, t: t, width: w, height: h, sill: s);
+  }
 
   final String id;
-  final String wallId;
+  String wallId;
   OpeningType type;
   double t;
   double width;
   double height;
   double sill;
+
+  /// Šarke na drugoj strani.
+  bool flip;
+
+  /// Otvaraju se na drugu stranu zida.
+  bool swingOut;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -119,44 +127,44 @@ class Opening {
         'width': width,
         'height': height,
         'sill': sill,
+        'flip': flip,
+        'swingOut': swingOut,
       };
 
   factory Opening.fromJson(Map<String, dynamic> j) => Opening(
         id: j['id'] as String,
         wallId: j['wallId'] as String,
-        type: j['type'] == 'window' ? OpeningType.window : OpeningType.door,
+        type: OpeningType.values.firstWhere((e) => e.name == j['type'], orElse: () => OpeningType.door),
         t: _d(j['t'], 0.5),
         width: _d(j['width'], 0.9),
-        height: _d(j['height'], 2.1),
+        height: _d(j['height'], 2.05),
         sill: _d(j['sill'], 0),
+        flip: _b(j['flip']),
+        swingOut: _b(j['swingOut']),
       );
 }
 
+/// Prostorija – automatski se prepoznaje iz zatvorenih zidova.
 class Room {
   Room({
     required this.id,
     required this.name,
     required this.nodeIds,
-    this.floorColor = 0xFFD8C3A5,
+    this.floor = 'parket_hrast',
   });
 
   final String id;
   String name;
-  final List<String> nodeIds;
-  int floorColor;
+  List<String> nodeIds;
+  String floor;
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'nodeIds': nodeIds,
-        'floorColor': floorColor,
-      };
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'nodeIds': nodeIds, 'floor': floor};
 
   factory Room.fromJson(Map<String, dynamic> j) => Room(
         id: j['id'] as String,
-        name: (j['name'] as String?) ?? 'Soba',
+        name: (j['name'] as String?) ?? 'Prostorija',
         nodeIds: List<String>.from(j['nodeIds'] as List),
-        floorColor: _i(j['floorColor'], 0xFFD8C3A5),
+        floor: (j['floor'] as String?) ?? 'parket_hrast',
       );
 }
 
@@ -173,6 +181,7 @@ class PlacedItem {
     required this.d,
     required this.h,
     required this.color,
+    this.price,
     this.modelUrl,
     this.retailer,
   });
@@ -189,6 +198,7 @@ class PlacedItem {
   double d;
   double h;
   int color;
+  double? price;
   final String? modelUrl;
   final String? retailer;
 
@@ -204,6 +214,7 @@ class PlacedItem {
         'd': d,
         'h': h,
         'color': color,
+        if (price != null) 'price': price,
         if (modelUrl != null) 'modelUrl': modelUrl,
         if (retailer != null) 'retailer': retailer,
       };
@@ -219,6 +230,7 @@ class PlacedItem {
         d: _d(j['d'], 1),
         h: _d(j['h'], 1),
         color: _i(j['color'], 0xFFCCCCCC),
+        price: j['price'] is num ? (j['price'] as num).toDouble() : null,
         modelUrl: j['modelUrl'] as String?,
         retailer: j['retailer'] as String?,
       );
@@ -232,7 +244,7 @@ class PlanImage {
     required this.metersPerPixel,
     required this.widthPx,
     required this.heightPx,
-    this.opacity = 0.6,
+    this.opacity = 0.55,
   });
 
   final String dataUrl;
@@ -258,7 +270,7 @@ class PlanImage {
         metersPerPixel: _d(j['metersPerPixel'], 0.01),
         widthPx: _i(j['widthPx'], 1000),
         heightPx: _i(j['heightPx'], 1000),
-        opacity: _d(j['opacity'], 0.6),
+        opacity: _d(j['opacity'], 0.55),
       );
 }
 
@@ -271,6 +283,8 @@ class Plan {
     List<Room>? rooms,
     List<PlacedItem>? items,
     this.image,
+    this.wallHeight = 2.6,
+    this.roof = false,
   })  : nodes = nodes ?? {},
         walls = walls ?? [],
         openings = openings ?? [],
@@ -285,7 +299,13 @@ class Plan {
   final List<PlacedItem> items;
   PlanImage? image;
 
-  bool get isEmpty => walls.isEmpty && items.isEmpty && rooms.isEmpty;
+  /// Zadana visina novih zidova.
+  double wallHeight;
+
+  /// Prikaži krov u 3D-u.
+  bool roof;
+
+  bool get isEmpty => walls.isEmpty && items.isEmpty;
 
   Wall? wallById(String id) {
     for (final w in walls) {
@@ -326,8 +346,10 @@ class Plan {
 
   Map<String, dynamic> toJson({bool includeImage = true}) => {
         'format': 'planstratiq',
-        'version': 1,
+        'version': 2,
         'name': name,
+        'wallHeight': wallHeight,
+        'roof': roof,
         'nodes': nodes.values.map((n) => n.toJson()).toList(),
         'walls': walls.map((w) => w.toJson()).toList(),
         'openings': openings.map((o) => o.toJson()).toList(),
@@ -345,20 +367,11 @@ class Plan {
       openings: _list(j['openings'], Opening.fromJson),
       rooms: _list(j['rooms'], Room.fromJson),
       items: _list(j['items'], PlacedItem.fromJson),
-      image: j['image'] is Map
-          ? PlanImage.fromJson(Map<String, dynamic>.from(j['image'] as Map))
-          : null,
+      image: j['image'] is Map ? PlanImage.fromJson(Map<String, dynamic>.from(j['image'] as Map)) : null,
+      wallHeight: _d(j['wallHeight'], 2.6),
+      roof: _b(j['roof']),
     );
   }
 
-  /// Podaci koji idu u 3D engine (bez slike nacrta).
-  Map<String, dynamic> toSceneJson() => {
-        'nodes': {
-          for (final n in nodes.values) n.id: {'x': n.pos.dx, 'y': n.pos.dy}
-        },
-        'walls': walls.map((w) => w.toJson()).toList(),
-        'openings': openings.map((o) => o.toJson()).toList(),
-        'rooms': rooms.map((r) => r.toJson()).toList(),
-        'items': items.map((i) => i.toJson()).toList(),
-      };
+  Plan clone() => Plan.fromJson(toJson());
 }

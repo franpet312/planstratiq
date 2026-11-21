@@ -6,13 +6,24 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Offset, Rect;
-import 'package:web/web.dart' as web;
 
 import '../models/catalog.dart';
 import '../models/geometry.dart';
+import '../models/materials.dart';
 import '../models/plan.dart';
+import '../models/topology.dart';
 
-enum Tool { select, wall, room, door, window, calibrate, place }
+enum Tool { select, wall, room, door, window, balcony, passage, measure, calibrate, place }
+
+extension ToolX on Tool {
+  OpeningType? get openingType => switch (this) {
+        Tool.door => OpeningType.door,
+        Tool.window => OpeningType.window,
+        Tool.balcony => OpeningType.balcony,
+        Tool.passage => OpeningType.passage,
+        _ => null,
+      };
+}
 
 enum SelKind { none, wall, node, opening, item, room }
 
@@ -23,21 +34,81 @@ class Selection {
   final String id;
 
   @override
-  bool operator ==(Object other) =>
-      other is Selection && other.kind == kind && other.id == id;
+  bool operator ==(Object other) => other is Selection && other.kind == kind && other.id == id;
   @override
   int get hashCode => Object.hash(kind, id);
 }
 
-/// Centralno stanje projekta: tlocrt, alat, odabir, undo/redo, spremanje.
+class RoomStat {
+  RoomStat(this.room, this.area, this.perimeter, this.material);
+  final Room room;
+  final double area;
+  final double perimeter;
+  final FloorMaterial material;
+  double get floorCost => area * material.pricePerM2;
+}
+
+class PlanStats {
+  PlanStats({
+    required this.rooms,
+    required this.footprint,
+    required this.paintArea,
+    required this.wallLength,
+    required this.doors,
+    required this.windows,
+  });
+
+  final List<RoomStat> rooms;
+  final double footprint;
+  final double paintArea;
+  final double wallLength;
+  final int doors;
+  final int windows;
+
+  double get netArea => rooms.fold(0.0, (a, r) => a + r.area);
+  double get floorCost => rooms.fold(0.0, (a, r) => a + r.floorCost);
+  double get paintCost => paintArea * paintPricePerM2;
+  double get paintLiters => paintArea * litersPerM2;
+}
+
+class _RoomHint {
+  _RoomHint(this.point, this.name, this.floor);
+  final Offset point;
+  final String? name;
+  final String? floor;
+}
+
+typedef PlanSaver = void Function(Plan plan);
+
+/// Centralno stanje jednog projekta: tlocrt, alat, odabir, povijest, spremanje.
 class PlanController extends ChangeNotifier {
-  static const _storageKey = 'planstratiq.autosave.v1';
+  PlanController({required this.projectId, Plan? initial, this.onSave}) {
+    if (initial != null) {
+      plan = initial;
+      _syncRooms();
+      _decodePlanImage().then((_) {
+        if (!_disposed) notifyListeners();
+      });
+    }
+  }
+
+  final String projectId;
+  final PlanSaver? onSave;
 
   Plan plan = Plan();
   Tool tool = Tool.select;
   Selection selection = Selection.none;
   CatalogItem? placing;
   ui.Image? bgImage;
+
+  /// Vanjski obris zgrade (za bruto površinu i prikaz).
+  List<List<Offset>> outlines = [];
+
+  /// Položaj osobe u 3D šetnji (prikazuje se na tlocrtu): pozicija i smjer.
+  final walker = ValueNotifier<(Offset, double)?>(null);
+
+  /// Stanje spremanja za prikaz u sučelju.
+  final saveState = ValueNotifier<String>('Spremljeno');
 
   /// Raste pri svakoj promjeni geometrije – 3D prikaz prema tome osvježava scenu.
   int revision = 0;
@@ -46,19 +117,22 @@ class PlanController extends ChangeNotifier {
   final List<String> _redo = [];
   String? _pending;
   Timer? _saveTimer;
+  final List<_RoomHint> _hints = [];
+  PlanStats? _stats;
+  bool _dirty = false;
+  bool _disposed = false;
 
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
 
-  Future<void> init() async {
-    try {
-      final saved = web.window.localStorage.getItem(_storageKey);
-      if (saved != null && saved.isNotEmpty) {
-        await importJson(saved, keepHistory: false);
-        return;
-      }
-    } catch (_) {/* oštećen autosave – krećemo s demo kućom */}
-    loadDemo();
+  @override
+  void dispose() {
+    _disposed = true;
+    _saveTimer?.cancel();
+    if (_dirty) _saveNow();
+    walker.dispose();
+    saveState.dispose();
+    super.dispose();
   }
 
   // ---------------------------------------------------------------- povijest
@@ -69,6 +143,7 @@ class PlanController extends ChangeNotifier {
     final img = plan.image;
     plan = Plan.fromJson(jsonDecode(s) as Map<String, dynamic>);
     plan.image = img;
+    _syncRooms();
     if (!_selectionValid()) selection = Selection.none;
   }
 
@@ -77,6 +152,7 @@ class PlanController extends ChangeNotifier {
   void endChange() {
     final before = _pending;
     _pending = null;
+    _syncRooms();
     if (before != null && before != _snapshot()) {
       _undo.add(before);
       if (_undo.length > 200) _undo.removeAt(0);
@@ -94,6 +170,7 @@ class PlanController extends ChangeNotifier {
   /// Za vrijeme povlačenja: osvježi prikaz bez upisa u povijest.
   void liveUpdate() {
     revision++;
+    _stats = null;
     notifyListeners();
   }
 
@@ -113,20 +190,21 @@ class PlanController extends ChangeNotifier {
 
   void _changed() {
     revision++;
+    _stats = null;
     notifyListeners();
+    _dirty = true;
+    saveState.value = 'Spremanje…';
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 800), _autosave);
+    _saveTimer = Timer(const Duration(milliseconds: 700), _saveNow);
   }
 
-  void _autosave() {
+  void _saveNow() {
+    _dirty = false;
     try {
-      web.window.localStorage.setItem(_storageKey, jsonEncode(plan.toJson()));
+      onSave?.call(plan);
+      if (!_disposed) saveState.value = 'Spremljeno';
     } catch (_) {
-      // Prevelika slika nacrta za localStorage – spremi bez nje.
-      try {
-        web.window.localStorage
-            .setItem(_storageKey, jsonEncode(plan.toJson(includeImage: false)));
-      } catch (_) {}
+      if (!_disposed) saveState.value = 'Nije spremljeno – premalo prostora u pregledniku';
     }
   }
 
@@ -156,49 +234,227 @@ class PlanController extends ChangeNotifier {
     };
   }
 
-  // ------------------------------------------------------------- geometrija
+  // ------------------------------------------------------------- topologija
 
-  String nodeAt(Offset p, {double tol = 0.02}) {
+  String? _nodeNear(Offset p, {double tol = 0.02, String? except}) {
+    String? best;
+    var bestD = tol;
     for (final n in plan.nodes.values) {
-      if ((n.pos - p).distance <= tol) return n.id;
+      if (n.id == except) continue;
+      final d = (n.pos - p).distance;
+      if (d <= bestD) {
+        bestD = d;
+        best = n.id;
+      }
+    }
+    return best;
+  }
+
+  bool _hasWall(String a, String b) => wallBetween(a, b) != null;
+
+  Wall? wallBetween(String a, String b) {
+    for (final w in plan.walls) {
+      if ((w.a == a && w.b == b) || (w.a == b && w.b == a)) return w;
+    }
+    return null;
+  }
+
+  /// Podijeli zid u točki p; otvori se raspodijele na odgovarajući dio.
+  String splitWall(Wall w, Offset p) {
+    final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+    final len = (b - a).distance;
+    final t = projectT(p, a, b).clamp(0.0, 1.0);
+    final n = PlanNode(newId('n'), a + (b - a) * t);
+    plan.nodes[n.id] = n;
+    final w2 = w.copyWith(id: newId('w'), a: n.id, b: w.b);
+    w.b = n.id;
+    plan.walls.add(w2);
+    final l1 = len * t, l2 = len * (1 - t);
+    for (final o in plan.openings.where((o) => o.wallId == w.id).toList()) {
+      final s = o.t * len;
+      if (s <= l1) {
+        o.t = l1 > 0 ? s / l1 : 0.5;
+      } else {
+        o.wallId = w2.id;
+        o.t = l2 > 0 ? (s - l1) / l2 : 0.5;
+      }
+    }
+    return n.id;
+  }
+
+  /// Vrati čvor u točki p: postojeći, novi na zidu (dijeli zid) ili novi slobodni.
+  String _attach(Offset p) {
+    final near = _nodeNear(p);
+    if (near != null) return near;
+    for (final w in plan.walls) {
+      final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+      if (distToSegment(p, a, b) < 0.015) {
+        final t = projectT(p, a, b);
+        if (t > 0.001 && t < 0.999) return splitWall(w, p);
+      }
     }
     final n = PlanNode(newId('n'), p);
     plan.nodes[n.id] = n;
     return n.id;
   }
 
-  bool _hasWall(String a, String b) => plan.walls
-      .any((w) => (w.a == a && w.b == b) || (w.a == b && w.b == a));
-
-  /// Dodaje zid između dvije točke (spaja se na postojeće čvorove).
+  /// Dodaje zid; automatski se spaja i dijeli na sjecištima s postojećim zidovima.
   void addWall(Offset p1, Offset p2, {double thickness = 0.2}) {
     if ((p2 - p1).distance < 0.05) return;
-    final a = nodeAt(p1), b = nodeAt(p2);
-    if (a == b || _hasWall(a, b)) return;
-    final w = Wall(id: newId('w'), a: a, b: b, thickness: thickness);
-    plan.walls.add(w);
-    selection = Selection(SelKind.wall, w.id);
-  }
-
-  Room addRoomRect(Rect r, {String? name, int? floorColor}) {
-    final corners = [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft];
-    final ids = [for (final p in corners) nodeAt(p, tol: 0.05)];
-    for (var i = 0; i < 4; i++) {
-      final a = ids[i], b = ids[(i + 1) % 4];
-      if (!_hasWall(a, b)) {
-        plan.walls.add(Wall(id: newId('w'), a: a, b: b));
+    final a = _attach(p1), b = _attach(p2);
+    if (a == b) return;
+    final pa = plan.nodePos(a), pb = plan.nodePos(b);
+    final splits = <(double, String)>[];
+    for (final w in List<Wall>.from(plan.walls)) {
+      if (w.a == a || w.b == a || w.a == b || w.b == b) continue;
+      final r = segmentIntersection(pa, pb, plan.nodePos(w.a), plan.nodePos(w.b));
+      if (r == null) continue;
+      final (t, u) = r;
+      if (t <= 1e-3 || t >= 1 - 1e-3) continue;
+      final String nid;
+      if (u <= 1e-3) {
+        nid = w.a;
+      } else if (u >= 1 - 1e-3) {
+        nid = w.b;
+      } else {
+        nid = splitWall(w, pa + (pb - pa) * t);
+      }
+      splits.add((t, nid));
+    }
+    for (final n in plan.nodes.values) {
+      if (n.id == a || n.id == b) continue;
+      final t = projectT(n.pos, pa, pb);
+      if (t > 1e-3 && t < 1 - 1e-3 && distToSegment(n.pos, pa, pb) < 0.01) {
+        splits.add((t, n.id));
       }
     }
-    final room = Room(
-      id: newId('r'),
-      name: name ?? 'Soba ${plan.rooms.length + 1}',
-      nodeIds: ids,
-      floorColor: floorColor ?? 0xFFD8C3A5,
-    );
-    plan.rooms.add(room);
-    selection = Selection(SelKind.room, room.id);
-    return room;
+    splits.sort((x, y) => x.$1.compareTo(y.$1));
+    final chain = <String>[a];
+    for (final s in splits) {
+      if (chain.last != s.$2) chain.add(s.$2);
+    }
+    if (chain.last != b) chain.add(b);
+    Wall? last;
+    for (var i = 0; i + 1 < chain.length; i++) {
+      final x = chain[i], y = chain[i + 1];
+      if (x == y || _hasWall(x, y)) continue;
+      last = Wall(id: newId('w'), a: x, b: y, thickness: thickness, height: plan.wallHeight);
+      plan.walls.add(last);
+    }
+    if (last != null) selection = Selection(SelKind.wall, last.id);
   }
+
+  void addRoomRect(Rect r, {String? name, String? floor, double thickness = 0.2}) {
+    final c = [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft];
+    for (var i = 0; i < 4; i++) {
+      addWall(c[i], c[(i + 1) % 4], thickness: thickness);
+    }
+    _hints.add(_RoomHint(r.center, name, floor));
+    selection = Selection.none;
+  }
+
+  /// Ako je čvor spušten na drugi čvor ili na zid – spoji ih.
+  void mergeNodeIfClose(String id) {
+    final n = plan.nodes[id];
+    if (n == null) return;
+    final other = _nodeNear(n.pos, tol: 0.03, except: id);
+    if (other != null) {
+      _replaceNode(id, other);
+      return;
+    }
+    for (final w in List<Wall>.from(plan.walls)) {
+      if (w.a == id || w.b == id) continue;
+      final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+      final t = projectT(n.pos, a, b);
+      if (t > 0.01 && t < 0.99 && distToSegment(n.pos, a, b) < 0.02) {
+        final split = splitWall(w, n.pos);
+        _replaceNode(id, split);
+        return;
+      }
+    }
+  }
+
+  void _replaceNode(String from, String to) {
+    for (final w in plan.walls) {
+      if (w.a == from) w.a = to;
+      if (w.b == from) w.b = to;
+    }
+    plan.walls.removeWhere((w) => w.a == w.b);
+    final seen = <String>{};
+    plan.walls.removeWhere((w) {
+      final k = w.a.compareTo(w.b) < 0 ? '${w.a}|${w.b}' : '${w.b}|${w.a}';
+      return !seen.add(k);
+    });
+    plan.nodes.remove(from);
+    if (selection == Selection(SelKind.node, from)) selection = Selection(SelKind.node, to);
+    _cleanup();
+  }
+
+  /// Ponovno prepoznaj prostorije; postojećima se čuvaju naziv i pod.
+  void _syncRooms() {
+    final res = detectFaces(plan);
+    outlines = res.outlines;
+    final old = List<Room>.from(plan.rooms);
+    final used = <Room>{};
+    final next = <Room>[];
+    for (final f in res.faces) {
+      final key = f.toSet();
+      final poly = [for (final id in f) plan.nodePos(id)];
+      Room? match;
+      for (final r in old) {
+        if (used.contains(r)) continue;
+        if (r.nodeIds.length == f.length && key.containsAll(r.nodeIds)) {
+          match = r;
+          break;
+        }
+      }
+      if (match == null) {
+        for (final r in old) {
+          if (used.contains(r)) continue;
+          final op = plan.roomPolygon(r);
+          if (op.length >= 3 && pointInPolygon(labelPoint(op), poly)) {
+            match = r;
+            break;
+          }
+        }
+      }
+      if (match != null) {
+        used.add(match);
+        match.nodeIds = f;
+        next.add(match);
+      } else {
+        final room = Room(id: newId('r'), name: '', nodeIds: f);
+        for (final h in _hints) {
+          if (pointInPolygon(h.point, poly)) {
+            if (h.name != null) room.name = h.name!;
+            if (h.floor != null) room.floor = h.floor!;
+            break;
+          }
+        }
+        next.add(room);
+      }
+    }
+    for (final r in next) {
+      if (r.name.isEmpty) r.name = _nextRoomName(next);
+    }
+    _hints.clear();
+    plan.rooms
+      ..clear()
+      ..addAll(next);
+    if (selection.kind == SelKind.room && plan.roomById(selection.id) == null) {
+      selection = Selection.none;
+    }
+  }
+
+  String _nextRoomName(List<Room> rooms) {
+    var i = 1;
+    while (rooms.any((r) => r.name == 'Prostorija $i')) {
+      i++;
+    }
+    return 'Prostorija $i';
+  }
+
+  // ------------------------------------------------------------ otvori
 
   static double clampOpeningT(double length, double width, double t) {
     final m = (width / 2 + 0.05) / length;
@@ -210,15 +466,17 @@ class PlanController extends ChangeNotifier {
     final w = plan.wallById(wallId);
     if (w == null) return null;
     final len = plan.wallLength(w);
+    if (len < 0.62) return null;
     final o = Opening.preset(wallId, type, t);
-    if (len < o.width + 0.1) return null;
+    if (len < o.width + 0.1) o.width = math.max(0.5, len - 0.12);
+    o.height = math.min(o.height, w.height - o.sill - 0.05);
     o.t = clampOpeningT(len, o.width, t);
     plan.openings.add(o);
     selection = Selection(SelKind.opening, o.id);
     return o;
   }
 
-  Opening? addOpeningNear(Offset p, OpeningType type, {double tol = 0.3}) {
+  Wall? wallNear(Offset p, {double tol = 0.3}) {
     Wall? best;
     var bestD = tol;
     for (final w in plan.walls) {
@@ -228,9 +486,14 @@ class PlanController extends ChangeNotifier {
         best = w;
       }
     }
-    if (best == null) return null;
-    final t = projectT(p, plan.nodePos(best.a), plan.nodePos(best.b));
-    return addOpening(best.id, type, t);
+    return best;
+  }
+
+  Opening? addOpeningNear(Offset p, OpeningType type, {double tol = 0.3}) {
+    final w = wallNear(p, tol: tol);
+    if (w == null) return null;
+    final t = projectT(p, plan.nodePos(w.a), plan.nodePos(w.b));
+    return addOpening(w.id, type, t);
   }
 
   void slideOpening(String id, Offset p) {
@@ -241,6 +504,8 @@ class PlanController extends ChangeNotifier {
     final t = projectT(p, plan.nodePos(w.a), plan.nodePos(w.b));
     o.t = clampOpeningT(len, o.width, roundTo(t * len, 0.05) / len);
   }
+
+  // ------------------------------------------------------------ namještaj
 
   PlacedItem placeItem(CatalogItem c, Offset p, {double rotation = 0}) {
     final it = PlacedItem(
@@ -254,6 +519,7 @@ class PlanController extends ChangeNotifier {
       d: c.d,
       h: c.h,
       color: c.color,
+      price: c.price,
       modelUrl: c.modelUrl,
       retailer: c.retailer,
     );
@@ -262,8 +528,28 @@ class PlanController extends ChangeNotifier {
     return it;
   }
 
-  void setNodePos(String id, Offset p) => plan.nodes[id]?.pos = p;
+  /// Postavi objekt i, ako je blizu zida, okreni ga leđima prema zidu i prisloni.
+  PlacedItem placeItemSmart(CatalogItem c, Offset p) {
+    var rot = 0.0;
+    var pos = p;
+    if (c.zone == CatalogZone.interior && !floorShapes.contains(c.shape)) {
+      final w = wallNear(p, tol: c.d / 2 + 0.45);
+      if (w != null) {
+        final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+        final q = closestOnSegment(p, a, b);
+        final away = p - q;
+        if (away.distance > 1e-6) {
+          final n = away / away.distance;
+          // stražnja strana objekta (lokalno -y) okrenuta je prema zidu (-n)
+          rot = roundTo(math.atan2(-n.dx, n.dy), math.pi / 12);
+          pos = q + n * (w.thickness / 2 + c.d / 2 + 0.01);
+        }
+      }
+    }
+    return placeItem(c, Offset(roundTo(pos.dx, 0.01), roundTo(pos.dy, 0.01)), rotation: rot);
+  }
 
+  void setNodePos(String id, Offset p) => plan.nodes[id]?.pos = p;
   void setItemPos(String id, Offset p) => plan.itemById(id)?.pos = p;
 
   /// Promijeni duljinu zida – pomiče se krajnja točka B, spojeni zidovi prate.
@@ -288,13 +574,13 @@ class PlanController extends ChangeNotifier {
     });
   }
 
-  void applyToAllWalls({double? thickness, double? height, int? color}) {
+  void applyToAllWalls({double? height, int? color}) {
     mutate(() {
       for (final w in plan.walls) {
-        if (thickness != null) w.thickness = thickness;
         if (height != null) w.height = height;
         if (color != null) w.color = color;
       }
+      if (height != null) plan.wallHeight = height;
     });
   }
 
@@ -303,27 +589,33 @@ class PlanController extends ChangeNotifier {
       double? width,
       double? height,
       double? sill,
-      double? offsetFromStart}) {
+      double? offsetFromStart,
+      bool? flip,
+      bool? swingOut}) {
     final o = plan.openingById(id);
     final w = o == null ? null : plan.wallById(o.wallId);
     if (o == null || w == null) return;
     mutate(() {
       final len = plan.wallLength(w);
       if (type != null && type != o.type) {
-        o.type = type;
-        if (type == OpeningType.door) o.sill = 0;
-        if (type == OpeningType.window && o.sill == 0) o.sill = 0.9;
+        final p = Opening.preset(o.wallId, type, o.t);
+        o
+          ..type = type
+          ..width = math.min(p.width, len - 0.12)
+          ..height = math.min(p.height, w.height - p.sill - 0.05)
+          ..sill = p.sill;
       }
       if (width != null) o.width = width.clamp(0.3, math.max(0.3, len - 0.1));
       if (height != null) o.height = height.clamp(0.2, w.height);
-      if (sill != null) o.sill = sill.clamp(0.0, w.height - o.height);
+      if (sill != null) o.sill = sill.clamp(0.0, math.max(0.0, w.height - o.height));
       if (offsetFromStart != null) o.t = offsetFromStart / len;
+      if (flip != null) o.flip = flip;
+      if (swingOut != null) o.swingOut = swingOut;
       o.t = clampOpeningT(len, o.width, o.t);
     });
   }
 
-  void updateItem(String id,
-      {double? w, double? d, double? h, double? rotation, int? color, String? name}) {
+  void updateItem(String id, {double? w, double? d, double? h, double? rotation, int? color, String? name}) {
     final it = plan.itemById(id);
     if (it == null) return;
     mutate(() {
@@ -346,25 +638,29 @@ class PlanController extends ChangeNotifier {
     final it = plan.itemById(id);
     if (it == null) return;
     mutate(() {
-      final copy = PlacedItem.fromJson({
-        ...it.toJson(),
-        'id': newId('i'),
-        'x': it.pos.dx + 0.3,
-        'y': it.pos.dy + 0.3,
-      });
+      final copy =
+          PlacedItem.fromJson({...it.toJson(), 'id': newId('i'), 'x': it.pos.dx + 0.3, 'y': it.pos.dy + 0.3});
       plan.items.add(copy);
       selection = Selection(SelKind.item, copy.id);
     });
   }
 
-  void updateRoom(String id, {String? name, int? floorColor}) {
+  void updateRoom(String id, {String? name, String? floor}) {
     final r = plan.roomById(id);
     if (r == null) return;
     mutate(() {
       if (name != null) r.name = name;
-      if (floorColor != null) r.floorColor = floorColor;
+      if (floor != null) r.floor = floor;
     });
   }
+
+  void setAllFloors(String floor) => mutate(() {
+        for (final r in plan.rooms) {
+          r.floor = floor;
+        }
+      });
+
+  void setRoof(bool v) => mutate(() => plan.roof = v);
 
   void deleteSelection() {
     final s = selection;
@@ -375,14 +671,13 @@ class PlanController extends ChangeNotifier {
           plan.walls.removeWhere((w) => w.id == s.id);
         case SelKind.node:
           plan.walls.removeWhere((w) => w.a == s.id || w.b == s.id);
-          plan.rooms.removeWhere((r) => r.nodeIds.contains(s.id));
           plan.nodes.remove(s.id);
         case SelKind.opening:
           plan.openings.removeWhere((o) => o.id == s.id);
         case SelKind.item:
           plan.items.removeWhere((i) => i.id == s.id);
         case SelKind.room:
-          plan.rooms.removeWhere((r) => r.id == s.id);
+          _deleteRoomWalls(s.id);
         case SelKind.none:
           break;
       }
@@ -391,16 +686,79 @@ class PlanController extends ChangeNotifier {
     });
   }
 
+  /// Brisanje prostorije uklanja njezine zidove koje ne dijeli s drugima.
+  void _deleteRoomWalls(String roomId) {
+    final r = plan.roomById(roomId);
+    if (r == null) return;
+    final shared = <String>{};
+    for (final o in plan.rooms) {
+      if (o.id == roomId) continue;
+      for (var i = 0; i < o.nodeIds.length; i++) {
+        final w = wallBetween(o.nodeIds[i], o.nodeIds[(i + 1) % o.nodeIds.length]);
+        if (w != null) shared.add(w.id);
+      }
+    }
+    final remove = <String>{};
+    for (var i = 0; i < r.nodeIds.length; i++) {
+      final w = wallBetween(r.nodeIds[i], r.nodeIds[(i + 1) % r.nodeIds.length]);
+      if (w != null && !shared.contains(w.id)) remove.add(w.id);
+    }
+    plan.walls.removeWhere((w) => remove.contains(w.id));
+  }
+
   void _cleanup() {
     final wallIds = {for (final w in plan.walls) w.id};
     plan.openings.removeWhere((o) => !wallIds.contains(o.wallId));
-    final used = <String>{
-      for (final w in plan.walls) ...[w.a, w.b],
-      for (final r in plan.rooms) ...r.nodeIds,
-    };
+    final used = <String>{for (final w in plan.walls) ...[w.a, w.b]};
     plan.nodes.removeWhere((id, _) => !used.contains(id));
-    plan.rooms
-        .removeWhere((r) => r.nodeIds.any((id) => !plan.nodes.containsKey(id)));
+  }
+
+  // ------------------------------------------------------------ statistika
+
+  /// Koliko prostorija graniči sa zidom (1 = vanjski zid, 2 = unutarnji).
+  int wallSides(Wall w) {
+    var n = 0;
+    for (final r in plan.rooms) {
+      final ids = r.nodeIds;
+      for (var i = 0; i < ids.length; i++) {
+        final a = ids[i], b = ids[(i + 1) % ids.length];
+        if ((a == w.a && b == w.b) || (a == w.b && b == w.a)) {
+          n++;
+          break;
+        }
+      }
+    }
+    return n;
+  }
+
+  PlanStats get stats => _stats ??= _computeStats();
+
+  PlanStats _computeStats() {
+    final rooms = <RoomStat>[];
+    for (final r in plan.rooms) {
+      final poly = plan.roomPolygon(r);
+      if (poly.length < 3) continue;
+      rooms.add(RoomStat(r, polygonArea(poly), polygonPerimeter(poly), floorById(r.floor)));
+    }
+    var paint = 0.0, length = 0.0;
+    for (final w in plan.walls) {
+      final len = plan.wallLength(w);
+      length += len;
+      final sides = wallSides(w);
+      var area = len * w.height;
+      for (final o in plan.openings.where((o) => o.wallId == w.id)) {
+        area -= o.width * o.height;
+      }
+      paint += math.max(0, area) * sides;
+    }
+    return PlanStats(
+      rooms: rooms,
+      footprint: outlines.fold(0.0, (a, p) => a + polygonArea(p)),
+      paintArea: paint,
+      wallLength: length,
+      doors: plan.openings.where((o) => o.type == OpeningType.door || o.type == OpeningType.balcony).length,
+      windows: plan.openings.where((o) => o.type == OpeningType.window).length,
+    );
   }
 
   // --------------------------------------------------------- nacrt (slika)
@@ -413,7 +771,6 @@ class PlanController extends ChangeNotifier {
     plan.image = PlanImage(
       dataUrl: 'data:${mime.isEmpty ? 'image/png' : mime};base64,${base64Encode(bytes)}',
       origin: Offset.zero,
-      // Pretpostavka dok se ne kalibrira: nacrt je širok 15 m.
       metersPerPixel: 15 / img.width,
       widthPx: img.width,
       heightPx: img.height,
@@ -436,7 +793,6 @@ class PlanController extends ChangeNotifier {
     }
   }
 
-  /// Kalibracija: dvije točke na nacrtu i njihova stvarna udaljenost.
   void calibrateImage(Offset p1, Offset p2, double meters) {
     final im = plan.image;
     final dist = (p2 - p1).distance;
@@ -452,7 +808,7 @@ class PlanController extends ChangeNotifier {
     plan.image?.opacity = v;
     notifyListeners();
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 800), _autosave);
+    _saveTimer = Timer(const Duration(milliseconds: 800), _saveNow);
   }
 
   void removeImage() {
@@ -465,107 +821,16 @@ class PlanController extends ChangeNotifier {
 
   String exportJson() => const JsonEncoder.withIndent('  ').convert(plan.toJson());
 
-  Future<void> importJson(String s, {bool keepHistory = false}) async {
-    final p = Plan.fromJson(jsonDecode(s) as Map<String, dynamic>);
-    plan = p;
-    if (!keepHistory) {
-      _undo.clear();
-      _redo.clear();
-    }
-    selection = Selection.none;
-    await _decodePlanImage();
-    _changed();
-  }
-
-  void newPlan() {
-    plan = Plan();
-    bgImage = null;
-    selection = Selection.none;
-    _undo.clear();
-    _redo.clear();
-    tool = Tool.select;
-    _changed();
-  }
-
   void rename(String name) => mutate(() => plan.name = name);
 
-  /// Primjer kuće ~10 × 8 m s četiri prostorije i okućnicom.
-  void loadDemo() {
-    plan = Plan(name: 'Demo kuća');
-    bgImage = null;
-    _undo.clear();
-    _redo.clear();
-
-    addRoomRect(const Rect.fromLTRB(0, 0, 6, 5), name: 'Dnevni boravak', floorColor: 0xFFC8A98A);
-    addRoomRect(const Rect.fromLTRB(6, 0, 10, 5), name: 'Spavaća soba', floorColor: 0xFFD9C3A3);
-    addRoomRect(const Rect.fromLTRB(0, 5, 6, 8), name: 'Kuhinja', floorColor: 0xFFD6D3CC);
-    addRoomRect(const Rect.fromLTRB(6, 5, 10, 8), name: 'Kupaonica', floorColor: 0xFFB9C7CF);
-
-    // Vanjski zidovi deblji.
-    for (final w in plan.walls) {
-      final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
-      final outer = (a.dx == 0 && b.dx == 0) ||
-          (a.dx == 10 && b.dx == 10) ||
-          (a.dy == 0 && b.dy == 0) ||
-          (a.dy == 8 && b.dy == 8);
-      if (outer) w.thickness = 0.3;
-    }
-
-    addOpeningNear(const Offset(1.2, 0), OpeningType.window);
-    addOpeningNear(const Offset(5.0, 0), OpeningType.window);
-    addOpeningNear(const Offset(8, 0), OpeningType.window);
-    addOpeningNear(const Offset(10, 6.5), OpeningType.window);
-    addOpeningNear(const Offset(0, 6.5), OpeningType.window);
-    addOpeningNear(const Offset(5.3, 8), OpeningType.door); // ulaz
-    addOpeningNear(const Offset(6, 3.8), OpeningType.door);
-    addOpeningNear(const Offset(2.2, 5), OpeningType.door);
-    addOpeningNear(const Offset(6, 6.8), OpeningType.door);
-
-    void put(String id, double x, double y, [double rotDeg = 0]) {
-      final c = catalogById(id);
-      if (c != null) placeItem(c, Offset(x, y), rotation: rotDeg * math.pi / 180);
-    }
-
-    // Dnevni boravak
-    put('rug', 2.9, 2.4, 90);
-    put('sofa_3', 2.9, 3.9, 180);
-    put('coffee_table', 2.9, 2.7);
-    put('tv_unit', 2.9, 0.45);
-    put('armchair', 0.8, 2.4, 270);
-    put('bookshelf', 5.6, 1.6, 90);
-    put('plant', 0.5, 0.6);
-    put('floor_lamp', 4.3, 4.3);
-    // Spavaća
-    put('bed_160', 8.0, 1.4);
-    put('nightstand', 6.9, 0.4);
-    put('nightstand', 9.1, 0.4);
-    put('wardrobe_150', 8.4, 4.45, 180);
-    // Kuhinja
-    put('kitchen_block', 1.5, 7.55, 180);
-    put('fridge', 0.5, 5.5, 270);
-    put('dining_table', 4.1, 6.4);
-    put('chair', 3.6, 5.8);
-    put('chair', 4.6, 5.8);
-    put('chair', 3.6, 7.0, 180);
-    put('chair', 4.6, 7.0, 180);
-    // Kupaonica
-    put('bathtub', 8.9, 7.45);
-    put('toilet', 9.5, 5.6, 0);
-    put('vanity', 7.6, 5.4, 0);
-    // Okućnica
-    put('deck', 3.0, -2.0);
-    put('garden_table', 3.0, -2.0);
-    put('lounger', 7.0, -2.2, 90);
-    put('umbrella', 4.6, -2.6);
-    put('tree', -3.5, -2.5);
-    put('tree_small', 12.5, 2.0);
-    put('hedge', -2.0, 10.5);
-    put('hedge', 0.0, 10.5);
-    put('path', 3.0, 10.2);
-    put('car', 8.2, 11.5, 90);
-    put('pool', 3.0, -7.5);
-
-    selection = Selection.none;
-    _changed();
+  /// Zamijeni sadržaj (npr. predložak) – sve u jednoj promjeni, može se poništiti.
+  void replaceWith(void Function(PlanController c) build) {
+    mutate(() {
+      final name = plan.name;
+      final image = plan.image;
+      plan = Plan(name: name, image: image);
+      build(this);
+      selection = Selection.none;
+    });
   }
 }

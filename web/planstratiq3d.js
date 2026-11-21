@@ -190,6 +190,7 @@ function mat(color, opts = {}) {
       emissiveIntensity: opts.emissiveIntensity ?? 0,
       transparent: !!opts.opacity,
       opacity: opts.opacity ?? 1,
+      envMapIntensity: opts.env ?? 1,
     });
   }
   matCache.set(key, m);
@@ -1167,7 +1168,7 @@ class Engine {
     for (const r of p.rooms || []) {
       const pts = (r.nodeIds || []).map((id) => nodes[id]).filter(Boolean);
       if (pts.length < 3) continue;
-      mk(pts, mat(r.floorColor, { tex: r.floorTexture, roughness: r.floorTexture === 'wood' ? 0.6 : 0.75, double: true }), 0.03,
+      mk(pts, mat(r.floorColor, { tex: r.floorTexture, roughness: r.floorTexture === 'wood' ? 0.82 : 0.86, env: 0.3, double: true }), 0.03,
         { userData: { kind: 'room', id: r.id } });
       mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true });
     }

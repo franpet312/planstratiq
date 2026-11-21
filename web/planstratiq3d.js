@@ -679,8 +679,10 @@ class Engine {
     scene.add(sun, sun.target);
     this.indoor = new THREE.PointLight(0xffe7c4, 0, 14, 1.6);
     scene.add(this.indoor);
+    this.ambient = new THREE.AmbientLight(0xfff6ea, 0);
+    scene.add(this.ambient);
 
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(400, 64).rotateX(-Math.PI / 2), mat(0xb9cf9a, { tex: 'grass', roughness: 1 }));
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(400, 64).rotateX(-Math.PI / 2), mat(0xa9bb92, { tex: 'grass', roughness: 1 }));
     ground.position.y = -0.01;
     ground.receiveShadow = true;
     scene.add(ground);
@@ -1415,10 +1417,12 @@ class Engine {
       const active = this.fpv.isLocked || this.touch.move || this.touch.look;
       if (this.fpv.isLocked || this.touch.move) this._walk(dt);
       if (active) this._emitPose(false);
-      this.indoor.intensity = 1.4;
+      this.indoor.intensity = 2.2;
+      this.ambient.intensity = 0.55;
     } else {
       this.orbit.update();
       this.indoor.intensity = 0;
+      this.ambient.intensity = 0;
     }
     if (this.container && this.container.isConnected) this.renderer.render(this.scene, this.camera);
   }

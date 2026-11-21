@@ -38,8 +38,11 @@ class _Drag {
 
 /// 2D uređivač tlocrta.
 class PlanEditor extends StatefulWidget {
-  const PlanEditor({super.key, required this.c, this.onEmptyAction});
+  const PlanEditor({super.key, required this.c, this.onEmptyAction, this.zoom});
   final PlanController c;
+
+  /// Trenutno mjerilo (piksela po metru) za prikaz mjerila u sučelju.
+  final ValueNotifier<double>? zoom;
 
   /// Akcije praznog projekta: 'room', 'image', 'template'.
   final void Function(String action)? onEmptyAction;
@@ -118,8 +121,9 @@ class PlanEditorState extends State<PlanEditor> {
     }
     final bw = math.max(maxX - minX, 3.0) + 3.2, bh = math.max(maxY - minY, 3.0) + 3.2;
     setState(() {
-      scale = math.min(_size.width / bw, _size.height / bh).clamp(6.0, 400.0);
-      pan = Offset(_size.width / 2, _size.height / 2) - Offset((minX + maxX) / 2, (minY + maxY) / 2) * scale;
+      const inset = 64.0; // alatna traka lijevo
+      scale = math.min((_size.width - inset) / bw, _size.height / bh).clamp(6.0, 400.0);
+      pan = Offset(inset + (_size.width - inset) / 2, _size.height / 2) - Offset((minX + maxX) / 2, (minY + maxY) / 2) * scale;
     });
   }
 
@@ -680,6 +684,10 @@ class PlanEditorState extends State<PlanEditor> {
       listenable: Listenable.merge([c, c.walker]),
       builder: (context, _) => LayoutBuilder(builder: (context, box) {
         _size = box.biggest;
+        final z = widget.zoom;
+        if (z != null && z.value != scale) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => z.value = scale);
+        }
         if (!_fitted && !_size.isEmpty) {
           _fitted = true;
           WidgetsBinding.instance.addPostFrameCallback((_) => fit());

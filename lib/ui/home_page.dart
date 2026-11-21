@@ -148,9 +148,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         if (projects.isEmpty)
           SliverToBoxAdapter(
             child: _constrained(Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Još nemaš projekata. Kreni od praznog papira, nacrta ili jednog od predložaka ispod.',
-                  style: AppText.ui(size: 14, color: Pal.muted)),
+              padding: const EdgeInsets.only(bottom: 28),
+              child: SizedBox(
+                width: double.infinity,
+                child: Text('Još nemaš projekata. Kreni od praznog papira, nacrta ili jednog od predložaka ispod.',
+                    style: AppText.ui(size: 14, color: Pal.muted)),
+              ),
             )),
           )
         else

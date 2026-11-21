@@ -19,8 +19,9 @@ class FaceResult {
 /// Pronalazi zatvorene prostorije u planarnom grafu zidova.
 ///
 /// Za svaki usmjereni brid (u→v) u čvoru v uzima se sljedeći susjed iza u
-/// (sortirano po kutu). Tako se obilaze lica grafa; omeđena lica imaju
-/// pozitivnu površinu (y prema dolje), vanjsko lice negativnu.
+/// (sortirano po kutu). Tako se obilaze lica grafa; omeđena lica dobiju
+/// negativnu površinu, a vanjski obris pozitivnu. Prostorije se vraćaju
+/// preokrenute, s pozitivnom orijentacijom.
 FaceResult detectFaces(Plan plan) {
   final adj = <String, List<String>>{};
   for (final w in plan.walls) {
@@ -62,9 +63,10 @@ FaceResult detectFaces(Plan plan) {
       if (clean.length < 3) continue;
       final poly = [for (final id in clean) plan.nodePos(id)];
       final a = signedArea(poly);
-      if (a > 0.25) {
-        faces.add(clean);
-      } else if (a < -0.25) {
+      if (a < -0.25) {
+        // omeđeno lice: spremi s pozitivnom orijentacijom (unutrašnjost lijevo od smjera obilaska)
+        faces.add(clean.reversed.toList());
+      } else if (a > 0.25) {
         outlines.add(poly);
       }
     }

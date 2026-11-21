@@ -31,6 +31,7 @@ class EditorPage extends StatefulWidget {
 class _EditorPageState extends State<EditorPage> {
   late final PlanController c;
   final editorKey = GlobalKey<PlanEditorState>();
+  final zoom = ValueNotifier<double>(50);
   ViewLayout? _layout;
   int tab = 0; // 0 katalog, 1 svojstva, 2 pregled
   Selection _lastSel = Selection.none;
@@ -55,6 +56,7 @@ class _EditorPageState extends State<EditorPage> {
   void dispose() {
     c.removeListener(_onChange);
     c.dispose();
+    zoom.dispose();
     super.dispose();
   }
 
@@ -324,10 +326,10 @@ class _EditorPageState extends State<EditorPage> {
   }
 
   Widget _editorArea() => Stack(children: [
-        Positioned.fill(child: PlanEditor(key: editorKey, c: c, onEmptyAction: _emptyAction)),
+        Positioned.fill(child: PlanEditor(key: editorKey, c: c, onEmptyAction: _emptyAction, zoom: zoom)),
         Positioned(left: 12, top: 12, child: _ToolDock(c: c, onCancel: () => editorKey.currentState?.cancelTool())),
         Positioned(top: 12, left: 72, right: 12, child: Center(child: _ToolHint(c: c))),
-        Positioned(left: 12, bottom: 12, child: _ZoomControls(editorKey: editorKey)),
+        Positioned(left: 12, bottom: 12, child: _ZoomControls(editorKey: editorKey, zoom: zoom)),
         if (c.plan.isEmpty && c.plan.image == null && c.tool == Tool.select)
           Positioned.fill(child: Center(child: _EmptyState(onAction: _emptyAction))),
       ]);
@@ -505,28 +507,25 @@ class _ToolHint extends StatelessWidget {
   }
 }
 
-class _ZoomControls extends StatefulWidget {
-  const _ZoomControls({required this.editorKey});
+class _ZoomControls extends StatelessWidget {
+  const _ZoomControls({required this.editorKey, required this.zoom});
   final GlobalKey<PlanEditorState> editorKey;
+  final ValueNotifier<double> zoom;
 
   @override
-  State<_ZoomControls> createState() => _ZoomControlsState();
-}
+  Widget build(BuildContext context) => ValueListenableBuilder<double>(valueListenable: zoom, builder: (context, scale, _) => _build(scale));
 
-class _ZoomControlsState extends State<_ZoomControls> {
-  @override
-  Widget build(BuildContext context) {
-    final ed = widget.editorKey.currentState;
-    final scale = ed?.scale ?? 50;
+  Widget _build(double scale) {
+    final ed = editorKey.currentState;
     // mjerilo: odaberi lijepu duljinu oko 80 px
     const nice = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0];
     final meters = nice.firstWhere((m) => m * scale >= 60, orElse: () => 20);
     return FloatPanel(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconBtn(icon: Icons.remove, tooltip: 'Udalji  −', size: 32, onTap: () => setState(() => ed?.zoomBy(1 / 1.25))),
-        IconBtn(icon: Icons.add, tooltip: 'Približi  +', size: 32, onTap: () => setState(() => ed?.zoomBy(1.25))),
-        IconBtn(icon: Icons.fit_screen_outlined, tooltip: 'Cijeli tlocrt  0', size: 32, onTap: () => setState(() => ed?.fit())),
+        IconBtn(icon: Icons.remove, tooltip: 'Udalji  −', size: 32, onTap: () => ed?.zoomBy(1 / 1.25)),
+        IconBtn(icon: Icons.add, tooltip: 'Približi  +', size: 32, onTap: () => ed?.zoomBy(1.25)),
+        IconBtn(icon: Icons.fit_screen_outlined, tooltip: 'Cijeli tlocrt  0', size: 32, onTap: () => ed?.fit()),
         const SizedBox(width: 8),
         Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
@@ -536,7 +535,7 @@ class _ZoomControlsState extends State<_ZoomControls> {
               border: Border(left: BorderSide(color: Pal.ink), right: BorderSide(color: Pal.ink), bottom: BorderSide(color: Pal.ink)),
             ),
           ),
-          Text('${meters < 1 ? '50 cm' : '${meters.round()} m'}', style: AppText.narrow(size: 10.5, color: Pal.inkSoft)),
+          Text(meters < 1 ? '50 cm' : '${meters.round()} m', style: AppText.narrow(size: 10.5, color: Pal.inkSoft)),
         ]),
         const SizedBox(width: 8),
       ]),

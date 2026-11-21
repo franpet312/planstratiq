@@ -209,6 +209,8 @@ class ImportedCatalog extends ChangeNotifier {
     return 'box';
   }
 
+  static int colorFor(String? s, String shape) => _color(s, shape);
+
   static int _color(String? s, String shape) {
     if (s != null) {
       final hex = s.replaceAll('#', '').trim();

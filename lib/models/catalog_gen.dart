@@ -357,6 +357,9 @@ final Map<String, CatalogItem> _byId = {
 /// Uvezeni proizvodi trgovina (postavlja ih ImportedCatalog).
 final Map<String, CatalogItem> importedById = {};
 
-CatalogItem? catalogById(String id) => _byId[id] ?? importedById[id];
+/// Stvarni proizvodi trgovina (IKEA, JYSK, Emmezeta) – postavlja ih RetailCatalog.
+final Map<String, CatalogItem> retailById = {};
+
+CatalogItem? catalogById(String id) => _byId[id] ?? retailById[id] ?? importedById[id];
 
 int get variantCount => catalog.length;

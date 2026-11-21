@@ -4,12 +4,14 @@ import 'package:flutter/services.dart';
 
 import 'app/theme.dart';
 import 'state/imported_catalog.dart';
+import 'state/retail_catalog.dart';
 import 'ui/home_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) BrowserContextMenu.disableContextMenu();
   ImportedCatalog.instance; // učitaj uvezene proizvode prije otvaranja projekata
+  RetailCatalog.instance.load(); // stvarni proizvodi trgovina (IKEA, JYSK, Emmezeta)
   runApp(const PlanstratiqApp());
 }
 

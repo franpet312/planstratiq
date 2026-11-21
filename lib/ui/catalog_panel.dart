@@ -8,6 +8,7 @@ import '../models/catalog.dart';
 import '../models/catalog_gen.dart';
 import '../models/geometry.dart';
 import '../state/imported_catalog.dart';
+import '../state/retail_catalog.dart';
 import '../state/plan_controller.dart';
 import '../viewer/engine_bridge.dart';
 import 'web_files.dart';
@@ -101,6 +102,8 @@ class _CatalogPanelState extends State<CatalogPanel> {
   static CatalogZone zone = CatalogZone.interior;
   static String? category;
   static String? styleId;
+  /// null = sve, '__gen' = generički modeli, inače naziv trgovine
+  static String? source;
   static _Sort sort = _Sort.recommended;
   String query = '';
   _Entry? open;
@@ -113,6 +116,8 @@ class _CatalogPanelState extends State<CatalogPanel> {
   ];
 
   List<_Entry> get _all => [
+        for (final m in RetailCatalog.instance.models)
+          _Entry(id: m.id, name: m.name, category: m.category, zone: m.zone, variants: m.variants, retailer: m.retailer),
         ..._generated,
         for (final it in ImportedCatalog.instance.items)
           _Entry(id: it.id, name: it.name, category: it.category, zone: it.zone, variants: [it], retailer: it.retailer),
@@ -129,7 +134,9 @@ class _CatalogPanelState extends State<CatalogPanel> {
     final words = q.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
     var list = _all.where((e) {
       if (words.isNotEmpty) return words.every((w) => e.search.contains(w));
-      if (category == '__imported') return e.retailer != null;
+      if (category == '__imported') return e.retailer != null && e.id.startsWith('imp:');
+      if (source == '__gen' && e.retailer != null) return false;
+      if (source != null && source != '__gen' && e.retailer != source) return false;
       if (e.zone != zone) return false;
       if (category != null && e.category != category) return false;
       if (styleId != null && e.style != null && e.style!.id != styleId) return false;
@@ -169,7 +176,10 @@ class _CatalogPanelState extends State<CatalogPanel> {
     final seen = <int>{};
     final out = <(int, String)>[];
     for (final v in e.variants) {
-      if (seen.add(v.color)) out.add((v.color, (v.variant ?? '').split(', ').length > 1 ? v.variant!.split(', ')[1] : ''));
+      if (seen.add(v.color)) {
+        final parts = (v.variant ?? '').split(' · ').first.split(', ');
+        out.add((v.color, parts.length > 1 ? parts.sublist(1).join(', ') : ''));
+      }
     }
     return out;
   }
@@ -212,7 +222,7 @@ class _CatalogPanelState extends State<CatalogPanel> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: ImportedCatalog.instance,
+      listenable: Listenable.merge([ImportedCatalog.instance, RetailCatalog.instance]),
       builder: (context, _) => open == null ? _grid(context) : _detail(context, open!),
     );
   }
@@ -221,9 +231,11 @@ class _CatalogPanelState extends State<CatalogPanel> {
   Widget _grid(BuildContext context) {
     final list = _filtered();
     final categories = <String>[];
-    for (final e in _generated.where((e) => e.zone == zone)) {
+    for (final e in _all.where((e) => e.zone == zone &&
+        (source == null || (source == '__gen' ? e.retailer == null : e.retailer == source)))) {
       if (!categories.contains(e.category)) categories.add(e.category);
     }
+    final retailers = RetailCatalog.instance.retailers;
     final variants = list.fold<int>(0, (a, e) => a + e.variants.length);
     final hasImported = ImportedCatalog.instance.items.isNotEmpty;
 
@@ -251,6 +263,19 @@ class _CatalogPanelState extends State<CatalogPanel> {
             }),
           ),
         ),
+        if (retailers.isNotEmpty)
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              children: [
+                _sourceChip('Sve trgovine', null),
+                for (final r in retailers) _sourceChip(r, r),
+                _sourceChip('Generički', '__gen'),
+              ],
+            ),
+          ),
         SizedBox(
           height: 44,
           child: ListView(
@@ -358,6 +383,31 @@ class _CatalogPanelState extends State<CatalogPanel> {
         ]),
       ),
     ]);
+  }
+
+  Widget _sourceChip(String label, String? value) {
+    final active = source == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        onTap: () => setState(() {
+          source = value;
+          category = null;
+          if (value != null && value != '__gen') styleId = null;
+        }),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: active ? Pal.accentSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: active ? Pal.accent : Pal.line),
+          ),
+          child: Text(label,
+              style: AppText.ui(size: 12, weight: FontWeight.w600, color: active ? Pal.accentDeep : Pal.inkSoft)),
+        ),
+      ),
+    );
   }
 
   Widget _miniButton(IconData icon, String label) => Padding(

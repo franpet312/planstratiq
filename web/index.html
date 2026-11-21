@@ -32,6 +32,25 @@
       };
     })();
   </script>
+  <!-- Dijeljenje projekta poveznicom: JSON -> gzip -> base64url -->
+  <script>
+    window.psqShare = {
+      async pack(str) {
+        const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
+        const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      },
+      async unpack(b64) {
+        b64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+        return await new Response(stream).text();
+      },
+    };
+  </script>
   <script type="module" src="planstratiq3d.js"></script>
 
   <style>

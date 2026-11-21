@@ -8,6 +8,7 @@ import '../models/plan.dart';
 import '../models/templates.dart';
 import '../state/plan_controller.dart';
 import '../state/project_store.dart';
+import '../state/share.dart';
 import '../viewer/viewer_3d.dart';
 import 'catalog_panel.dart';
 import 'common.dart';
@@ -105,6 +106,57 @@ class _EditorPageState extends State<EditorPage> {
   void _exportCsv() => downloadText(buildCsv(c), '${c.plan.name} – troškovnik.csv', mime: 'text/csv;charset=utf-8');
 
   void _exportJson() => downloadText(c.exportJson(), '${c.plan.name}.planstratiq.json');
+
+  Future<void> _share() async {
+    String link;
+    try {
+      link = await shareLink(c.plan);
+    } catch (_) {
+      _snack('Ovaj preglednik ne podržava dijeljenje poveznicom. Spremi projekt kao datoteku.');
+      return;
+    }
+    var copied = true;
+    try {
+      await Clipboard.setData(ClipboardData(text: link));
+    } catch (_) {
+      copied = false;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Podijeli projekt'),
+        content: SizedBox(
+          width: 480,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              copied
+                  ? 'Poveznica je kopirana. Pošalji je bilo kome: otvorit će vlastitu kopiju tlocrta s namještajem i 3D prikazom.'
+                  : 'Kopiraj poveznicu i pošalji je: primatelj otvara vlastitu kopiju tlocrta s namještajem i 3D prikazom.',
+              style: AppText.ui(size: 13.5, color: Pal.inkSoft, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              constraints: const BoxConstraints(maxHeight: 120),
+              decoration: BoxDecoration(color: Pal.paper, borderRadius: BorderRadius.circular(8), border: Border.all(color: Pal.line)),
+              child: SingleChildScrollView(child: SelectableText(link, style: AppText.narrow(size: 12, color: Pal.inkSoft))),
+            ),
+            const SizedBox(height: 8),
+            Text('Slika nacrta iz pozadine se ne dijeli. Poveznica ima ${link.length} znakova.',
+                style: AppText.ui(size: 12, color: Pal.muted)),
+          ]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Clipboard.setData(ClipboardData(text: link)),
+            child: const Text('Kopiraj ponovno'),
+          ),
+          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Gotovo')),
+        ],
+      ),
+    );
+  }
 
   Future<void> _rename() async {
     final ctrl = TextEditingController(text: c.plan.name);
@@ -265,6 +317,8 @@ class _EditorPageState extends State<EditorPage> {
           icon: const Icon(Icons.ios_share, color: Pal.inkSoft, size: 20),
           onSelected: (v) {
             switch (v) {
+              case 'share':
+                _share();
               case 'png':
                 _exportPlanPng();
               case 'csv':
@@ -278,6 +332,8 @@ class _EditorPageState extends State<EditorPage> {
             }
           },
           itemBuilder: (_) => const [
+            PopupMenuItem(value: 'share', child: ListTile(dense: true, leading: Icon(Icons.link), title: Text('Podijeli poveznicom'))),
+            PopupMenuDivider(),
             PopupMenuItem(value: 'png', child: ListTile(dense: true, leading: Icon(Icons.image_outlined), title: Text('Tlocrt kao slika (PNG)'))),
             PopupMenuItem(value: 'csv', child: ListTile(dense: true, leading: Icon(Icons.table_view_outlined), title: Text('Troškovnik (CSV)'))),
             PopupMenuItem(value: 'json', child: ListTile(dense: true, leading: Icon(Icons.save_alt), title: Text('Projekt kao datoteka'))),

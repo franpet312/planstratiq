@@ -7,6 +7,7 @@ import '../models/geometry.dart';
 import '../models/plan.dart';
 import '../models/templates.dart';
 import '../state/project_store.dart';
+import '../state/share.dart';
 import 'editor_page.dart';
 import 'plan_preview.dart';
 import 'web_files.dart';
@@ -29,7 +30,16 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _reload();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final shared = await planFromLocation();
+      if (shared != null && mounted) {
+        final id = store.create(shared);
+        setState(_reload);
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Otvoren je podijeljeni projekt „${shared.name}”. Ovo je tvoja kopija.')));
+        _open(id);
+      }
+      if (!mounted) return;
       if (MediaQuery.of(context).disableAnimations) {
         _draw.value = 1;
       } else {

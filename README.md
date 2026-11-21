@@ -1,119 +1,110 @@
 # Planstratiq
 
-Web aplikacija za planiranje kuće: iz nacrta (ili od nule) složiš tlocrt, a aplikacija
-odmah generira 3D model kroz koji možeš **hodati u prvom licu**, pomicati zidove,
-mijenjati mjere i opremati interijer i eksterijer namještajem.
+Web aplikacija za planiranje kuće ili stana: nacrtaj tlocrt (ili ga precrtaj sa slike nacrta),
+pomiči zidove dok mjere ne sjednu, opremi prostorije namještajem stvarnih dimenzija i prošeći
+kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 
-## Pokretanje
+**Otvori aplikaciju:** https://franpet312.github.io/planstratiq/
 
-Potrebno: Flutter SDK 3.24+ (Dart 3.5+) i Chrome.
+## Što sve radi
+
+**Projekti**
+- Početni ekran s projektima (spremaju se automatski u preglednik), predlošcima kuće i stana i praznim papirom.
+- Kopiranje, preimenovanje, brisanje, spremanje projekta kao datoteke i otvaranje na drugom računalu.
+
+**Tlocrt (2D)**
+- Izgled pravog arhitektonskog nacrta: šrafirani nosivi zidovi, kote s kosinama, natpisi prostorija s neto površinom i vrstom poda, simboli namještaja.
+- *Prostorija:* povuci pravokutnik, zidovi se sami spajaju sa susjednima.
+- *Zidovi:* klik po klik, hvatanje na kutove 0/45/90° i postojeće točke; upiši duljinu (npr. `4,25`) i Enter za točnu mjeru.
+- Prostorije se **prepoznaju same** iz zatvorenih zidova (i nepravilnih oblika); zidovi se dijele na T-spojevima i križanjima.
+- Pomicanje zida povlačenjem (spojeni zidovi prate), pomicanje kuta, pomicanje cijele prostorije.
+- Vrata, prozori, balkonska vrata i prolazi; šarke i smjer otvaranja vrata.
+- Alat za mjerenje, mjerilo, zoom, pinch-zoom na dodir.
+- Učitavanje slike nacrta kao podloge i kalibracija mjerila (dvije točke + stvarna udaljenost).
+
+**Namještaj i okućnica**
+- Katalog s ~60 objekata (dnevni boravak, spavaća, kuhinja, kupaonica, dječja, vrt, dvorište), 3D sličicama, mjerama i okvirnim cijenama.
+- Povuci objekt na tlocrt ili u 3D; uz zid se sam okrene leđima prema zidu.
+- Rotacija ručicom (korak 15°), strelice za pomak 1 cm, dupliciranje, promjena mjera i boje.
+
+**3D**
+- Zidovi s otvorima, fasada, podovi s teksturama (parket, laminat, pločice, kamen, beton, tepison), nebo, sjene.
+- Doba dana (položaj sunca), krov, snimka prikaza kao slika.
+- Odabir i povlačenje namještaja izravno u 3D-u.
+- **Šetnja u prvom licu**: W A S D + miš, ili na mobitelu lijevi palac za hodanje i desni za gledanje; ne prolazi se kroz zidove, kroz vrata da. Položaj osobe vidi se uživo na tlocrtu. Brzi skok u prostoriju.
+
+**Pregled i cijene**
+- Neto površina (po licima zidova) i bruto tlocrtna površina, popis prostorija.
+- Okvirni troškovnik: podovi po materijalu, bojanje zidova (m² i litre), namještaj.
+- Izvoz: tlocrt kao PNG s natpisnim poljem, troškovnik kao CSV (Excel), projekt kao datoteka.
+
+## Prečaci
+
+| Tipka | Radnja |
+|---|---|
+| V / W / R | Odabir / zidovi / prostorija |
+| D / P / M | Vrata / prozor / mjerenje |
+| brojke + Enter | Točna duljina zida dok crtaš |
+| Ctrl+Z / Ctrl+Y | Poništi / ponovi |
+| Delete | Obriši odabrano |
+| R / Shift+R | Okreni namještaj ±90° |
+| Ctrl+D | Dupliciraj namještaj |
+| strelice (Shift) | Pomakni namještaj 1 cm (10 cm) |
+| + / − / 0 | Zoom / cijeli tlocrt |
+| Esc | Prekini alat |
+
+## Razvoj
+
+Potrebno: Flutter SDK (stable) i Chrome.
 
 ```bash
+git clone https://github.com/franpet312/planstratiq
 cd planstratiq
-flutter create . --platforms web --project-name planstratiq   # samo prvi put: doda ikone/manifest, NE dira lib/ i postojeće datoteke
+flutter create . --platforms web --project-name planstratiq   # samo prvi put; NE prepisuj web/index.html
 flutter pub get
 flutter run -d chrome
 ```
 
-> Ako `flutter create` ponudi prepisivanje `web/index.html`, odgovori **ne** – naš index.html
-> učitava 3D engine.
-
-Build za produkciju: `flutter build web --release` → sadržaj `build/web/` ide na bilo koji
-statički hosting (Firebase Hosting, Netlify, Vercel, Nginx…).
-
-3D engine (Three.js 0.170) trenutno se učitava s CDN-a (jsdelivr). Za produkciju ga je
-bolje preuzeti u `web/vendor/` i promijeniti putanje u `importmap` u `web/index.html`.
-
-## Što radi (MVP)
-
-| Funkcija | Kako |
-|---|---|
-| Učitavanje nacrta | „Učitaj nacrt” → slika (JPG/PNG) postaje podloga; alat **Mjerilo**: klikneš dvije točke poznate udaljenosti i upišeš stvarnu mjeru |
-| Crtanje zidova | Alat **Zid**: klik-klik-klik; hvata se na postojeće točke i kutove 0/45/90°, korak 5 cm |
-| Sobe | Alat **Soba**: povučeš pravokutnik, zidovi se kreiraju i spajaju sa susjednim sobama; prikaz površine m² |
-| Pomicanje zida | U alatu Odabir povučeš zid – pomiče se okomito u koracima od 1 cm, spojeni zidovi prate. Duljina, debljina i visina mogu se upisati i brojčano |
-| Vrata i prozori | Klik na zid; kasnije se povlače duž zida; širina, visina, parapet |
-| Namještaj | Katalog interijera i eksterijera s realnim mjerama; postavljanje, pomicanje, rotacija (R), dupliciranje (Ctrl+D), boje |
-| 3D pregled | Orbit kamera (rotacija/pomak/zoom), sjene, sunce, trava, nebo |
-| Šetnja u prvom licu | „Šetnja” → klik u prikaz → WASD/strelice + miš, Shift trčanje, kolizija sa zidovima, prolaz kroz vrata, stropovi |
-| Projekt | Undo/redo, automatsko spremanje u preglednik, izvoz/uvoz `.planstratiq.json`, demo kuća |
-| Prikazi | 2D, 2D+3D uživo jedno uz drugo, 3D |
+Svaki push na `main` automatski se gradi i objavljuje na GitHub Pages (`.github/workflows/deploy.yml`).
 
 ## Arhitektura
 
 ```
-Flutter Web (Dart)                                   Three.js (JavaScript)
-┌──────────────────────────────────────────┐         ┌──────────────────────────────┐
-│ PlannerPage (UI, alati, paneli)          │         │ web/planstratiq3d.js         │
-│   ├─ PlanEditor  (2D CustomPainter)      │  JSON   │  Engine                      │
-│   ├─ Viewer3D    (HtmlElementView) ──────┼────────►│   ├─ zidovi s otvorima       │
-│   ├─ CatalogPanel / PropertiesPanel      │ setPlan │   ├─ podovi / stropovi        │
-│   └─ PlanController (stanje, undo/redo)  │ setMode │   ├─ proceduralni namještaj   │
-│        └─ Plan (čvorovi, zidovi, otvori, │         │   │   + GLB modeli (GLTFLoader)│
-│           sobe, objekti, slika nacrta)   │         │   ├─ OrbitControls            │
-└──────────────────────────────────────────┘         │   └─ PointerLock + kolizija   │
-                                                     └──────────────────────────────┘
+Flutter Web (Dart)                                        Three.js (web/planstratiq3d.js)
+┌──────────────────────────────────────────────┐          ┌──────────────────────────────────┐
+│ HomePage – projekti, predlošci               │          │ Engine                           │
+│ EditorPage                                   │  JSON    │  zidovi s otvorima, fasada       │
+│   PlanEditor + PlanPainter (2D nacrt)        │ ───────► │  podovi s teksturama, krov       │
+│   Viewer3D (HtmlElementView) ────────────────┼─ setPlan │  proceduralni namještaj / GLB    │
+│   Katalog / Svojstva / Pregled i cijene      │ ◄─────── │  orbit + odabir/povlačenje       │
+│ PlanController – stanje, povijest, topologija│  događaji│  šetnja (PointerLock, dodir)     │
+│ ProjectStore – localStorage                  │ select,  │  nebo, sunce, sjene, snimka      │
+│ Plan – čvorovi, zidovi, otvori, prostorije,  │ move,    │  sličice kataloga                │
+│        namještaj, slika nacrta               │ pose     └──────────────────────────────────┘
+└──────────────────────────────────────────────┘
 ```
 
-* **Zašto Flutter + Three.js?** Flutter je odličan za sučelje i 2D uređivač, ali na webu
-  nema zreo 3D engine sa sjenama, učitavanjem GLB modela i pointer-lock kontrolama.
-  Three.js je standard za to; Dart s njim razgovara preko `dart:js_interop`.
-* **Model podataka** (`lib/models/plan.dart`): zidovi dijele **čvorove** (točke spoja).
-  Zato pomicanje jednog zida automatski produžuje/skraćuje susjedne. Sve mjere su u metrima.
-* **Tok podataka**: svaka promjena povećava `revision` → `Viewer3D` šalje novi JSON enginu →
-  engine ponovno gradi scenu (dovoljno brzo za stotine zidova/objekata).
+- **Model** (`lib/models/plan.dart`): zidovi dijele čvorove, pa pomicanje zida pomiče i spojene zidove. Mjere su u metrima.
+- **Topologija** (`lib/models/topology.dart`): prostorije su lica planarnog grafa zidova; prepoznaju se nakon svake promjene, a postojeće zadržavaju naziv i pod. Neto/bruto površina računa se pomakom poligona za pola debljine zida.
+- **3D** komunicira s Dartom preko `dart:js_interop` (`lib/viewer/engine_bridge.dart`).
 
 ```
 lib/
-  main.dart
-  models/      plan.dart, catalog.dart, geometry.dart
-  state/       plan_controller.dart
-  editor/      plan_editor.dart, plan_painter.dart
-  viewer/      viewer_3d.dart
-  ui/          planner_page.dart, catalog_panel.dart, properties_panel.dart, web_files.dart
+  app/theme.dart                 paleta, tipografija (Archivo, Archivo Narrow)
+  models/                        plan, katalog, materijali, topologija, predlošci, geometrija
+  state/                         PlanController, ProjectStore
+  editor/                        PlanEditor, PlanPainter (nacrt + simboli), izvoz PNG
+  viewer/                        Viewer3D, most prema engineu, sličice
+  ui/                            početni ekran, uređivač, paneli, zajedničke komponente
 web/
   index.html, planstratiq3d.js
 ```
 
 ## Plan razvoja
 
-1. **Automatsko prepoznavanje nacrta (AI)** – backend servis (Python/FastAPI) koji iz slike
-   ili PDF-a prepoznaje zidove, vrata, prozore i prostorije (segmentacijski model treniran na
-   skupovima poput CubiCasa5K + vektorizacija OpenCV-om) i vraća JSON u istom formatu kao
-   `Plan.toJson()`. Korisnik zatim samo ispravlja. Do tada: precrtavanje preko podloge.
-2. **Katalog trgovaca** – vidi dolje.
-3. **Uređivanje u 3D-u** – odabir i povlačenje zidova/namještaja direktno u 3D prikazu
-   (raycasting → poruka natrag u Dart).
-4. **Više etaža, stubišta, krov** (dvostrešni/četverostrešni generator), balkoni, terasa.
-5. **Materijali i teksture** – parket, pločice, fasada, crijep; PBR teksture.
-6. **Teren i okućnica** – granica parcele, nagib, staze, ograde po rubu.
-7. **Korisnički računi i oblak** – Firebase ili Supabase (auth + pohrana projekata + dijeljenje linkom).
-8. **Izvoz** – PDF tlocrt s kotama, slike 3D prikaza, GLB/OBJ izvoz modela, popis namještaja s cijenama.
-9. **Mobilno / VR** – Flutter omogućuje mobilnu aplikaciju; WebXR za VR šetnju.
-
-## Namještaj trgovaca (IKEA, JYSK, Emmezeta…)
-
-Katalog je trenutno generički (realne mjere + proceduralni 3D oblici). Za stvarne proizvode:
-
-* Ovi trgovci **nemaju javni API** za preuzimanje 3D modela, a njihovi modeli i fotografije
-  zaštićeni su autorskim pravom – scraping s njihovih stranica nije dopušten.
-* Ispravan put je **partnerstvo / affiliate program**: trgovac daje produktni feed (naziv,
-  šifra, mjere, cijena, link, slike) i, idealno, GLB modele. Alternativno, vlastiti 3D
-  modeli izrađeni prema javno objavljenim mjerama, uz link na proizvod.
-* Tehnički je sve spremno: `CatalogItem` ima `retailer`, `productUrl`, `price` i `modelUrl`
-  (GLB). Kad `modelUrl` postoji, engine učita model i skalira ga na mjere proizvoda.
-* Preporuka: katalog prebaciti na backend (npr. `GET /catalog?retailer=…&category=…`) kako bi
-  se feedovi mogli osvježavati bez nove verzije aplikacije.
-
-## Prečaci
-
-| Tipka | Radnja |
-|---|---|
-| Ctrl+Z / Ctrl+Y | Poništi / ponovi |
-| Ctrl+S | Spremi projekt (JSON) |
-| Del / Backspace | Obriši odabrano |
-| R / Shift+R | Rotiraj namještaj ±90° |
-| Ctrl+D | Dupliciraj namještaj |
-| Esc | Prekini alat / odznači |
-| Kotačić / srednja tipka | Zoom / pomak 2D pogleda |
-| W A S D, Shift, Esc | Šetnja u 3D-u |
+1. **Više etaža** (prizemlje, kat, podrum) sa stubištem između etaža.
+2. **Automatsko prepoznavanje nacrta (AI)**: servis koji iz slike/PDF-a prepozna zidove, vrata i prozore (segmentacija + vektorizacija) i vrati isti JSON format; korisnik samo ispravlja.
+3. **Katalog trgovaca**: IKEA, JYSK, Emmezeta i drugi nemaju javni API za 3D modele, a njihovi modeli i fotografije zaštićeni su; put je partnerski/affiliate feed (naziv, šifra, mjere, cijena, link, GLB model). Aplikacija je spremna: `CatalogItem` ima `retailer`, `productUrl`, `price` i `modelUrl`.
+4. **Dijeljenje** projekta linkom i korisnički računi (npr. Supabase/Firebase).
+5. Složeniji krovovi, teren i nagib parcele, ograda po rubu parcele.
+6. PDF izvoz s presjecima i specifikacijom; WebXR za VR šetnju.

@@ -834,8 +834,31 @@ class Engine {
 
   walkTo(x, y) {
     if (this.mode !== 'walk') this.setMode('walk');
-    this.camera.position.set(x, EYE, y);
+    this._placeViewer(x, y);
     this._emitPose(true);
+  }
+
+  // udaljenost do najbližeg zida u smjeru (dx, dz)
+  _rayDist(x, z, dx, dz, max = 15) {
+    for (let d = 0.1; d < max; d += 0.1) if (this._blocked(x + dx * d, z + dz * d)) return d;
+    return max;
+  }
+
+  // postavi promatrača: okreni ga prema najduljem slobodnom pogledu i odmakni unatrag
+  _placeViewer(x, z) {
+    let best = { d: -1, dx: 0, dz: -1 };
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const dx = Math.sin(a), dz = -Math.cos(a);
+      const d = this._rayDist(x, z, dx, dz);
+      if (d > best.d) best = { d, dx, dz };
+    }
+    const back = Math.min(1.6, Math.max(0, this._rayDist(x, z, -best.dx, -best.dz) - 0.5));
+    x -= best.dx * back;
+    z -= best.dz * back;
+    this.camera.position.set(x, EYE, z);
+    this.camera.up.set(0, 1, 0);
+    this.camera.quaternion.setFromEuler(new THREE.Euler(-0.08, Math.atan2(-best.dx, -best.dz), 0, 'YXZ'));
   }
 
   frame() {
@@ -843,7 +866,7 @@ class Engine {
     const size = Math.max(b.max.x - b.min.x, b.max.z - b.min.z, 6);
     const c = new THREE.Vector3((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2);
     this.orbit.target.copy(c);
-    const k = 0.62 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * Math.max(1, 1.25 / Math.max(this.camera.aspect, 0.5));
+    const k = (0.62 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) * Math.pow(Math.max(1, 1.2 / Math.max(this.camera.aspect, 0.3)), 0.6);
     this.camera.position.set(c.x + size * 0.42 * k, size * 0.62 * k, c.z + size * 0.72 * k);
     this.camera.lookAt(c);
     this.center = c;
@@ -1372,9 +1395,7 @@ class Engine {
       x = (b.min.x + b.max.x) / 2;
       z = (b.min.z + b.max.z) / 2;
     }
-    this.camera.position.set(x, EYE, z);
-    this.camera.up.set(0, 1, 0);
-    this.camera.quaternion.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ'));
+    this._placeViewer(x, z);
     this._emitPose(true);
   }
 

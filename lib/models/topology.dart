@@ -5,7 +5,7 @@ import 'geometry.dart';
 import 'plan.dart';
 
 class FaceResult {
-  FaceResult(this.faces, this.outlines);
+  FaceResult(this.faces, this.outlines, this.outlineIds);
 
   /// Unutarnje zatvorene površine (prostorije) kao liste ID-jeva čvorova.
   final List<List<String>> faces;
@@ -13,8 +13,48 @@ class FaceResult {
   /// Vanjski obrisi (po jedan za svaku povezanu skupinu zidova).
   final List<List<Offset>> outlines;
 
-  double get footprint => outlines.fold(0.0, (a, p) => a + polygonArea(p));
+  /// ID-jevi čvorova vanjskih obrisa (isti poredak kao [outlines]).
+  final List<List<String>> outlineIds;
 }
+
+/// Površina poligona pomaknutog za debljinu zidova: prema unutra (neto) ili van (bruto).
+/// [half] je pola debljine zida za svaki brid (poly[i] → poly[i+1]).
+double offsetArea(List<Offset> poly, List<double> half, {required bool inward}) {
+  final n = poly.length;
+  if (n < 3) return 0;
+  final a = signedArea(poly);
+  final sgn = a >= 0 ? 1.0 : -1.0;
+  var sumLh = 0.0, corr = 0.0;
+  for (var i = 0; i < n; i++) {
+    final p0 = poly[i], p1 = poly[(i + 1) % n], p2 = poly[(i + 2) % n];
+    sumLh += (p1 - p0).distance * half[i];
+    final c = cross(p1 - p0, p2 - p1) * sgn;
+    final h = half[i] * half[(i + 1) % n];
+    if (c > 1e-9) {
+      corr += h;
+    } else if (c < -1e-9) {
+      corr -= h;
+    }
+  }
+  final r = inward ? a.abs() - sumLh + corr : a.abs() + sumLh + corr;
+  return r < 0 ? 0 : r;
+}
+
+/// Pola debljine zida za svaki brid niza čvorova.
+List<double> edgeHalfThickness(Plan plan, List<String> ids) {
+  final byKey = <String, Wall>{};
+  for (final w in plan.walls) {
+    byKey['${w.a}|${w.b}'] = w;
+    byKey['${w.b}|${w.a}'] = w;
+  }
+  return [
+    for (var i = 0; i < ids.length; i++) (byKey['${ids[i]}|${ids[(i + 1) % ids.length]}']?.thickness ?? 0) / 2,
+  ];
+}
+
+/// Neto (svijetla) površina prostorije – unutar lica zidova.
+double roomNetArea(Plan plan, Room r) =>
+    offsetArea(plan.roomPolygon(r), edgeHalfThickness(plan, r.nodeIds), inward: true);
 
 /// Pronalazi zatvorene prostorije u planarnom grafu zidova.
 ///
@@ -43,6 +83,7 @@ FaceResult detectFaces(Plan plan) {
   final visited = <String>{};
   final faces = <List<String>>[];
   final outlines = <List<Offset>>[];
+  final outlineIds = <List<String>>[];
 
   for (final u0 in adj.keys) {
     for (final v0 in adj[u0]!) {
@@ -68,10 +109,11 @@ FaceResult detectFaces(Plan plan) {
         faces.add(clean.reversed.toList());
       } else if (a > 0.25) {
         outlines.add(poly);
+        outlineIds.add(clean);
       }
     }
   }
-  return FaceResult(faces, outlines);
+  return FaceResult(faces, outlines, outlineIds);
 }
 
 /// Uklanja "šiljke" (slobodni zid unutar prostorije: ...a, b, a...).

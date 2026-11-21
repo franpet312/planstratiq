@@ -101,8 +101,9 @@ class PlanController extends ChangeNotifier {
   CatalogItem? placing;
   ui.Image? bgImage;
 
-  /// Vanjski obris zgrade (za bruto površinu i prikaz).
+  /// Vanjski obris zgrade (za bruto površinu, podlogu i krov).
   List<List<Offset>> outlines = [];
+  List<List<String>> outlineIds = [];
 
   /// Položaj osobe u 3D šetnji (prikazuje se na tlocrtu): pozicija i smjer.
   final walker = ValueNotifier<(Offset, double)?>(null);
@@ -394,6 +395,7 @@ class PlanController extends ChangeNotifier {
   void _syncRooms() {
     final res = detectFaces(plan);
     outlines = res.outlines;
+    outlineIds = res.outlineIds;
     final old = List<Room>.from(plan.rooms);
     final used = <Room>{};
     final next = <Room>[];
@@ -738,7 +740,7 @@ class PlanController extends ChangeNotifier {
     for (final r in plan.rooms) {
       final poly = plan.roomPolygon(r);
       if (poly.length < 3) continue;
-      rooms.add(RoomStat(r, polygonArea(poly), polygonPerimeter(poly), floorById(r.floor)));
+      rooms.add(RoomStat(r, roomNetArea(plan, r), polygonPerimeter(poly), floorById(r.floor)));
     }
     var paint = 0.0, length = 0.0;
     for (final w in plan.walls) {
@@ -753,7 +755,10 @@ class PlanController extends ChangeNotifier {
     }
     return PlanStats(
       rooms: rooms,
-      footprint: outlines.fold(0.0, (a, p) => a + polygonArea(p)),
+      footprint: [
+        for (var i = 0; i < outlines.length; i++)
+          offsetArea(outlines[i], edgeHalfThickness(plan, outlineIds[i]), inward: false)
+      ].fold(0.0, (a, b) => a + b),
       paintArea: paint,
       wallLength: length,
       doors: plan.openings.where((o) => o.type == OpeningType.door || o.type == OpeningType.balcony).length,

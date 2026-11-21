@@ -785,6 +785,10 @@ class Engine {
 
   setPlan(json) {
     try { this.plan = typeof json === 'string' ? JSON.parse(json) : json; } catch (e) { console.error('[Planstratiq3D] JSON', e); return; }
+    if (this.plan.projectId !== this.projectId) {
+      this.projectId = this.plan.projectId;
+      this.framed = false;
+    }
     this._rebuild();
     if (!this.framed && (this.plan.walls?.length || this.plan.items?.length)) {
       this.framed = true;
@@ -839,7 +843,8 @@ class Engine {
     const size = Math.max(b.max.x - b.min.x, b.max.z - b.min.z, 6);
     const c = new THREE.Vector3((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2);
     this.orbit.target.copy(c);
-    this.camera.position.set(c.x + size * 0.55, size * 0.95, c.z + size * 1.0);
+    const k = 0.62 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * Math.max(1, 1.25 / Math.max(this.camera.aspect, 0.5));
+    this.camera.position.set(c.x + size * 0.42 * k, size * 0.62 * k, c.z + size * 0.72 * k);
     this.camera.lookAt(c);
     this.center = c;
     this.extent = size;
@@ -962,7 +967,11 @@ class Engine {
       if (!any) { b.min.set(x, 0, z); b.max.set(x, 0, z); any = true; } else b.expandByPoint(new THREE.Vector3(x, 0, z));
     };
     for (const n of Object.values(p.nodes || {})) add(n.x, n.y);
-    if (!any) for (const it of p.items || []) add(it.x, it.y);
+    for (const it of p.items || []) {
+      const r = Math.max(it.w, it.d) / 2;
+      add(it.x - r, it.y - r);
+      add(it.x + r, it.y + r);
+    }
     if (!any) { b.min.set(-5, 0, -5); b.max.set(5, 0, 5); }
     return b;
   }
@@ -1161,7 +1170,10 @@ class Engine {
       if (!alongX) g.rotation.y = Math.PI / 2;
       const roofMat = mat(0xa5533a, { tex: 'roof', roughness: 0.85, double: true });
       for (const sgn of [-1, 1]) {
-        const plane = new THREE.Mesh(new THREE.BoxGeometry(len, 0.08, slope), roofMat);
+        const geo = new THREE.BoxGeometry(len, 0.08, slope);
+        const uv = geo.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * len, uv.getY(i) * slope);
+        const plane = new THREE.Mesh(geo, roofMat);
         plane.position.set(0, rise / 2, (sgn * half) / 2);
         plane.rotation.x = sgn * Math.atan2(rise, half);
         plane.castShadow = true;

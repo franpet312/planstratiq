@@ -115,6 +115,7 @@ class Engine3D {
       inside[w.id] = sign;
     }
     return {
+      'projectId': c.projectId,
       'wallHeight': plan.wallHeight,
       'roof': plan.roof,
       'nodes': {for (final n in plan.nodes.values) n.id: {'x': n.pos.dx, 'y': n.pos.dy}},

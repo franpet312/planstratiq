@@ -7,6 +7,7 @@ import '../models/catalog.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
+import '../models/topology.dart';
 import '../state/plan_controller.dart';
 import 'catalog_panel.dart';
 import 'common.dart';
@@ -236,10 +237,10 @@ class PropertiesPanel extends StatelessWidget {
   List<Widget> _room(Room? r) {
     if (r == null) return [];
     final poly = c.plan.roomPolygon(r);
-    final area = polygonArea(poly);
+    final area = roomNetArea(c.plan, r);
     final mat = floorById(r.floor);
     return [
-      _header(r.name, Icons.crop_square, subtitle: '${fmtM2(area)}, opseg ${fmtM(polygonPerimeter(poly))} m'),
+      _header(r.name, Icons.crop_square, subtitle: 'Neto ${fmtM2(area)}, opseg ${fmtM(polygonPerimeter(poly))} m'),
       const SizedBox(height: 10),
       TextFormField(
         key: _k('name'),

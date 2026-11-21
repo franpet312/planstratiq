@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:web/web.dart' as web;
 
-import '../models/geometry.dart';
 import '../models/plan.dart';
+import '../models/topology.dart';
 
 class ProjectMeta {
   ProjectMeta({required this.id, required this.name, required this.updated, this.area = 0, this.rooms = 0});
@@ -76,7 +76,7 @@ class ProjectStore {
       ..name = plan.name
       ..updated = DateTime.now().millisecondsSinceEpoch
       ..rooms = plan.rooms.length
-      ..area = plan.rooms.fold(0.0, (a, r) => a + polygonArea(plan.roomPolygon(r)));
+      ..area = plan.rooms.fold(0.0, (a, r) => a + roomNetArea(plan, r));
     _writeIndex(l);
   }
 

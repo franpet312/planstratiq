@@ -8,6 +8,7 @@ import '../models/catalog.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
+import '../models/topology.dart';
 import '../state/plan_controller.dart';
 
 /// Sve što je potrebno za crtanje tlocrta – iz uređivača ili za pregled.
@@ -215,7 +216,7 @@ class PlanPainter extends CustomPainter {
     for (final r in plan.rooms) {
       final poly = plan.roomPolygon(r);
       if (poly.length < 3) continue;
-      final area = polygonArea(poly);
+      final area = roomNetArea(plan, r);
       final at = s(labelPoint(poly));
       final pxArea = area * scale * scale;
       if (pxArea < (st.preview ? 900 : 2600)) continue;

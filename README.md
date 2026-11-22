@@ -21,6 +21,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Vrata, prozori, balkonska vrata i prolazi; šarke i smjer otvaranja vrata.
 - Alat za mjerenje, mjerilo, zoom, pinch-zoom na dodir.
 - Učitavanje slike nacrta kao podloge i kalibracija mjerila (dvije točke + stvarna udaljenost).
+- **Automatsko prepoznavanje nacrta**: iz slike se prepoznaju zidovi (s debljinom), vrata i prozori i ucrtaju u tlocrt; mjerilo se procijeni iz širine vrata ili upiše ukupna širina zgrade s kote. Radi u pregledniku (`web/psqdetect.js`), najbolje za nacrte s vodoravnim i okomitim, ispunjenim ili šrafiranim zidovima.
 
 **Etaže**
 - Podrum, prizemlje i katovi: svaka etaža ima svoje zidove, prostorije i namještaj; kota poda računa se sama (svijetla visina + 25 cm ploče).
@@ -112,7 +113,7 @@ web/
 
 ## Plan razvoja
 
-1. **Automatsko prepoznavanje nacrta (AI)**: servis koji iz slike/PDF-a prepozna zidove, vrata i prozore (segmentacija + vektorizacija) i vrati isti JSON format; korisnik samo ispravlja.
+1. **Bolje prepoznavanje nacrta**: kosi zidovi, ispravljanje zakrivljenih fotografija, PDF izravno, prepoznavanje naziva prostorija (OCR).
 2. **Veći katalog trgovaca**: puni asortiman i 3D modeli traže partnerski/affiliate feed (naziv, šifra, mjere, cijena, link, GLB model); aplikacija je spremna (`retailer`, `productUrl`, `price`, `modelUrl`).
 3. **Korisnički računi** i projekti u oblaku (npr. Supabase/Firebase).
 4. Složeniji krovovi, teren i nagib parcele, ograda po rubu parcele.

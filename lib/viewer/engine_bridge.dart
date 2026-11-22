@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show Offset;
 
@@ -120,9 +121,27 @@ class Engine3D {
     };
   }
 
+  /// Otvori u podu za stubišta: pravokutnici stubišta s etaže [li] (u tlocrtnim koordinatama).
+  static List<List<List<double>>> _stairHoles(PlanController c, int li) {
+    if (li < 0 || li >= c.plan.levels.length) return const [];
+    final out = <List<List<double>>>[];
+    for (final it in c.plan.levels[li].items) {
+      if (it.shape != 'stairs') continue;
+      final cs = math.cos(it.rotation), sn = math.sin(it.rotation);
+      final hw = it.w / 2 - 0.02, hd = it.d / 2 - 0.02;
+      out.add([
+        for (final (lx, ly) in [(-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd)])
+          [it.pos.dx + lx * cs - ly * sn, it.pos.dy + lx * sn + ly * cs]
+      ]);
+    }
+    return out;
+  }
+
   static Map<String, dynamic> _levelJson(PlanController c, int li) {
     final (outlines, sides) = c.levelSceneData(li);
     final plan = c.plan;
+    final holes = _stairHoles(c, li - 1);
+    final ceilHoles = li < plan.levels.length - 1 ? _stairHoles(c, li) : const <List<List<double>>>[];
     final prev = plan.active;
     plan.active = li;
     try {
@@ -179,6 +198,15 @@ class Engine3D {
           for (final o in outlines) [for (final p in o) [p.dx, p.dy]]
         ],
         'items': plan.items.map((i) => i.toJson()).toList(),
+        'holes': holes,
+        'stairsBelow': [
+          if (li > 0)
+            for (final it in plan.levels[li - 1].items)
+              if (it.shape == 'stairs') {'x': it.pos.dx, 'y': it.pos.dy, 'w': it.w, 'd': it.d, 'h': it.h, 'rotation': it.rotation}
+        ],
+        'hasAbove': li < plan.levels.length - 1,
+        'hasBelow': li > 0,
+        'ceilHoles': ceilHoles,
       };
     } finally {
       plan.active = prev;

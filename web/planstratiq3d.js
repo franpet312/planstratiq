@@ -905,6 +905,8 @@ class Engine {
     if (Math.abs(fy - this.fy) > 0.001) {
       const d = fy - this.fy;
       this.fy = fy;
+      if (this._stairOff != null) this._stairOff -= d; // isti položaj u prostoru, nova etaža
+      if (this.tp && this.tp.off != null) this.tp.off -= d;
       // prebaci promatrača na novu etažu
       this.camera.position.y += d;
       if (this.mode === 'orbit') this.orbit.target.y += d;
@@ -1363,8 +1365,23 @@ class Engine {
       this.slabMat.polygonOffsetUnits = 2;
     }
     const slabMat = this.slabMat;
+    const toPts = (h) => h.map(([x, y]) => ({ x, y }));
+    const inPoly = (x, y, poly) => {
+      let c = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) c = !c;
+      }
+      return c;
+    };
+    let curPts = null;
+    const withHoles = (shape, holes) => {
+      for (const h of holes || []) if (!curPts || inPoly(h.reduce((a, q) => a + q[0], 0) / h.length, h.reduce((a, q) => a + q[1], 0) / h.length, curPts)) shape.holes.push(new THREE.Path(toPts(h).map((q) => new THREE.Vector2(q.x, -q.y))));
+      return shape;
+    };
     const mk = (pts, material, y, opts = {}) => {
-      const geo = new THREE.ShapeGeometry(this._shapeFrom(pts)).rotateX(-Math.PI / 2);
+      curPts = pts;
+      const geo = new THREE.ShapeGeometry(withHoles(this._shapeFrom(pts), opts.holes)).rotateX(-Math.PI / 2);
       const m = new THREE.Mesh(geo, material);
       m.position.y = y;
       m.receiveShadow = true;
@@ -1377,10 +1394,11 @@ class Engine {
     for (const o of p.outlines || []) {
       if (o.length < 3) continue;
       const pts = o.map(([x, y]) => ({ x, y }));
-      mk(pts, slabMat, 0.004);
+      mk(pts, slabMat, 0.004, { holes: p.holes });
       if (Math.abs(elev) > 0.05) {
-        // međukatna ploča (25 cm) – vidi se izvana između etaža
-        const geo = new THREE.ExtrudeGeometry(this._shapeFrom(pts), { depth: 0.25, bevelEnabled: false }).rotateX(-Math.PI / 2);
+        // međukatna ploča (25 cm) – vidi se izvana između etaža; otvor za stubište
+        curPts = pts;
+        const geo = new THREE.ExtrudeGeometry(withHoles(this._shapeFrom(pts), p.holes), { depth: 0.25, bevelEnabled: false }).rotateX(-Math.PI / 2);
         const m = new THREE.Mesh(geo, mat(0xd8d2c8, { tex: 'plaster', roughness: 0.95 }));
         m.position.y = -0.25;
         m.castShadow = true;
@@ -1392,8 +1410,8 @@ class Engine {
       const pts = (r.nodeIds || []).map((id) => nodes[id]).filter(Boolean);
       if (pts.length < 3) continue;
       mk(pts, mat(r.floorColor, { tex: r.floorTexture, roughness: r.floorTexture === 'wood' ? 0.82 : 0.86, env: 0.3, double: true }), 0.03,
-        { userData: { kind: 'room', id: r.id } });
-      if (!this._passive) mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true });
+        { userData: { kind: 'room', id: r.id }, holes: p.holes });
+      if (!this._passive) mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true, holes: p.ceilHoles });
     }
   }
 
@@ -1660,6 +1678,42 @@ class Engine {
     this._emitPose(true);
   }
 
+  // visina stuba ispod točke (x, z) u odnosu na pod aktivne etaže; dir: +1 = vrh stubišta, −1 = dno stubišta odozgo
+  _stairs(x, z) {
+    const p = this.plan || {};
+    const local = (it) => {
+      const r = it.rotation || 0, dx = x - it.x, dz = z - it.y;
+      return { lx: dx * Math.cos(r) + dz * Math.sin(r), lz: -dx * Math.sin(r) + dz * Math.cos(r) };
+    };
+    for (const it of p.items || []) {
+      if (it.shape !== 'stairs') continue;
+      const { lx, lz } = local(it);
+      if (Math.abs(lx) > it.w / 2 || Math.abs(lz) > it.d / 2) continue;
+      const k = (it.d / 2 - lz) / it.d; // 0 dno, 1 vrh
+      return { off: k * it.h, dir: p.hasAbove && k > 0.9 ? 1 : 0 };
+    }
+    for (const it of p.stairsBelow || []) {
+      const { lx, lz } = local(it);
+      if (Math.abs(lx) > it.w / 2 || Math.abs(lz) > it.d / 2) continue;
+      const k = (it.d / 2 - lz) / it.d;
+      const drop = (1 - k) * (it.h + 0.25);
+      return { off: -drop, dir: p.hasBelow && k < 0.1 ? -1 : 0 };
+    }
+    return { off: 0, dir: 0 };
+  }
+
+  _stairStep(x, z) {
+    const s = this._stairs(x, z);
+    if (s.dir && !this._levelPending) {
+      this._levelPending = true;
+      setTimeout(() => (this._levelPending = false), 1500);
+      this.emit('level', { dir: s.dir });
+    }
+    // glatko penjanje/spuštanje
+    this._stairOff = this._stairOff == null ? s.off : this._stairOff + (s.off - this._stairOff) * 0.35;
+    return this._stairOff;
+  }
+
   _blocked(x, z) {
     for (const c of this.colliders) {
       const abx = c.bx - c.ax, abz = c.bz - c.az;
@@ -1697,7 +1751,7 @@ class Engine {
     const stuck = this._blocked(p.x, p.z);
     if (stuck || !this._blocked(p.x + mx, p.z)) p.x += mx;
     if (stuck || !this._blocked(p.x, p.z + mz)) p.z += mz;
-    p.y = EYE + this.fy;
+    p.y = EYE + this.fy + this._stairStep(p.x, p.z);
     return true;
   }
 
@@ -1799,14 +1853,15 @@ class Engine {
     a.legs[1].rotation.x = -sw;
     a.arms[0].rotation.x = -sw * 0.8;
     a.arms[1].rotation.x = sw * 0.8;
-    a.root.position.set(tp.x, this.fy + Math.abs(Math.cos(tp.phase)) * 0.035 * amt, tp.z);
+    tp.off = this._stairStep(tp.x, tp.z);
+    a.root.position.set(tp.x, this.fy + tp.off + Math.abs(Math.cos(tp.phase)) * 0.035 * amt, tp.z);
     a.root.rotation.y = tp.heading;
     this._thirdCamera(dt, false);
   }
 
   _thirdCamera(dt, snap) {
     const tp = this.tp;
-    const target = new THREE.Vector3(tp.x, 1.45 + this.fy, tp.z);
+    const target = new THREE.Vector3(tp.x, 1.45 + this.fy + (tp.off || 0), tp.z);
     const off = new THREE.Vector3(Math.sin(tp.yaw) * Math.cos(tp.pitch), Math.sin(tp.pitch), Math.cos(tp.yaw) * Math.cos(tp.pitch));
     let dist = tp.dist;
     if (this.wallMeshes.length) {

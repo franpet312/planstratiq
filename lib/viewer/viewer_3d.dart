@@ -70,6 +70,10 @@ class _Viewer3DState extends State<Viewer3D> {
   void _onEngine(String type, Object? data) {
     if (!mounted) return;
     switch (type) {
+      case 'level':
+        // hodanje stubištem: prijeđi na etažu iznad/ispod
+        final dir = ((data as Map)['dir'] as num).toInt();
+        c.switchLevel(c.plan.active + dir);
       case 'select':
         final m = data as Map;
         final kind = switch (m['kind']) {
@@ -271,7 +275,8 @@ class _Viewer3DState extends State<Viewer3D> {
             top: 64,
             child: FloatPanel(
               padding: const EdgeInsets.all(4),
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              child: IntrinsicWidth(
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 for (var i = c.plan.levels.length - 1; i >= 0; i--)
                   InkWell(
                     borderRadius: BorderRadius.circular(7),
@@ -289,7 +294,8 @@ class _Viewer3DState extends State<Viewer3D> {
                               color: i == c.plan.active ? Pal.accentDeep : Pal.inkSoft)),
                     ),
                   ),
-              ]),
+                ]),
+              ),
             ),
           ),
       ]),

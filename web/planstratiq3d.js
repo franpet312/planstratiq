@@ -1927,4 +1927,5 @@ Object.defineProperty(api, 'onEvent', {
 });
 if (prev.onEvent) engine.onEvent = prev.onEvent;
 window.Planstratiq3D = api;
+Object.defineProperty(api, "_engine", { value: engine, enumerable: false }); // za dijagnostiku
 for (const [fn, args] of prev._q || []) if (api[fn]) api[fn](...args);

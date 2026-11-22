@@ -12,6 +12,7 @@ import '../state/share.dart';
 import '../viewer/viewer_3d.dart';
 import 'catalog_panel.dart';
 import 'common.dart';
+import 'detect_flow.dart';
 import 'home_page.dart' show LogoMark;
 import 'plan_preview.dart';
 import 'properties_panel.dart';
@@ -81,9 +82,28 @@ class _EditorPageState extends State<EditorPage> {
     try {
       await c.loadImageBytes(f.bytes, f.type);
       if (layout == ViewLayout.view3d) setState(() => _layout = ViewLayout.split);
-      c.setTool(Tool.calibrate);
       WidgetsBinding.instance.addPostFrameCallback((_) => editorKey.currentState?.fit());
-      _snack('Nacrt je učitan. Klikni dvije točke čiju stvarnu udaljenost znaš, npr. početak i kraj kotiranog zida.');
+      if (!mounted) return;
+      final auto = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Nacrt je učitan'),
+          content: const Text('Mogu pokušati sam prepoznati zidove, vrata i prozore s nacrta, a ti ih zatim samo provjeriš i ispraviš. '
+              'Najbolje radi s čistim nacrtom (skenom ili PDF-om pretvorenim u sliku) gdje su zidovi ispunjeni ili šrafirani.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Precrtat ću ručno')),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, true),
+              icon: const Icon(Icons.auto_fix_high, size: 18),
+              label: const Text('Prepoznaj zidove'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (auto == true && await runDetection(context, c)) return;
+      c.setTool(Tool.calibrate);
+      _snack('Klikni dvije točke čiju stvarnu udaljenost znaš, npr. početak i kraj kotiranog zida.');
     } catch (e) {
       _snack('Slika se ne može učitati. Probaj s JPG ili PNG datotekom.');
     }

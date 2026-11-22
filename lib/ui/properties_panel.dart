@@ -12,6 +12,7 @@ import '../models/topology.dart';
 import '../state/plan_controller.dart';
 import 'catalog_panel.dart';
 import 'common.dart';
+import 'detect_flow.dart';
 
 const itemColors = [
   0xFFFFFFFF, 0xFFEDE7DF, 0xFFD9C7B0, 0xFFB08D6E, 0xFF8C6A4F, 0xFF5A4636,
@@ -323,6 +324,11 @@ class PropertiesPanel extends StatelessWidget {
           Expanded(child: Slider(value: c.plan.image!.opacity, min: 0.05, max: 1, onChanged: c.setImageOpacity)),
         ]),
         Wrap(spacing: 8, runSpacing: 8, children: [
+          FilledButton.icon(
+            onPressed: () => runDetection(context, c),
+            icon: const Icon(Icons.auto_fix_high, size: 18),
+            label: const Text('Prepoznaj zidove'),
+          ),
           OutlinedButton.icon(
             onPressed: () {
               c.setTool(Tool.calibrate);

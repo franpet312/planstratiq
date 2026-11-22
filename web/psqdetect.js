@@ -317,7 +317,107 @@
     return JSON.stringify(r);
   }
 
-  const api = { detect, detectFromGray };
+  // ---------------------------------------------------------------- priprema slike
+  const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/';
+
+  async function pdfToCanvas(bytes) {
+    const pdfjs = await import(PDFJS + 'pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.mjs';
+    const doc = await pdfjs.getDocument({ data: bytes }).promise;
+    const page = await doc.getPage(1);
+    const v1 = page.getViewport({ scale: 1 });
+    const scale = Math.min(6, 2600 / Math.max(v1.width, v1.height));
+    const vp = page.getViewport({ scale });
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(vp.width);
+    cv.height = Math.round(vp.height);
+    const g = cv.getContext('2d');
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, cv.width, cv.height);
+    await page.render({ canvasContext: g, viewport: vp }).promise;
+    return cv;
+  }
+
+  // nagib skena: kut (u stupnjevima) pri kojem su tamni pikseli najviše poravnati u retke i stupce
+  function skewAngle(cv) {
+    const sc = Math.min(1, 900 / Math.max(cv.width, cv.height));
+    const w = Math.max(1, Math.round(cv.width * sc)), h = Math.max(1, Math.round(cv.height * sc));
+    const c2 = document.createElement('canvas');
+    c2.width = w;
+    c2.height = h;
+    const g = c2.getContext('2d', { willReadFrequently: true });
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, w, h);
+    g.drawImage(cv, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data;
+    const gray = new Uint8Array(w * h);
+    for (let i = 0, j = 0; j < gray.length; i += 4, j++) gray[j] = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
+    const thr = otsu(gray);
+    const xs = [], ys = [];
+    const step = Math.max(1, Math.floor((w * h) / 250000));
+    for (let i = 0; i < gray.length; i += step) if (gray[i] < thr) { xs.push(i % w); ys.push((i / w) | 0); }
+    if (xs.length < 200) return 0;
+    const diag = Math.ceil(Math.hypot(w, h)) + 2;
+    const score = (deg) => {
+      const a = (deg * Math.PI) / 180, cs = Math.cos(a), sn = Math.sin(a);
+      const rows = new Float64Array(2 * diag), cols = new Float64Array(2 * diag);
+      for (let k = 0; k < xs.length; k++) {
+        const x = xs[k], y = ys[k];
+        rows[Math.round(-x * sn + y * cs) + diag]++;
+        cols[Math.round(x * cs + y * sn) + diag]++;
+      }
+      let s = 0;
+      for (let k = 0; k < rows.length; k++) s += rows[k] * rows[k] + cols[k] * cols[k];
+      return s;
+    };
+    let best = 0, bestS = score(0);
+    for (let a = -6; a <= 6; a += 0.25) { const sc2 = score(a); if (sc2 > bestS) { bestS = sc2; best = a; } }
+    for (let a = best - 0.25; a <= best + 0.25; a += 0.05) { const sc2 = score(a); if (sc2 > bestS) { bestS = sc2; best = a; } }
+    return best;
+  }
+
+  function rotateCanvas(cv, deg) {
+    const a = (deg * Math.PI) / 180;
+    const out = document.createElement('canvas');
+    out.width = cv.width;
+    out.height = cv.height;
+    const g = out.getContext('2d');
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, out.width, out.height);
+    g.translate(out.width / 2, out.height / 2);
+    g.rotate(-a);
+    g.drawImage(cv, -cv.width / 2, -cv.height / 2);
+    return out;
+  }
+
+  // PDF → slika prve stranice; skenu ispravi nagib. Vraća JSON {dataUrl, angle, pdf}.
+  async function prepare(dataUrl) {
+    let cv, pdf = false, changed = false;
+    if (dataUrl.startsWith('data:application/pdf')) {
+      const b64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      cv = await pdfToCanvas(bytes);
+      pdf = true;
+      changed = true;
+    } else {
+      const img = await loadImage(dataUrl);
+      cv = document.createElement('canvas');
+      cv.width = img.width;
+      cv.height = img.height;
+      const g = cv.getContext('2d');
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, cv.width, cv.height);
+      g.drawImage(img, 0, 0);
+    }
+    let angle = 0;
+    try { angle = skewAngle(cv); } catch (e) { angle = 0; }
+    if (Math.abs(angle) >= 0.2) { cv = rotateCanvas(cv, angle); changed = true; } else angle = 0;
+    return JSON.stringify({ dataUrl: changed ? cv.toDataURL('image/jpeg', 0.88) : dataUrl, angle, pdf });
+  }
+
+  const api = { detect, detectFromGray, prepare };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.psqDetect = api;
 })(typeof window !== 'undefined' ? window : globalThis);

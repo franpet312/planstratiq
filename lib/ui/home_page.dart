@@ -76,7 +76,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void _fromTemplate(PlanTemplate t) => _open(store.create(buildTemplatePlan(t)));
 
   Future<void> _fromImage() async {
-    final f = await pickFile('image/*');
+    final f = await pickFile('image/*,application/pdf,.pdf');
     if (f == null) return;
     final name = f.name.contains('.') ? f.name.substring(0, f.name.lastIndexOf('.')) : f.name;
     _open(store.create(Plan(name: name.isEmpty ? 'Iz nacrta' : name)), image: f);

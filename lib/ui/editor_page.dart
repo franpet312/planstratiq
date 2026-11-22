@@ -7,6 +7,7 @@ import '../editor/plan_export.dart';
 import '../models/plan.dart';
 import '../models/templates.dart';
 import '../state/plan_controller.dart';
+import '../state/plan_detect.dart';
 import '../state/project_store.dart';
 import '../state/share.dart';
 import '../viewer/viewer_3d.dart';
@@ -80,7 +81,13 @@ class _EditorPageState extends State<EditorPage> {
   // ---------------------------------------------------------------- akcije
   Future<void> _applyImage(PickedFile f) async {
     try {
-      await c.loadImageBytes(f.bytes, f.type);
+      final (bytes, mime, angle, wasPdf) = await prepareImage(f.bytes, f.type, f.name);
+      await c.loadImageBytes(bytes, mime);
+      if (angle.abs() > 0.01 && mounted) {
+        _snack('Sken je bio nagnut ${angle.abs().toStringAsFixed(1).replaceAll('.', ',')}° – izravnao sam ga.');
+      } else if (wasPdf && mounted) {
+        _snack('Učitana je prva stranica PDF-a.');
+      }
       if (layout == ViewLayout.view3d) setState(() => _layout = ViewLayout.split);
       WidgetsBinding.instance.addPostFrameCallback((_) => editorKey.currentState?.fit());
       if (!mounted) return;
@@ -105,12 +112,12 @@ class _EditorPageState extends State<EditorPage> {
       c.setTool(Tool.calibrate);
       _snack('Klikni dvije točke čiju stvarnu udaljenost znaš, npr. početak i kraj kotiranog zida.');
     } catch (e) {
-      _snack('Slika se ne može učitati. Probaj s JPG ili PNG datotekom.');
+      _snack('Nacrt se ne može učitati. Probaj s PDF, JPG ili PNG datotekom.');
     }
   }
 
   Future<void> _uploadImage() async {
-    final f = await pickFile('image/*');
+    final f = await pickFile('image/*,application/pdf,.pdf');
     if (f != null) await _applyImage(f);
   }
 

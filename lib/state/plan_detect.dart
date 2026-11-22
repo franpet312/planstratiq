@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/painting.dart' show Offset;
 
@@ -13,6 +14,24 @@ external _PsqDetect? get _psqDetect;
 
 extension type _PsqDetect(JSObject _) implements JSObject {
   external JSPromise<JSString> detect(String dataUrl, String opts);
+  external JSPromise<JSString> prepare(String dataUrl);
+}
+
+/// Priprema nacrta: PDF → slika prve stranice, sken se izravna. Vraća (bajtovi, mime, kut nagiba, bio PDF).
+Future<(Uint8List, String, double, bool)> prepareImage(Uint8List bytes, String mime, String name) async {
+  final isPdf = mime == 'application/pdf' || name.toLowerCase().endsWith('.pdf');
+  final api = _psqDetect;
+  if (api == null) {
+    if (isPdf) throw StateError('PDF nije podržan');
+    return (bytes, mime, 0.0, false);
+  }
+  final type = isPdf ? 'application/pdf' : (mime.isEmpty ? 'image/png' : mime);
+  final res = (await api.prepare('data:$type;base64,${base64Encode(bytes)}').toDart).toDart;
+  final j = jsonDecode(res) as Map<String, dynamic>;
+  final url = j['dataUrl'] as String;
+  final outMime = url.substring(5, url.indexOf(';'));
+  final out = base64Decode(url.substring(url.indexOf(',') + 1));
+  return (Uint8List.fromList(out), outMime, (j['angle'] as num).toDouble(), j['pdf'] == true);
 }
 
 /// Rezultat prepoznavanja u pikselima slike nacrta, prije pretvorbe u metre.

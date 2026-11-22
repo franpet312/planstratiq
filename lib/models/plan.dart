@@ -286,6 +286,77 @@ class PlanImage {
       );
 }
 
+/// Jedna etaža zgrade (podrum, prizemlje, kat…): vlastiti zidovi, otvori, prostorije i namještaj.
+class Level {
+  Level({
+    required this.id,
+    this.name = 'Prizemlje',
+    this.elevation = 0,
+    this.height = 2.6,
+    Map<String, PlanNode>? nodes,
+    List<Wall>? walls,
+    List<Opening>? openings,
+    List<Room>? rooms,
+    List<PlacedItem>? items,
+    this.image,
+  })  : nodes = nodes ?? {},
+        walls = walls ?? [],
+        openings = openings ?? [],
+        rooms = rooms ?? [],
+        items = items ?? [];
+
+  final String id;
+  String name;
+
+  /// Visina gotovog poda iznad terena (m); podrum je ispod nule.
+  double elevation;
+
+  /// Zadana visina zidova (svijetla visina etaže).
+  double height;
+  final Map<String, PlanNode> nodes;
+  final List<Wall> walls;
+  final List<Opening> openings;
+  final List<Room> rooms;
+  final List<PlacedItem> items;
+  PlanImage? image;
+
+  bool get isEmpty => walls.isEmpty && items.isEmpty;
+
+  Map<String, dynamic> toJson({bool includeImage = true}) => {
+        'id': id,
+        'name': name,
+        'elevation': elevation,
+        'wallHeight': height,
+        'nodes': nodes.values.map((n) => n.toJson()).toList(),
+        'walls': walls.map((w) => w.toJson()).toList(),
+        'openings': openings.map((o) => o.toJson()).toList(),
+        'rooms': rooms.map((r) => r.toJson()).toList(),
+        'items': items.map((i) => i.toJson()).toList(),
+        if (includeImage && image != null) 'image': image!.toJson(),
+      };
+
+  factory Level.fromJson(Map<String, dynamic> j, {String? fallbackId}) {
+    final nodes = _list(j['nodes'], PlanNode.fromJson);
+    return Level(
+      id: (j['id'] as String?) ?? fallbackId ?? 'L0',
+      name: (j['name'] as String?) ?? 'Prizemlje',
+      elevation: _d(j['elevation'], 0),
+      height: _d(j['wallHeight'], 2.6),
+      nodes: {for (final n in nodes) n.id: n},
+      walls: _list(j['walls'], Wall.fromJson),
+      openings: _list(j['openings'], Opening.fromJson),
+      rooms: _list(j['rooms'], Room.fromJson),
+      items: _list(j['items'], PlacedItem.fromJson),
+      image: j['image'] is Map ? PlanImage.fromJson(Map<String, dynamic>.from(j['image'] as Map)) : null,
+    );
+  }
+}
+
+/// Debljina međukatne konstrukcije (m) – razmak od stropa jedne do poda sljedeće etaže.
+const double slabThickness = 0.25;
+
+/// Cijeli projekt: jedna ili više etaža. Polja nodes/walls/… odnose se na AKTIVNU etažu,
+/// pa uređivač, crtanje i statistika rade s etažom koja je trenutno odabrana.
 class Plan {
   Plan({
     this.name = 'Novi projekt',
@@ -294,30 +365,73 @@ class Plan {
     List<Opening>? openings,
     List<Room>? rooms,
     List<PlacedItem>? items,
-    this.image,
-    this.wallHeight = 2.6,
+    PlanImage? image,
+    double wallHeight = 2.6,
     this.roof = false,
-  })  : nodes = nodes ?? {},
-        walls = walls ?? [],
-        openings = openings ?? [],
-        rooms = rooms ?? [],
-        items = items ?? [];
+    List<Level>? levels,
+    int active = 0,
+  }) : levels = levels ??
+            [
+              Level(
+                id: 'L0',
+                nodes: nodes,
+                walls: walls,
+                openings: openings,
+                rooms: rooms,
+                items: items,
+                image: image,
+                height: wallHeight,
+              )
+            ] {
+    this.active = active.clamp(0, this.levels.length - 1);
+  }
 
   String name;
-  final Map<String, PlanNode> nodes;
-  final List<Wall> walls;
-  final List<Opening> openings;
-  final List<Room> rooms;
-  final List<PlacedItem> items;
-  PlanImage? image;
 
-  /// Zadana visina novih zidova.
-  double wallHeight;
+  /// Etaže poredane odozdo prema gore.
+  final List<Level> levels;
+  int active = 0;
 
-  /// Prikaži krov u 3D-u.
+  Level get level => levels[active];
+  Map<String, PlanNode> get nodes => level.nodes;
+  List<Wall> get walls => level.walls;
+  List<Opening> get openings => level.openings;
+  List<Room> get rooms => level.rooms;
+  List<PlacedItem> get items => level.items;
+  PlanImage? get image => level.image;
+  set image(PlanImage? v) => level.image = v;
+
+  /// Zadana visina novih zidova aktivne etaže.
+  double get wallHeight => level.height;
+  set wallHeight(double v) => level.height = v;
+
+  /// Prikaži krov u 3D-u (na najvišoj etaži).
   bool roof;
 
-  bool get isEmpty => walls.isEmpty && items.isEmpty;
+  /// Etaža ispod aktivne (za prozirni prikaz na tlocrtu), ako postoji.
+  Level? get levelBelow => active > 0 ? levels[active - 1] : null;
+
+  /// Prizemlje: etaža s visinom najbližom nuli.
+  int get groundIndex {
+    var best = 0;
+    for (var i = 1; i < levels.length; i++) {
+      if (levels[i].elevation.abs() < levels[best].elevation.abs()) best = i;
+    }
+    return best;
+  }
+
+  /// Ponovno izračunaj visine etaža (prizemlje ostaje na svojoj visini).
+  void restackLevels() {
+    final g = groundIndex;
+    for (var i = g + 1; i < levels.length; i++) {
+      levels[i].elevation = levels[i - 1].elevation + levels[i - 1].height + slabThickness;
+    }
+    for (var i = g - 1; i >= 0; i--) {
+      levels[i].elevation = levels[i + 1].elevation - levels[i].height - slabThickness;
+    }
+  }
+
+  bool get isEmpty => levels.every((l) => l.isEmpty);
 
   Wall? wallById(String id) {
     for (final w in walls) {
@@ -358,30 +472,26 @@ class Plan {
 
   Map<String, dynamic> toJson({bool includeImage = true}) => {
         'format': 'planstratiq',
-        'version': 2,
+        'version': 3,
         'name': name,
-        'wallHeight': wallHeight,
         'roof': roof,
-        'nodes': nodes.values.map((n) => n.toJson()).toList(),
-        'walls': walls.map((w) => w.toJson()).toList(),
-        'openings': openings.map((o) => o.toJson()).toList(),
-        'rooms': rooms.map((r) => r.toJson()).toList(),
-        'items': items.map((i) => i.toJson()).toList(),
-        if (includeImage && image != null) 'image': image!.toJson(),
+        'active': active,
+        'levels': [for (final l in levels) l.toJson(includeImage: includeImage)],
       };
 
   factory Plan.fromJson(Map<String, dynamic> j) {
-    final nodes = _list(j['nodes'], PlanNode.fromJson);
+    final raw = j['levels'];
+    final levels = raw is List && raw.isNotEmpty
+        ? [
+            for (var i = 0; i < raw.length; i++)
+              if (raw[i] is Map) Level.fromJson(Map<String, dynamic>.from(raw[i] as Map), fallbackId: 'L$i')
+          ]
+        : [Level.fromJson(j, fallbackId: 'L0')..name = 'Prizemlje']; // stari format (jedna etaža)
     return Plan(
       name: (j['name'] as String?) ?? 'Projekt',
-      nodes: {for (final n in nodes) n.id: n},
-      walls: _list(j['walls'], Wall.fromJson),
-      openings: _list(j['openings'], Opening.fromJson),
-      rooms: _list(j['rooms'], Room.fromJson),
-      items: _list(j['items'], PlacedItem.fromJson),
-      image: j['image'] is Map ? PlanImage.fromJson(Map<String, dynamic>.from(j['image'] as Map)) : null,
-      wallHeight: _d(j['wallHeight'], 2.6),
       roof: _b(j['roof']),
+      levels: levels.isEmpty ? null : levels,
+      active: j['active'] is int ? j['active'] as int : 0,
     );
   }
 

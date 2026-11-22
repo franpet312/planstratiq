@@ -31,6 +31,7 @@ class _Viewer3DState extends State<Viewer3D> {
   Selection _sentSel = Selection.none;
   Timer? _debounce;
   bool _timeOpen = false;
+  static bool _showAll = false;
 
   PlanController get c => widget.c;
 
@@ -107,7 +108,7 @@ class _Viewer3DState extends State<Viewer3D> {
 
   @override
   Widget build(BuildContext context) {
-    final rooms = c.stats.rooms;
+    final rooms = c.stats.rooms.where((r) => r.levelIndex == c.plan.active).toList();
     return DragTarget<CatalogItem>(
       onAcceptWithDetails: (d) {
         final rb = context.findRenderObject() as RenderBox?;
@@ -126,6 +127,7 @@ class _Viewer3DState extends State<Viewer3D> {
               engine.mount(el);
               engine.setMode(_mode.name);
               engine.setTime(_hour);
+              engine.setShowAll(_showAll);
               _push();
             },
           ),
@@ -187,6 +189,16 @@ class _Viewer3DState extends State<Viewer3D> {
                   active: c.plan.roof,
                   onTap: () => c.setRoof(!c.plan.roof),
                 ),
+                if (_mode == ViewMode3D.orbit && c.plan.levels.length > 1)
+                  IconBtn(
+                    icon: Icons.layers_outlined,
+                    tooltip: _showAll ? 'Prikaži samo do odabrane etaže' : 'Prikaži sve etaže',
+                    active: _showAll,
+                    onTap: () {
+                      setState(() => _showAll = !_showAll);
+                      engine.setShowAll(_showAll);
+                    },
+                  ),
                 IconBtn(icon: Icons.photo_camera_outlined, tooltip: 'Spremi sliku ovog prikaza', onTap: _snapshot),
                 if (_mode == ViewMode3D.orbit)
                   IconBtn(icon: Icons.center_focus_strong_outlined, tooltip: 'Centriraj pogled na kuću', onTap: engine.frame),
@@ -251,6 +263,33 @@ class _Viewer3DState extends State<Viewer3D> {
                   ]),
                 ),
               ),
+            ),
+          ),
+        if (c.plan.levels.length > 1)
+          Positioned(
+            right: 12,
+            top: 64,
+            child: FloatPanel(
+              padding: const EdgeInsets.all(4),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                for (var i = c.plan.levels.length - 1; i >= 0; i--)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(7),
+                    onTap: () => c.switchLevel(i),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: i == c.plan.active ? Pal.accentSoft : Colors.transparent,
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: Text(c.plan.levels[i].name,
+                          style: AppText.ui(
+                              size: 12,
+                              weight: FontWeight.w600,
+                              color: i == c.plan.active ? Pal.accentDeep : Pal.inkSoft)),
+                    ),
+                  ),
+              ]),
             ),
           ),
       ]),

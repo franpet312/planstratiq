@@ -77,6 +77,7 @@ class Engine3D {
         s.id,
       );
   void setTime(double hour) => _js.setOptions(jsonEncode({'time': hour}));
+  void setShowAll(bool v) => _js.setOptions(jsonEncode({'showAll': v}));
   void frame() => _js.frame();
   void walkTo(Offset p) => _js.walkTo(p.dx, p.dy);
 
@@ -96,64 +97,92 @@ class Engine3D {
   }
 
   /// Plan pretvoren u oblik koji engine očekuje (s podacima o materijalima i strani interijera).
+  /// Aktivna etaža je na vrhu objekta; ostale etaže su u `others` (samo za prikaz).
   static Map<String, dynamic> sceneJson(PlanController c) {
     final plan = c.plan;
-    final inside = <String, int>{};
-    for (final w in plan.walls) {
-      final sides = c.wallSides(w);
-      if (sides != 1) {
-        inside[w.id] = 0;
-        continue;
-      }
-      // pronađi prostoriju uz zid i odredi s koje je strane
-      var sign = 0;
-      for (final r in plan.rooms) {
-        final ids = r.nodeIds;
-        for (var i = 0; i < ids.length; i++) {
-          final a = ids[i], b = ids[(i + 1) % ids.length];
-          if ((a == w.a && b == w.b) || (a == w.b && b == w.a)) {
-            final pa = plan.nodePos(a), pb = plan.nodePos(b);
-            final d = pb - pa;
-            final inward = Offset(-d.dy, d.dx);
-            final wd = plan.nodePos(w.b) - plan.nodePos(w.a);
-            final n = Offset(-wd.dy, wd.dx);
-            sign = dot(inward, n) >= 0 ? 1 : -1;
-          }
-        }
-      }
-      inside[w.id] = sign;
-    }
+    final active = plan.active;
+    final top = plan.levels.last;
+    final (topOutlines, _) = c.levelSceneData(plan.levels.length - 1);
     return {
       'projectId': c.projectId,
-      'wallHeight': plan.wallHeight,
       'roof': plan.roof,
-      'nodes': {for (final n in plan.nodes.values) n.id: {'x': n.pos.dx, 'y': n.pos.dy}},
-      'walls': [
-        for (final w in plan.walls) {...w.toJson(), 'inside': inside[w.id] ?? 0}
+      ..._levelJson(c, active),
+      'others': [
+        for (var i = 0; i < plan.levels.length; i++)
+          if (i != active) _levelJson(c, i)
       ],
-      'openings': plan.openings.map((o) => o.toJson()).toList(),
-      'rooms': [
-        for (final r in plan.rooms)
-          () {
-            final poly = plan.roomPolygon(r);
-            final m = floorById(r.floor);
-            final lp = poly.length >= 3 ? labelPoint(poly) : Offset.zero;
-            return {
-              'id': r.id,
-              'nodeIds': r.nodeIds,
-              'floorColor': m.color,
-              'floorTexture': m.texture,
-              'area': polygonArea(poly),
-              'cx': lp.dx,
-              'cy': lp.dy,
-            };
-          }()
-      ],
-      'outlines': [
-        for (final o in c.outlines) [for (final p in o) [p.dx, p.dy]]
-      ],
-      'items': plan.items.map((i) => i.toJson()).toList(),
+      'roofLevel': {
+        'y': top.elevation + top.height,
+        'outlines': [
+          for (final o in topOutlines) [for (final p in o) [p.dx, p.dy]]
+        ],
+      },
     };
+  }
+
+  static Map<String, dynamic> _levelJson(PlanController c, int li) {
+    final (outlines, sides) = c.levelSceneData(li);
+    final plan = c.plan;
+    final prev = plan.active;
+    plan.active = li;
+    try {
+      final inside = <String, int>{};
+      for (final w in plan.walls) {
+        if (sides[w.id] != 1) {
+          inside[w.id] = 0;
+          continue;
+        }
+        // pronađi prostoriju uz zid i odredi s koje je strane
+        var sign = 0;
+        for (final r in plan.rooms) {
+          final ids = r.nodeIds;
+          for (var i = 0; i < ids.length; i++) {
+            final a = ids[i], b = ids[(i + 1) % ids.length];
+            if ((a == w.a && b == w.b) || (a == w.b && b == w.a)) {
+              final pa = plan.nodePos(a), pb = plan.nodePos(b);
+              final d = pb - pa;
+              final inward = Offset(-d.dy, d.dx);
+              final wd = plan.nodePos(w.b) - plan.nodePos(w.a);
+              final n = Offset(-wd.dy, wd.dx);
+              sign = dot(inward, n) >= 0 ? 1 : -1;
+            }
+          }
+        }
+        inside[w.id] = sign;
+      }
+      return {
+        'elevation': plan.level.elevation,
+        'wallHeight': plan.wallHeight,
+        'nodes': {for (final n in plan.nodes.values) n.id: {'x': n.pos.dx, 'y': n.pos.dy}},
+        'walls': [
+          for (final w in plan.walls) {...w.toJson(), 'inside': inside[w.id] ?? 0}
+        ],
+        'openings': plan.openings.map((o) => o.toJson()).toList(),
+        'rooms': [
+          for (final r in plan.rooms)
+            () {
+              final poly = plan.roomPolygon(r);
+              final m = floorById(r.floor);
+              final lp = poly.length >= 3 ? labelPoint(poly) : Offset.zero;
+              return {
+                'id': r.id,
+                'nodeIds': r.nodeIds,
+                'floorColor': m.color,
+                'floorTexture': m.texture,
+                'area': polygonArea(poly),
+                'cx': lp.dx,
+                'cy': lp.dy,
+              };
+            }()
+        ],
+        'outlines': [
+          for (final o in outlines) [for (final p in o) [p.dx, p.dy]]
+        ],
+        'items': plan.items.map((i) => i.toJson()).toList(),
+      };
+    } finally {
+      plan.active = prev;
+    }
   }
 }
 

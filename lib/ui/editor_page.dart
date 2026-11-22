@@ -300,6 +300,8 @@ class _EditorPageState extends State<EditorPage> {
         const SizedBox(width: 8),
         if (!narrow) const Spacer(),
         _layoutSwitch(narrow),
+        const SizedBox(width: 6),
+        _levelButton(narrow),
         if (!narrow) const Spacer(),
         IconBtn(icon: Icons.undo, tooltip: 'Poništi (Ctrl+Z)', onTap: c.canUndo ? c.undo : null),
         IconBtn(icon: Icons.redo, tooltip: 'Ponovi (Ctrl+Y)', onTap: c.canRedo ? c.redo : null),
@@ -344,6 +346,140 @@ class _EditorPageState extends State<EditorPage> {
         ),
         const SizedBox(width: 4),
       ]),
+    );
+  }
+
+  // ---------------------------------------------------------------- etaže
+  Widget _levelButton(bool narrow) {
+    final levels = c.plan.levels;
+    return PopupMenuButton<String>(
+      tooltip: 'Etaže',
+      onSelected: (v) {
+        if (v.startsWith('L:')) {
+          c.switchLevel(int.parse(v.substring(2)));
+        } else if (v == 'up') {
+          c.addLevel(above: true);
+          _snack('Dodan je ${c.plan.level.name}. Vanjski zidovi preuzeti su s etaže ispod – prilagodi ih po potrebi.');
+        } else if (v == 'down') {
+          c.addLevel(above: false);
+          _snack('Dodan je ${c.plan.level.name}.');
+        } else if (v == 'edit') {
+          _editLevels();
+        }
+      },
+      itemBuilder: (_) => [
+        for (var i = levels.length - 1; i >= 0; i--)
+          PopupMenuItem(
+            value: 'L:$i',
+            child: Row(children: [
+              Icon(i == c.plan.active ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  size: 18, color: i == c.plan.active ? Pal.accent : Pal.muted),
+              const SizedBox(width: 10),
+              Expanded(child: Text(levels[i].name)),
+              Text(_elev(levels[i].elevation), style: AppText.narrow(size: 12.5, color: Pal.muted)),
+            ]),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: 'up', child: ListTile(dense: true, leading: Icon(Icons.add), title: Text('Dodaj kat iznad'))),
+        const PopupMenuItem(value: 'down', child: ListTile(dense: true, leading: Icon(Icons.vertical_align_bottom), title: Text('Dodaj podrum'))),
+        const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('Uredi etaže…'))),
+      ],
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(color: Pal.paper, borderRadius: BorderRadius.circular(11), border: Border.all(color: Pal.lineSoft)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.layers_outlined, size: 18, color: Pal.inkSoft),
+          if (!narrow || levels.length > 1) ...[
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: narrow ? 70 : 120),
+              child: Text(c.plan.level.name,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.ui(size: 13, weight: FontWeight.w600)),
+            ),
+          ],
+          const Icon(Icons.arrow_drop_down, size: 18, color: Pal.muted),
+        ]),
+      ),
+    );
+  }
+
+  static String _elev(double e) => '${e >= 0 ? '+' : '−'}${e.abs().toStringAsFixed(2).replaceAll('.', ',')}';
+
+  Future<void> _editLevels() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          final levels = c.plan.levels;
+          return AlertDialog(
+            title: const Text('Etaže'),
+            content: SizedBox(
+              width: 460,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('Visina kote poda računa se sama: svijetla visina etaže + 25 cm međukatne konstrukcije.',
+                    style: AppText.ui(size: 12.5, color: Pal.muted)),
+                const SizedBox(height: 12),
+                for (var i = levels.length - 1; i >= 0; i--)
+                  Padding(
+                    key: ValueKey(levels[i].id),
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(children: [
+                      Expanded(
+                        flex: 5,
+                        child: TextFormField(
+                          initialValue: levels[i].name,
+                          decoration: InputDecoration(labelText: 'Naziv', helperText: 'kota ${_elev(levels[i].elevation)} m'),
+                          onFieldSubmitted: (v) {
+                            c.renameLevel(i, v);
+                            setD(() {});
+                          },
+                          onChanged: (v) => c.renameLevel(i, v),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 3,
+                        child: NumField(
+                          label: 'Visina',
+                          value: levels[i].height,
+                          onSubmit: (v) {
+                            c.setLevelHeight(i, v);
+                            setD(() {});
+                          },
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Obriši etažu',
+                        onPressed: levels.length <= 1
+                            ? null
+                            : () async {
+                                final ok = await showDialog<bool>(
+                                  context: ctx,
+                                  builder: (c2) => AlertDialog(
+                                    title: Text('Obrisati „${levels[i].name}”?'),
+                                    content: const Text('Obrisat će se zidovi, prostorije i namještaj te etaže. Možeš poništiti s Ctrl+Z.'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(c2, false), child: const Text('Odustani')),
+                                      FilledButton(onPressed: () => Navigator.pop(c2, true), child: const Text('Obriši')),
+                                    ],
+                                  ),
+                                );
+                                if (ok == true) {
+                                  c.deleteLevel(i);
+                                  setD(() {});
+                                }
+                              },
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ]),
+                  ),
+              ]),
+            ),
+            actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Gotovo'))],
+          );
+        },
+      ),
     );
   }
 

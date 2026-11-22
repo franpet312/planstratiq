@@ -87,6 +87,7 @@ class PlanPainter extends CustomPainter {
       canvas.drawRect(Offset.zero & size, Paint()..color = Pal.paper);
       _grid(canvas, size);
       _image(canvas);
+      _ghostBelow(canvas);
     }
     _rooms(canvas);
     _items(canvas, floor: true);
@@ -149,6 +150,40 @@ class PlanPainter extends CustomPainter {
     if (scale > 28) lines(0.5, const Color(0xFFE2E7E4));
     lines(1, const Color(0xFFD7DDDA));
     lines(5, const Color(0xFFC8D0CC), 1.2);
+  }
+
+  /// Prozirni obris etaže ispod – pomaže poravnati nosive zidove kata.
+  void _ghostBelow(Canvas canvas) {
+    final below = plan.levelBelow;
+    if (below == null || below.walls.isEmpty) return;
+    final p = Paint()
+      ..color = const Color(0x553A6EA5)
+      ..strokeCap = StrokeCap.butt
+      ..style = PaintingStyle.stroke;
+    for (final w in below.walls) {
+      final a = below.nodes[w.a]?.pos, b = below.nodes[w.b]?.pos;
+      if (a == null || b == null) continue;
+      p.strokeWidth = math.max(1.0, w.thickness * scale);
+      canvas.drawLine(s(a), s(b), p);
+    }
+    final dash = Paint()
+      ..color = const Color(0x993A6EA5)
+      ..strokeWidth = 1;
+    for (final o in below.openings) {
+      Wall? w;
+      for (final x in below.walls) {
+        if (x.id == o.wallId) w = x;
+      }
+      if (w == null) continue;
+      final a = below.nodes[w.a]?.pos, b = below.nodes[w.b]?.pos;
+      if (a == null || b == null) continue;
+      final d = b - a;
+      final len = d.distance;
+      if (len < 0.01) continue;
+      final u = d / len;
+      final c = a + u * (o.t * len);
+      canvas.drawLine(s(c - u * (o.width / 2)), s(c + u * (o.width / 2)), dash);
+    }
   }
 
   void _image(Canvas canvas) {

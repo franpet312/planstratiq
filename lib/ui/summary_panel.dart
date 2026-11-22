@@ -48,7 +48,10 @@ class SummaryPanel extends StatelessWidget {
       else
         for (final r in st.rooms)
           InkWell(
-            onTap: () => c.select(Selection(SelKind.room, r.room.id)),
+            onTap: () {
+              c.switchLevel(r.levelIndex);
+              c.select(Selection(SelKind.room, r.room.id));
+            },
             borderRadius: BorderRadius.circular(6),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
@@ -57,7 +60,7 @@ class SummaryPanel extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(r.room.name, style: AppText.ui(size: 13, weight: FontWeight.w500)),
+                    Text(r.level.isEmpty ? r.room.name : '${r.room.name}  ·  ${r.level}', style: AppText.ui(size: 13, weight: FontWeight.w500)),
                     Text(r.material.name, style: AppText.ui(size: 11.5, color: Pal.muted)),
                   ]),
                 ),
@@ -100,7 +103,7 @@ String buildCsv(PlanController c) {
   b.writeln();
   b.writeln('${q('Prostorija')};${q('Površina (m²)')};${q('Opseg (m)')};${q('Pod')};${q('Cijena poda (€)')}');
   for (final r in st.rooms) {
-    b.writeln('${q(r.room.name)};${n(r.area)};${n(r.perimeter)};${q(r.material.name)};${n(r.floorCost)}');
+    b.writeln('${q(r.level.isEmpty ? r.room.name : '${r.room.name} (${r.level})')};${n(r.area)};${n(r.perimeter)};${q(r.material.name)};${n(r.floorCost)}');
   }
   b.writeln('${q('Ukupno')};${n(st.netArea)};;;${n(st.floorCost)}');
   b.writeln();

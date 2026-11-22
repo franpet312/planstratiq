@@ -307,7 +307,10 @@ class PropertiesPanel extends StatelessWidget {
             key: const ValueKey('wall-height-all'),
             label: 'Visina novih zidova',
             value: c.plan.wallHeight,
-            onSubmit: (v) => c.mutate(() => c.plan.wallHeight = v.clamp(2.0, 6.0)),
+            onSubmit: (v) => c.mutate(() {
+              c.plan.wallHeight = v.clamp(2.0, 6.0);
+              c.plan.restackLevels();
+            }),
           ),
         ),
         const SizedBox(width: 8),

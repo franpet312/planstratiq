@@ -164,6 +164,10 @@ class PlanEditorState extends State<PlanEditor> {
       if (n.id == excludeNode) continue;
       if ((n.pos - w).distance < tol) return n.pos;
     }
+    // kutovi etaže ispod (za poravnanje nosivih zidova)
+    for (final n in plan.levelBelow?.nodes.values ?? const <PlanNode>[]) {
+      if ((n.pos - w).distance < tol) return n.pos;
+    }
     if (from != null) {
       // kraj zida blizu postojećeg zida: zalijepi se točno na njega
       for (final wl in plan.walls) {

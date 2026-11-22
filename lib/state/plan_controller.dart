@@ -40,8 +40,10 @@ class Selection {
 }
 
 class RoomStat {
-  RoomStat(this.room, this.area, this.perimeter, this.material);
+  RoomStat(this.room, this.area, this.perimeter, this.material, [this.level = '', this.levelIndex = 0]);
   final Room room;
+  final String level;
+  final int levelIndex;
   final double area;
   final double perimeter;
   final FloorMaterial material;
@@ -141,10 +143,14 @@ class PlanController extends ChangeNotifier {
   String _snapshot() => jsonEncode(plan.toJson(includeImage: false));
 
   void _restore(String s) {
-    final img = plan.image;
+    final images = {for (final l in plan.levels) l.id: l.image};
+    final prevLevel = plan.level.id;
     plan = Plan.fromJson(jsonDecode(s) as Map<String, dynamic>);
-    plan.image = img;
+    for (final l in plan.levels) {
+      l.image = images[l.id];
+    }
     _syncRooms();
+    if (plan.level.id != prevLevel) _decodePlanImage().then((_) => _disposed ? null : notifyListeners());
     if (!_selectionValid()) selection = Selection.none;
   }
 
@@ -585,7 +591,10 @@ class PlanController extends ChangeNotifier {
         if (height != null) w.height = height;
         if (color != null) w.color = color;
       }
-      if (height != null) plan.wallHeight = height;
+      if (height != null) {
+        plan.wallHeight = height;
+        plan.restackLevels();
+      }
     });
   }
 
@@ -738,35 +747,59 @@ class PlanController extends ChangeNotifier {
 
   PlanStats get stats => _stats ??= _computeStats();
 
+  /// Statistika cijele zgrade (sve etaže).
   PlanStats _computeStats() {
     final rooms = <RoomStat>[];
-    for (final r in plan.rooms) {
-      final poly = plan.roomPolygon(r);
-      if (poly.length < 3) continue;
-      rooms.add(RoomStat(r, roomNetArea(plan, r), polygonPerimeter(poly), floorById(r.floor)));
-    }
-    var paint = 0.0, length = 0.0;
-    for (final w in plan.walls) {
-      final len = plan.wallLength(w);
-      length += len;
-      final sides = wallSides(w);
-      var area = len * w.height;
-      for (final o in plan.openings.where((o) => o.wallId == w.id)) {
-        area -= o.width * o.height;
+    var paint = 0.0, length = 0.0, footprint = 0.0;
+    var doors = 0, windows = 0;
+    final prev = plan.active;
+    final multi = plan.levels.length > 1;
+    for (var li = 0; li < plan.levels.length; li++) {
+      plan.active = li;
+      final lvlName = multi ? plan.level.name : '';
+      for (final r in plan.rooms) {
+        final poly = plan.roomPolygon(r);
+        if (poly.length < 3) continue;
+        rooms.add(RoomStat(r, roomNetArea(plan, r), polygonPerimeter(poly), floorById(r.floor), lvlName, li));
       }
-      paint += math.max(0, area) * sides;
+      for (final w in plan.walls) {
+        final len = plan.wallLength(w);
+        length += len;
+        final sides = wallSides(w);
+        var area = len * w.height;
+        for (final o in plan.openings.where((o) => o.wallId == w.id)) {
+          area -= o.width * o.height;
+        }
+        paint += math.max(0, area) * sides;
+      }
+      final res = li == prev ? null : detectFaces(plan);
+      final outs = res?.outlines ?? outlines;
+      final outIds = res?.outlineIds ?? outlineIds;
+      for (var i = 0; i < outs.length; i++) {
+        footprint += offsetArea(outs[i], edgeHalfThickness(plan, outIds[i]), inward: false);
+      }
+      doors += plan.openings.where((o) => o.type == OpeningType.door || o.type == OpeningType.balcony).length;
+      windows += plan.openings.where((o) => o.type == OpeningType.window).length;
     }
+    plan.active = prev;
     return PlanStats(
       rooms: rooms,
-      footprint: [
-        for (var i = 0; i < outlines.length; i++)
-          offsetArea(outlines[i], edgeHalfThickness(plan, outlineIds[i]), inward: false)
-      ].fold(0.0, (a, b) => a + b),
+      footprint: footprint,
       paintArea: paint,
       wallLength: length,
-      doors: plan.openings.where((o) => o.type == OpeningType.door || o.type == OpeningType.balcony).length,
-      windows: plan.openings.where((o) => o.type == OpeningType.window).length,
+      doors: doors,
+      windows: windows,
     );
+  }
+
+  /// Podaci etaže [i] za 3D: obrisi zgrade i strana zidova prema interijeru.
+  (List<List<Offset>>, Map<String, int>) levelSceneData(int i) {
+    final prev = plan.active;
+    plan.active = i;
+    final outs = i == prev ? outlines : detectFaces(plan).outlines;
+    final sides = <String, int>{for (final w in plan.walls) w.id: wallSides(w)};
+    plan.active = prev;
+    return (outs, sides);
   }
 
   // --------------------------------------------------------- nacrt (slika)
@@ -832,6 +865,111 @@ class PlanController extends ChangeNotifier {
   void rename(String name) => mutate(() => plan.name = name);
 
   /// Zamijeni sadržaj (npr. predložak) – sve u jednoj promjeni, može se poništiti.
+  // ---------------------------------------------------------------- etaže
+
+  /// Prebaci se na etažu [i] (tlocrt, 3D i statistika prate aktivnu etažu).
+  void switchLevel(int i) {
+    if (i == plan.active || i < 0 || i >= plan.levels.length) return;
+    plan.active = i;
+    selection = Selection.none;
+    if (tool == Tool.place || tool == Tool.calibrate) tool = Tool.select;
+    placing = null;
+    _syncRooms();
+    bgImage = null;
+    _decodePlanImage().then((_) {
+      if (!_disposed) notifyListeners();
+    });
+    revision++;
+    _stats = null;
+    notifyListeners();
+    _dirty = true;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 700), _saveNow);
+  }
+
+  static String levelNameFor(int floorNo) {
+    if (floorNo == 0) return 'Prizemlje';
+    if (floorNo < 0) return floorNo == -1 ? 'Podrum' : 'Podrum ${-floorNo}';
+    return '$floorNo. kat';
+  }
+
+  /// Dodaj etažu iznad najviše ili ispod najniže. [copyShell]: preuzmi vanjske zidove susjedne etaže.
+  void addLevel({required bool above, bool copyShell = true}) {
+    mutate(() {
+      final ref = above ? plan.levels.last : plan.levels.first;
+      final g = plan.groundIndex;
+      final floorNo = above ? plan.levels.length - 1 - g + 1 : -(g + 1);
+      final lvl = Level(id: newId('L'), name: levelNameFor(floorNo), height: ref.height);
+      if (copyShell) {
+        // preuzmi obodne zidove (one uz koje je prostorija samo s jedne strane) i čvorove
+        final prev = plan.active;
+        plan.active = plan.levels.indexOf(ref);
+        final res = detectFaces(plan);
+        final outerIds = <String>{};
+        for (final ids in res.outlineIds) {
+          for (var k = 0; k < ids.length; k++) {
+            final a = ids[k], b = ids[(k + 1) % ids.length];
+            for (final w in ref.walls) {
+              if ((w.a == a && w.b == b) || (w.a == b && w.b == a)) outerIds.add(w.id);
+            }
+          }
+        }
+        final idMap = <String, String>{};
+        String mapNode(String id) => idMap.putIfAbsent(id, () {
+              final nid = newId('n');
+              lvl.nodes[nid] = PlanNode(nid, ref.nodes[id]!.pos);
+              return nid;
+            });
+        for (final w in ref.walls.where((w) => outerIds.contains(w.id))) {
+          if (!ref.nodes.containsKey(w.a) || !ref.nodes.containsKey(w.b)) continue;
+          lvl.walls.add(w.copyWith(id: newId('w'), a: mapNode(w.a), b: mapNode(w.b))..height = lvl.height);
+        }
+        plan.active = prev;
+      }
+      if (above) {
+        plan.levels.add(lvl);
+      } else {
+        plan.levels.insert(0, lvl);
+      }
+      plan.restackLevels();
+      plan.active = plan.levels.indexOf(lvl);
+      selection = Selection.none;
+      bgImage = null;
+    });
+  }
+
+  void deleteLevel(int i) {
+    if (plan.levels.length <= 1) return;
+    mutate(() {
+      final a = plan.active;
+      plan.levels.removeAt(i);
+      plan.active = (a > i ? a - 1 : (a == i ? i - 1 : a)).clamp(0, plan.levels.length - 1);
+      plan.restackLevels();
+      selection = Selection.none;
+    });
+    bgImage = null;
+    _decodePlanImage().then((_) {
+      if (!_disposed) notifyListeners();
+    });
+  }
+
+  void renameLevel(int i, String name) {
+    if (name.trim().isEmpty) return;
+    mutate(() => plan.levels[i].name = name.trim());
+  }
+
+  void setLevelHeight(int i, double h) {
+    mutate(() {
+      final l = plan.levels[i];
+      final old = l.height;
+      l.height = h.clamp(2.0, 6.0);
+      for (final w in l.walls) {
+        if ((w.height - old).abs() < 0.001) w.height = l.height;
+      }
+      plan.restackLevels();
+    });
+  }
+
   void replaceWith(void Function(PlanController c) build) {
     mutate(() {
       final name = plan.name;

@@ -772,6 +772,7 @@ class Engine {
     ground.position.y = -0.01;
     ground.receiveShadow = true;
     scene.add(ground);
+    this.ground = ground;
 
     this.world = new THREE.Group();
     scene.add(this.world);
@@ -803,6 +804,11 @@ class Engine {
     this.itemGroups = new Map();
     this.wallGroups = new Map();
     this.plan = null;
+    this.fy = 0; // visina poda aktivne etaže
+    this.showAll = false; // u pogledu izvana prikaži i etaže iznad aktivne
+    this.levelGroups = [];
+    this._tgt = null;
+    this._passive = false;
     this.framed = false;
     this.savedOrbit = null;
     this.selection = { kind: '', id: '' };
@@ -895,6 +901,14 @@ class Engine {
 
   setPlan(json) {
     try { this.plan = typeof json === 'string' ? JSON.parse(json) : json; } catch (e) { console.error('[Planstratiq3D] JSON', e); return; }
+    const fy = this.plan.elevation || 0;
+    if (Math.abs(fy - this.fy) > 0.001) {
+      const d = fy - this.fy;
+      this.fy = fy;
+      // prebaci promatrača na novu etažu
+      this.camera.position.y += d;
+      if (this.mode === 'orbit') this.orbit.target.y += d;
+    }
     if (this.plan.projectId !== this.projectId) {
       this.projectId = this.plan.projectId;
       this.framed = false;
@@ -914,6 +928,7 @@ class Engine {
   setOptions(json) {
     const o = typeof json === 'string' ? JSON.parse(json) : json;
     if (o.time != null) this.setTime(o.time);
+    if (o.showAll != null) { this.showAll = !!o.showAll; this._applyVisibility(); }
   }
 
   setMode(mode) {
@@ -930,7 +945,7 @@ class Engine {
         this.camera.getWorldDirection(d);
         this._placeAvatar(this.camera.position.x, this.camera.position.z, Math.atan2(d.x, d.z));
       } else if (mode === 'walk' && from === 'third') {
-        this.camera.position.set(this.tp.x, EYE, this.tp.z);
+        this.camera.position.set(this.tp.x, EYE + this.fy, this.tp.z);
         this.camera.quaternion.setFromEuler(new THREE.Euler(-0.05, this.tp.heading + Math.PI, 0, 'YXZ'));
         this._emitPose(true);
       } else {
@@ -982,7 +997,7 @@ class Engine {
 
   _placeAvatar(x, z, heading) {
     Object.assign(this.tp, { x, z, heading, yaw: heading + Math.PI, speed: 0 });
-    this.avatar.root.position.set(x, 0, z);
+    this.avatar.root.position.set(x, this.fy, z);
     this.avatar.root.rotation.y = heading;
     this._thirdCamera(1, true);
     this._emitPose(true);
@@ -1006,7 +1021,7 @@ class Engine {
     const back = Math.min(1.6, Math.max(0, this._rayDist(x, z, -best.dx, -best.dz) - 0.5));
     x -= best.dx * back;
     z -= best.dz * back;
-    this.camera.position.set(x, EYE, z);
+    this.camera.position.set(x, EYE + this.fy, z);
     this.camera.up.set(0, 1, 0);
     this.camera.quaternion.setFromEuler(new THREE.Euler(-0.08, Math.atan2(-best.dx, -best.dz), 0, 'YXZ'));
   }
@@ -1016,7 +1031,7 @@ class Engine {
     const b = this._bounds(true);
     const w = b.max.x - b.min.x, d = b.max.z - b.min.z;
     const size = Math.max(w, d, 6);
-    const c = new THREE.Vector3((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2);
+    const c = new THREE.Vector3((b.min.x + b.max.x) / 2, this.fy, (b.min.z + b.max.z) / 2);
     this.orbit.target.copy(c);
     const r = 0.5 * Math.hypot(w, d) + 2;
     const vfov = THREE.MathUtils.degToRad(this.camera.fov);
@@ -1064,7 +1079,7 @@ class Engine {
     const ndc = new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
     const p = new THREE.Vector3();
-    if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p)) return null;
+    if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.fy), p)) return null;
     return JSON.stringify([p.x, p.z]);
   }
 
@@ -1168,6 +1183,7 @@ class Engine {
     this.wallMeshes = [];
     this.itemGroups.clear();
     this.wallGroups.clear();
+    this.levelGroups = [];
     this.selHelper = null;
   }
 
@@ -1175,6 +1191,31 @@ class Engine {
     this._clearWorld();
     const p = this.plan;
     if (!p) return;
+    // ostale etaže (samo za prikaz, bez odabira i sudara)
+    for (const L of p.others || []) {
+      const g = new THREE.Group();
+      g.position.y = L.elevation || 0;
+      this.world.add(g);
+      this._tgt = g;
+      this._passive = true;
+      this._buildLevel(L);
+      this.levelGroups.push({ g, above: (L.elevation || 0) > this.fy + 0.01 });
+    }
+    // aktivna etaža
+    const lv = new THREE.Group();
+    lv.position.y = this.fy;
+    this.world.add(lv);
+    this._tgt = lv;
+    this._passive = false;
+    this._buildLevel(p);
+    this._tgt = this.world;
+    this._passive = false;
+    if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y);
+    this._applyVisibility();
+    this._updateSelectionHelper();
+  }
+
+  _buildLevel(p) {
     const nodes = p.nodes || {};
     const degree = {};
     for (const w of p.walls || []) {
@@ -1187,23 +1228,30 @@ class Engine {
       this._buildWall(w, nodes, degree, (p.openings || []).filter((o) => o.wallId === w.id));
     }
     this._buildFloors(p, nodes, maxH);
-    if (p.roof) this._buildRoofs(p, maxH);
     for (const it of p.items || []) {
       const g = new THREE.Group();
       g.position.set(it.x, 0, it.y);
       g.rotation.y = -(it.rotation || 0);
-      g.userData = { kind: 'item', id: it.id, data: it };
+      if (!this._passive) {
+        g.userData = { kind: 'item', id: it.id, data: it };
+        this.itemGroups.set(it.id, g);
+      }
       buildItem(it, g, this.loader);
-      this.world.add(g);
-      this.itemGroups.set(it.id, g);
+      this._tgt.add(g);
     }
-    this._applyVisibility();
-    this._updateSelectionHelper();
   }
 
   _applyVisibility() {
-    for (const c of this.ceilings) c.visible = this.mode === 'walk';
-    for (const r of this.roofs) r.visible = this.mode !== 'third';
+    const showAbove = this.mode === 'orbit' && this.showAll;
+    let hiddenAbove = false;
+    for (const L of this.levelGroups) {
+      L.g.visible = !L.above || showAbove;
+      if (L.above && !showAbove) hiddenAbove = true;
+    }
+    for (const c of this.ceilings) c.visible = this.mode === 'walk' && !hiddenAbove ? true : this.mode === 'walk';
+    for (const r of this.roofs) r.visible = this.mode !== 'third' && !hiddenAbove;
+    // podrum se izvana ne vidi ispod trave
+    if (this.ground) this.ground.visible = !(this.mode === 'orbit' && this.fy < -0.1);
   }
 
   _buildWall(w, nodes, degree, openings) {
@@ -1219,7 +1267,7 @@ class Engine {
     const g = new THREE.Group();
     g.position.set(A.x, 0, A.y);
     g.rotation.y = -ang;
-    g.userData = { kind: 'wall', id: w.id, L, H, T, ea, eb };
+    g.userData = this._passive ? { L, H, T, ea, eb } : { kind: 'wall', id: w.id, L, H, T, ea, eb };
 
     // strana interijera: +1 (lokalni +z), -1 (lokalni -z), 0 (unutarnji zid)
     const side = w.inside || 0;
@@ -1235,7 +1283,7 @@ class Engine {
       m.castShadow = true;
       m.receiveShadow = true;
       g.add(m);
-      if (!Array.isArray(material) || material === faces) this.wallMeshes.push(m);
+      if (!this._passive && (!Array.isArray(material) || material === faces)) this.wallMeshes.push(m);
       return m;
     };
     const ops = openings.map((o) => ({ ...o, s: o.t * L - o.width / 2, e: o.t * L + o.width / 2 })).sort((a, b) => a.s - b.s);
@@ -1290,7 +1338,8 @@ class Engine {
     }
     box(cur, L + eb, 0, H);
     solids.push([solidStart, L + eb]);
-    this.world.add(g);
+    this._tgt.add(g);
+    if (this._passive) return;
     this.wallGroups.set(w.id, g);
     const ux = dx / L, uz = dz / L;
     for (const [s0, s1] of solids) {
@@ -1320,19 +1369,31 @@ class Engine {
       m.position.y = y;
       m.receiveShadow = true;
       if (opts.ceiling) this.ceilings.push(m);
-      if (opts.userData) m.userData = opts.userData;
-      this.world.add(m);
+      if (opts.userData && !this._passive) m.userData = opts.userData;
+      this._tgt.add(m);
       return m;
     };
+    const elev = this._tgt === this.world ? 0 : this._tgt.position.y;
     for (const o of p.outlines || []) {
-      if (o.length >= 3) mk(o.map(([x, y]) => ({ x, y })), slabMat, 0.004);
+      if (o.length < 3) continue;
+      const pts = o.map(([x, y]) => ({ x, y }));
+      mk(pts, slabMat, 0.004);
+      if (Math.abs(elev) > 0.05) {
+        // međukatna ploča (25 cm) – vidi se izvana između etaža
+        const geo = new THREE.ExtrudeGeometry(this._shapeFrom(pts), { depth: 0.25, bevelEnabled: false }).rotateX(-Math.PI / 2);
+        const m = new THREE.Mesh(geo, mat(0xd8d2c8, { tex: 'plaster', roughness: 0.95 }));
+        m.position.y = -0.25;
+        m.castShadow = true;
+        m.receiveShadow = true;
+        this._tgt.add(m);
+      }
     }
     for (const r of p.rooms || []) {
       const pts = (r.nodeIds || []).map((id) => nodes[id]).filter(Boolean);
       if (pts.length < 3) continue;
       mk(pts, mat(r.floorColor, { tex: r.floorTexture, roughness: r.floorTexture === 'wood' ? 0.82 : 0.86, env: 0.3, double: true }), 0.03,
         { userData: { kind: 'room', id: r.id } });
-      mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true });
+      if (!this._passive) mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true });
     }
   }
 
@@ -1437,7 +1498,7 @@ class Engine {
   _groundAt(e) {
     this.raycaster.setFromCamera(this._ndc(e), this.camera);
     const p = new THREE.Vector3();
-    return this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p) ? p : null;
+    return this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.fy), p) ? p : null;
   }
 
   _bindPointer() {
@@ -1636,7 +1697,7 @@ class Engine {
     const stuck = this._blocked(p.x, p.z);
     if (stuck || !this._blocked(p.x + mx, p.z)) p.x += mx;
     if (stuck || !this._blocked(p.x, p.z + mz)) p.z += mz;
-    p.y = EYE;
+    p.y = EYE + this.fy;
     return true;
   }
 
@@ -1652,7 +1713,7 @@ class Engine {
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
     this.emit('pose', { x: this.camera.position.x, y: this.camera.position.z, yaw: Math.atan2(dir.x, -dir.z) });
-    this.indoor.position.set(this.camera.position.x, 2.2, this.camera.position.z);
+    this.indoor.position.set(this.camera.position.x, this.camera.position.y + 0.55, this.camera.position.z);
   }
 
   _makeAvatar() {
@@ -1738,14 +1799,14 @@ class Engine {
     a.legs[1].rotation.x = -sw;
     a.arms[0].rotation.x = -sw * 0.8;
     a.arms[1].rotation.x = sw * 0.8;
-    a.root.position.set(tp.x, Math.abs(Math.cos(tp.phase)) * 0.035 * amt, tp.z);
+    a.root.position.set(tp.x, this.fy + Math.abs(Math.cos(tp.phase)) * 0.035 * amt, tp.z);
     a.root.rotation.y = tp.heading;
     this._thirdCamera(dt, false);
   }
 
   _thirdCamera(dt, snap) {
     const tp = this.tp;
-    const target = new THREE.Vector3(tp.x, 1.45, tp.z);
+    const target = new THREE.Vector3(tp.x, 1.45 + this.fy, tp.z);
     const off = new THREE.Vector3(Math.sin(tp.yaw) * Math.cos(tp.pitch), Math.sin(tp.pitch), Math.cos(tp.yaw) * Math.cos(tp.pitch));
     let dist = tp.dist;
     if (this.wallMeshes.length) {

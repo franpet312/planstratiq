@@ -184,6 +184,18 @@ class PlanPainter extends CustomPainter {
       final c = a + u * (o.t * len);
       canvas.drawLine(s(c - u * (o.width / 2)), s(c + u * (o.width / 2)), dash);
     }
+    // stubište s etaže ispod = otvor u podu ove etaže
+    for (final it in below.items.where((i) => i.shape == 'stairs')) {
+      canvas.save();
+      canvas.translate(s(it.pos).dx, s(it.pos).dy);
+      canvas.rotate(it.rotation);
+      final r = Rect.fromCenter(center: Offset.zero, width: it.w * scale, height: it.d * scale);
+      canvas.drawRect(r, Paint()..color = const Color(0x183A6EA5));
+      canvas.drawRect(r, dash..style = PaintingStyle.stroke);
+      canvas.drawLine(r.topLeft, r.bottomRight, dash);
+      canvas.drawLine(r.topRight, r.bottomLeft, dash);
+      canvas.restore();
+    }
   }
 
   void _image(Canvas canvas) {

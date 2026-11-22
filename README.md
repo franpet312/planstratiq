@@ -22,7 +22,14 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Alat za mjerenje, mjerilo, zoom, pinch-zoom na dodir.
 - Učitavanje slike nacrta kao podloge i kalibracija mjerila (dvije točke + stvarna udaljenost).
 
+**Etaže**
+- Podrum, prizemlje i katovi: svaka etaža ima svoje zidove, prostorije i namještaj; kota poda računa se sama (svijetla visina + 25 cm ploče).
+- Novi kat preuzima vanjske zidove etaže ispod; na tlocrtu se etaža ispod vidi prozirno (plavo), a kutovi joj služe za hvatanje.
+- Stubište postavljeno u prizemlju automatski probija otvor u ploči kata; u 3D šetnji (prvo i treće lice) stubama se hoda gore-dolje između etaža.
+- U 3D-u izvana prikazuju se etaže do odabrane (presjek), ili sve etaže s krovom na najvišoj.
+
 **Namještaj i okućnica**
+- **Stvarni proizvodi trgovina**: ~680 proizvoda IKEA, JYSK i Emmezeta (naziv, mjere, cijena, poveznica na proizvod), filtar po trgovini; boje istog proizvoda grupirane su u jedan model. Kod dijela IKEA proizvoda dubina ili visina su procijenjene (oznaka „mjere okvirne”). Podaci: `web/retail/products.csv`.
 - Katalog s **~24.600 varijanti u 464 modela**: ~90 vrsta namještaja i opreme × 8 stilova (skandinavski, moderni, klasični, industrijski, rustikalni, minimalistički, boho, retro) × veličine × boje × izvedbe nogu. Realne mjere, okvirne cijene, 3D sličice.
 - Pretraga, filtri po prostoriji i stilu, poredak po cijeni; detalj modela s odabirom veličine, boje i nogu.
 - **Uvoz kataloga trgovine** (CSV ili JSON): naziv, mjere, cijena, boja, link na proizvod i GLB 3D model. Vrsta namještaja se prepoznaje iz naziva. Predložak CSV-a preuzima se iz kataloga.
@@ -105,9 +112,8 @@ web/
 
 ## Plan razvoja
 
-1. **Više etaža** (prizemlje, kat, podrum) sa stubištem između etaža.
-2. **Automatsko prepoznavanje nacrta (AI)**: servis koji iz slike/PDF-a prepozna zidove, vrata i prozore (segmentacija + vektorizacija) i vrati isti JSON format; korisnik samo ispravlja.
-3. **Katalog trgovaca**: IKEA, JYSK, Emmezeta i drugi nemaju javni API za 3D modele, a njihovi modeli i fotografije zaštićeni su; put je partnerski/affiliate feed (naziv, šifra, mjere, cijena, link, GLB model). Aplikacija je spremna: `CatalogItem` ima `retailer`, `productUrl`, `price` i `modelUrl`.
-4. **Dijeljenje** projekta linkom i korisnički računi (npr. Supabase/Firebase).
-5. Složeniji krovovi, teren i nagib parcele, ograda po rubu parcele.
-6. PDF izvoz s presjecima i specifikacijom; WebXR za VR šetnju.
+1. **Automatsko prepoznavanje nacrta (AI)**: servis koji iz slike/PDF-a prepozna zidove, vrata i prozore (segmentacija + vektorizacija) i vrati isti JSON format; korisnik samo ispravlja.
+2. **Veći katalog trgovaca**: puni asortiman i 3D modeli traže partnerski/affiliate feed (naziv, šifra, mjere, cijena, link, GLB model); aplikacija je spremna (`retailer`, `productUrl`, `price`, `modelUrl`).
+3. **Korisnički računi** i projekti u oblaku (npr. Supabase/Firebase).
+4. Složeniji krovovi, teren i nagib parcele, ograda po rubu parcele.
+5. PDF izvoz s presjecima i specifikacijom; WebXR za VR šetnju.

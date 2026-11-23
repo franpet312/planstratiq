@@ -633,7 +633,11 @@ class PlanController extends ChangeNotifier {
       return;
     }
     final r = resolveItemPos(plan, it, p);
-    if (r != null) it.pos = Offset(roundTo(r.dx, 0.005), roundTo(r.dy, 0.005));
+    if (r != null) {
+      it.pos = Offset(roundTo(r.dx, 0.005), roundTo(r.dy, 0.005));
+    } else if (itemOverlaps(plan, it)) {
+      it.pos = p; // već je zaglavljen (npr. ne stane u prostoriju) – pusti ga da ga se izvuče
+    }
   }
 
   /// Okreni objekt; ako se pri okretanju zabije u nešto, odmakne se (ili ostane kako je bio).
@@ -645,7 +649,11 @@ class PlanController extends ChangeNotifier {
       return true;
     }
     final r = resolveItemPos(plan, it, it.pos, rot: rot);
-    if (r == null) return false;
+    if (r == null) {
+      if (!itemOverlaps(plan, it)) return false;
+      it.rotation = rot;
+      return true;
+    }
     it.rotation = rot;
     it.pos = r;
     return true;

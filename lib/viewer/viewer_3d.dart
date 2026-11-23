@@ -87,7 +87,8 @@ class _Viewer3DState extends State<Viewer3D> {
         final m = data as Map;
         final it = c.plan.itemById(m['id'] as String);
         if (it != null) {
-          c.mutate(() => it.pos = Offset((m['x'] as num).toDouble(), (m['y'] as num).toDouble()));
+          c.mutate(() => c.setItemPos(it.id, Offset((m['x'] as num).toDouble(), (m['y'] as num).toDouble())));
+          _push(); // i kad se objekt nije pomaknuo (sudar), vrati ga na pravo mjesto u 3D-u
         }
       case 'pose':
         if (data == null) {

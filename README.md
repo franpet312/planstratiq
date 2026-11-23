@@ -37,11 +37,14 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - **Uvoz kataloga trgovine** (CSV ili JSON): naziv, mjere, cijena, boja, link na proizvod i GLB 3D model. Vrsta namještaja se prepoznaje iz naziva. Predložak CSV-a preuzima se iz kataloga.
 - Povuci objekt na tlocrt ili u 3D; uz zid se sam okrene leđima prema zidu.
 - Rotacija ručicom (korak 15°), strelice za pomak 1 cm, dupliciranje, promjena mjera i boje.
+- **Sudaranje**: namještaj ne ulazi u zidove ni u drugi namještaj – pri povlačenju klizi uz prepreku (stolice se smiju podvući pod stol, tepisi i terase leže ispod svega). Isključuje se u svojstvima objekta.
+- **Balkoni**: ploča s ogradom (staklena, metalna ili zidana) uz vanjski zid. Dodaje se iz kataloga (sama se prisloni uz zid s vanjske strane) ili jednim klikom iz svojstava vanjskog zida / balkonskih vrata – ako zid nema balkonska vrata, dodaju se.
 
 **3D**
 - Zidovi s otvorima, fasada, podovi s teksturama (parket, laminat, pločice, kamen, beton, tepison), nebo, sjene.
 - Doba dana (položaj sunca), krov, snimka prikaza kao slika.
 - Odabir i povlačenje namještaja izravno u 3D-u.
+- **Otvaranje i paljenje**: vrata, prozori i balkonska vrata, ormari, ladice, hladnjak, perilice i pećnica otvaraju se, a lampe, TV i kamin pale. U šetnji tipka E ili klik (na mobitelu dodir), izvana dvoklik. Zatvorena vrata ne propuštaju, a u šetnji se ne prolazi ni kroz namještaj ni kroz ogradu balkona.
 - Tri načina pogleda: **izvana** (orbit), **treće lice** (animirani lik hoda kućom, kamera ga prati i ne prolazi kroz zidove; povlačenje mišem okreće kameru, kotačić mijenja udaljenost) i **prvo lice**.
 - **Šetnja u prvom licu**: W A S D + miš, ili na mobitelu lijevi palac za hodanje i desni za gledanje; ne prolazi se kroz zidove, kroz vrata da. Položaj osobe vidi se uživo na tlocrtu. Brzi skok u prostoriju.
 

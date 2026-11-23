@@ -113,6 +113,20 @@ class PropertiesPanel extends StatelessWidget {
             label: Text(t.label),
           ),
       ]),
+      if (sides <= 1) ...[
+        const SectionTitle('Balkon'),
+        Text('Ploča s ogradom s vanjske strane zida. Ako zid nema balkonska vrata, dodat će se na sredinu.',
+            style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final (id, label) in const [('balkon', 'Staklena ograda'), ('balkon_metal', 'Metalna ograda'), ('balkon_zid', 'Zidana ograda')])
+            OutlinedButton.icon(
+              onPressed: () => c.addBalcony(w.id, familyId: id),
+              icon: const Icon(Icons.balcony_outlined, size: 18),
+              label: Text(label),
+            ),
+        ]),
+      ],
     ];
   }
 
@@ -172,6 +186,17 @@ class PropertiesPanel extends StatelessWidget {
         else
           const SizedBox(),
       ]),
+      if (o.type == OpeningType.balcony && c.wallSides(w) <= 1) ...[
+        const SectionTitle('Balkon ispred vrata'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final (id, label) in const [('balkon', 'Staklena ograda'), ('balkon_metal', 'Metalna ograda'), ('balkon_zid', 'Zidana ograda')])
+            OutlinedButton.icon(
+              onPressed: () => c.addBalcony(w.id, familyId: id, openingId: o.id),
+              icon: const Icon(Icons.balcony_outlined, size: 18),
+              label: Text(label),
+            ),
+        ]),
+      ],
       if (o.type == OpeningType.door) ...[
         const SectionTitle('Otvaranje'),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -231,6 +256,16 @@ class PropertiesPanel extends StatelessWidget {
       ],
       const SectionTitle('Boja'),
       Swatches(colors: itemColors, value: it.color, onPick: (v) => c.updateItem(it.id, color: v)),
+      const SizedBox(height: 8),
+      SwitchListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        value: c.collisions,
+        onChanged: c.setCollisions,
+        title: Text('Sudaranje', style: AppText.ui(size: 13, weight: FontWeight.w500)),
+        subtitle: Text('Namještaj ne ulazi u zidove ni u drugi namještaj (stolice se smiju podvući pod stol).',
+            style: AppText.ui(size: 12, color: Pal.muted, height: 1.3)),
+      ),
       const SizedBox(height: 14),
       Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(

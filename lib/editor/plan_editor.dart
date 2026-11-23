@@ -458,7 +458,7 @@ class PlanEditorState extends State<PlanEditor> {
             final v = w - it.pos;
             var ang = math.atan2(v.dx, -v.dy);
             if (!HardwareKeyboard.instance.isShiftPressed) ang = roundTo(ang, math.pi / 12);
-            it.rotation = ang % (2 * math.pi);
+            c.setItemRotation(d.id, ang % (2 * math.pi));
             c.liveUpdate();
           }
         case _DragKind.resize:
@@ -687,7 +687,7 @@ class PlanEditorState extends State<PlanEditor> {
       };
       if (nudge != null) {
         final it = plan.itemById(id)!;
-        c.mutate(() => it.pos += nudge);
+        c.mutate(() => c.setItemPos(id, it.pos + nudge));
         return KeyEventResult.handled;
       }
     }

@@ -17,8 +17,24 @@ const RADIUS = 0.22;
 const WALK = 1.5;
 const RUN = 3.2;
 const ACCENT = 0x0e6b66;
+const FLOOR = 0.03; // visina gotovog poda iznad ploče
+let lampBudget = 8; // najviše toliko stvarnih svjetala u lampama (zbog brzine)
 
 const rgb = (c) => Number(c) & 0xffffff;
+const BALCONY = new Set(['balcony', 'balcony_rail', 'balcony_wall']);
+function inPolygon(x, y, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) c = !c;
+  }
+  return c;
+}
+// točka (x, y) tlocrta u lokalnim koordinatama objekta (x širina, z dubina)
+function toLocal(it, x, y) {
+  const r = it.rotation || 0, dx = x - it.x, dz = y - it.y;
+  return { x: dx * Math.cos(r) + dz * Math.sin(r), z: -dx * Math.sin(r) + dz * Math.cos(r) };
+}
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ------------------------------------------------------------------ teksture
@@ -200,6 +216,12 @@ const lighter = (c, f = 0.25) => new THREE.Color(rgb(c)).lerp(new THREE.Color(0x
 const darker = (c, f = 0.35) => new THREE.Color(rgb(c)).lerp(new THREE.Color(0x000000), f).getHex();
 
 // ------------------------------------------------------------------ namještaj
+// mali pomak po objektu (0–6 mm) da se tepisi koji se preklapaju ne „bore” (z-fighting)
+function jitter(id) {
+  let h = 0;
+  for (const ch of String(id || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return (h % 7) * 0.001;
+}
 // Gradi objekt u lokalnim koordinatama: središte na podu, stražnja strana na -z.
 function buildItem(it, g, loader) {
   const W = it.w, D = it.d, H = it.h;
@@ -230,6 +252,57 @@ function buildItem(it, g, loader) {
     return m;
   };
   const metal = { metalness: 0.6, roughness: 0.35 };
+
+  // pomični dijelovi (vrata ormara, ladice, svjetla) – engine ih otvara/pali na klik ili E
+  const ud = g.userData || (g.userData = {});
+  const parts = [];
+  const interactive = (noun, def = 0, light = false) => { ud.parts = parts; ud.inter = { noun, def, light }; };
+  const part = (o, prop, delta) => parts.push({ o, prop, delta });
+  const inside = lighter(color, 0.18);
+  const inGroup = (grp, f) => { const prev = tgt; tgt = grp; f(); tgt = prev; };
+  // krilo s šarkom na x=hx (lokalno), otvara se prema +z; dir=+1 krilo ide u +x od šarke
+  const hinged = (w, h, x, y, z, dir, c = color, opts, handleY = null, open = 1.75) => {
+    const pv = new THREE.Group();
+    pv.position.set(x, y, z);
+    tgt.add(pv);
+    inGroup(pv, () => {
+      b(w, h, 0.02, (dir * w) / 2, h / 2, 0.01, c, opts);
+      if (handleY !== null) b(0.015, 0.22, 0.025, dir * (w - 0.05), handleY, 0.032, 0x9a9a9a, metal);
+    });
+    part(pv, 'ry', -dir * open);
+    return pv;
+  };
+  // šuplji korpus (stranice, strop, dno, leđa) – da se pri otvaranju vidi unutrašnjost
+  const carcass = (w, h, d, c = color, inC = inside) => {
+    const t = 0.02;
+    for (const sx of [-1, 1]) b(t, h, d, sx * (w / 2 - t / 2), h / 2, 0, c);
+    b(w, t, d, 0, h - t / 2, 0, c);
+    b(w, 0.06, d, 0, 0.03, 0, c);
+    b(w - 2 * t, h - 0.08, 0.01, 0, h / 2, -d / 2 + 0.005, inC);
+  };
+  // ormar s vratima u mreži cols × rows (splits: visine prijeloma redova)
+  const cabinet = (w, h, d, cols, splits = [], opts) => {
+    const dd = d - 0.02;
+    const grp = new THREE.Group();
+    grp.position.z = -0.01;
+    tgt.add(grp);
+    inGroup(grp, () => {
+      carcass(w, h, dd);
+      for (const y of splits) b(w - 0.04, 0.02, dd - 0.02, 0, y, 0.01, inside);
+      if (h > 1.2) b(w - 0.04, 0.02, dd - 0.04, 0, h * 0.78, 0.01, inside);
+    });
+    const ys = [0, ...splits, h];
+    const dw = w / cols;
+    for (let r = 0; r + 1 < ys.length; r++) {
+      const y0 = ys[r] + 0.003, hh = ys[r + 1] - ys[r] - 0.006;
+      for (let i = 0; i < cols; i++) {
+        const left = cols === 1 || i % 2 === 0;
+        const hx = left ? -w / 2 + i * dw + 0.002 : -w / 2 + (i + 1) * dw - 0.002;
+        const hy = r === 0 && ys.length > 2 ? hh - 0.2 : Math.min(hh / 2, 1.05 - y0);
+        hinged(dw - 0.004, hh, hx, y0, d / 2 - 0.02, left ? 1 : -1, color, opts, Math.max(0.15, hy));
+      }
+    }
+  };
 
   // noge prema izvedbi i stilu
   const legType = it.legs || 'wood';
@@ -343,13 +416,14 @@ function buildItem(it, g, loader) {
       break;
     }
     case 'wardrobe': {
-      b(W, H, D, 0, H / 2, 0);
-      const doors = Math.max(2, Math.round(W / 0.5));
-      for (let i = 1; i < doors; i++) b(0.006, H - 0.06, 0.006, -W / 2 + (i * W) / doors, H / 2, D / 2 + 0.003, darker(color, 0.4));
-      for (let i = 0; i < doors; i++) {
-        const x = -W / 2 + ((i + 0.5) * W) / doors + (i % 2 ? -1 : 1) * (W / doors / 2 - 0.05);
-        b(0.015, 0.25, 0.025, x, H * 0.52, D / 2 + 0.013, 0x9a9a9a, metal);
-      }
+      cabinet(W, H, D, Math.max(2, Math.round(W / 0.5)));
+      // šipka i nešto odjeće
+      const rod = cyl(0.012, 0.012, W - 0.06, 0, H * 0.74, -0.02, 0x9a9a9a, 8, metal);
+      rod.rotation.z = Math.PI / 2;
+      const r = rnd(Math.round(W * 100));
+      const cl = [0x40505e, 0xb9a88f, 0x7d3b3b, 0xd8d4cc, 0x2f2f33, 0x6f7f68];
+      for (let x = -W / 2 + 0.12; x < W / 2 - 0.1; x += 0.09 + r() * 0.05) b(0.03, 0.75 + r() * 0.25, Math.min(0.42, D - 0.16), x, H * 0.74 - 0.45 - r() * 0.1, -0.02, cl[Math.floor(r() * cl.length)], { roughness: 1 });
+      interactive('ormar');
       break;
     }
     case 'dresser':
@@ -357,12 +431,26 @@ function buildItem(it, g, loader) {
     case 'box': {
       const lh = it.legs && H > 0.3 ? lift(Math.min(0.14, H * 0.2), W, D) : 0;
       const Hb = H - lh;
-      b(W, Hb, D, 0, Hb / 2, 0);
       if (it.shape === 'dresser') {
+        b(W, Hb, D - 0.02, 0, Hb / 2, -0.01);
         const rows = Math.max(1, Math.round(Hb / 0.22));
-        for (let i = 1; i < rows; i++) b(W - 0.02, 0.006, 0.006, 0, (i * Hb) / rows, D / 2 + 0.003, darker(color, 0.35));
-        for (let i = 0; i < rows; i++) b(Math.min(0.2, W * 0.3), 0.015, 0.02, 0, ((i + 0.5) * Hb) / rows, D / 2 + 0.01, 0x9a9a9a, metal);
-      } else if (it.shape === 'tv_stand') {
+        const rh = Hb / rows;
+        for (let i = 0; i < rows; i++) {
+          const dr = new THREE.Group();
+          tgt.add(dr);
+          const yc = (i + 0.5) * rh;
+          inGroup(dr, () => {
+            b(W - 0.012, rh - 0.008, 0.02, 0, yc, D / 2 - 0.01);
+            b(Math.min(0.2, W * 0.3), 0.015, 0.02, 0, yc, D / 2 + 0.01, 0x9a9a9a, metal);
+            b(W - 0.06, Math.max(0.04, rh - 0.06), D * 0.62, 0, yc, D / 2 - 0.02 - D * 0.31, inside);
+          });
+          part(dr, 'pz', D * (0.5 - 0.08 * (rows - 1 - i) / Math.max(1, rows - 1)));
+        }
+        interactive('ladice');
+      } else {
+        b(W, Hb, D, 0, Hb / 2, 0);
+      }
+      if (it.shape === 'tv_stand') {
         const n = Math.max(2, Math.round(W / 0.5));
         for (let i = 1; i < n; i++) b(0.006, Hb - 0.04, 0.006, -W / 2 + (i * W) / n, Hb / 2, D / 2 + 0.003, darker(color, 0.35));
         b(W * 0.3, Hb * 0.5, 0.01, 0, Hb / 2, D / 2 + 0.004, 0x222222, { roughness: 0.4 });
@@ -387,8 +475,17 @@ function buildItem(it, g, loader) {
       b(W, 0.04, D, 0, H - 0.02, 0);
       const n = Math.max(2, Math.round(H / 0.4));
       for (let i = 1; i < n; i++) b(W - 0.06, 0.012, D - 0.04, 0, (i * H) / n, 0, 0, { glass: true });
-      b(W - 0.06, H - 0.08, 0.01, 0, H / 2, D / 2 - 0.005, 0, { glass: true });
-      b(0.008, H - 0.08, 0.012, 0, H / 2, D / 2, darker(color, 0.3));
+      for (const dir of [1, -1]) {
+        const pv = new THREE.Group();
+        pv.position.set(-dir * (W / 2 - 0.03), 0.04, D / 2 - 0.01);
+        tgt.add(pv);
+        inGroup(pv, () => {
+          b((W - 0.06) / 2 - 0.002, H - 0.08, 0.01, (dir * ((W - 0.06) / 2)) / 2, (H - 0.08) / 2, 0, 0, { glass: true });
+          b(0.008, 0.18, 0.015, dir * ((W - 0.06) / 2 - 0.03), (H - 0.08) / 2, 0.012, darker(color, 0.3));
+        });
+        part(pv, 'ry', -dir * 1.6);
+      }
+      interactive('vitrinu');
       break;
     }
     case 'crib': {
@@ -401,17 +498,25 @@ function buildItem(it, g, loader) {
       for (let i = 1; i < bars; i++) for (const sx of [-1, 1]) b(0.015, H - 0.4, 0.015, sx * (W / 2 - 0.02), 0.4 + (H - 0.4) / 2, -D / 2 + (i * D) / bars);
       break;
     }
-    case 'dishwasher':
+    case 'dishwasher': {
+      b(W, H, D - 0.03, 0, H / 2, -0.015, 0xd9d9d6, { roughness: 0.4 });
+      b(W - 0.06, 0.12, D - 0.12, 0, H * 0.3, -0.02, 0x9a9a9a, metal);
+      b(W - 0.06, 0.12, D - 0.12, 0, H * 0.65, -0.02, 0x9a9a9a, metal);
+      const pv = new THREE.Group();
+      pv.position.set(0, 0.06, D / 2 - 0.03);
+      tgt.add(pv);
+      inGroup(pv, () => {
+        b(W - 0.006, H - 0.07, 0.03, 0, (H - 0.07) / 2, 0.015, color, { roughness: 0.3 });
+        b(W - 0.02, 0.1, 0.01, 0, H - 0.07 - 0.06, 0.032, darker(color, 0.25));
+        b(W * 0.5, 0.02, 0.025, 0, H - 0.07 - 0.15, 0.04, 0x888888, metal);
+      });
+      part(pv, 'rx', 1.45);
+      interactive('perilicu posuđa');
+      break;
+    }
     case 'tall': {
-      b(W, H, D, 0, H / 2, 0, color, { roughness: it.shape === 'dishwasher' ? 0.3 : 0.6 });
-      if (it.shape === 'dishwasher') {
-        b(W - 0.02, 0.1, 0.01, 0, H - 0.07, D / 2 + 0.005, darker(color, 0.25));
-        b(W * 0.5, 0.02, 0.025, 0, H - 0.16, D / 2 + 0.012, 0x888888, metal);
-      } else {
-        b(W - 0.01, 0.006, 0.006, 0, H * 0.45, D / 2 + 0.003, darker(color, 0.35));
-        b(0.015, 0.25, 0.025, W / 2 - 0.06, H * 0.6, D / 2 + 0.012, 0x8a8a8a, metal);
-        b(0.015, 0.2, 0.025, W / 2 - 0.06, H * 0.3, D / 2 + 0.012, 0x8a8a8a, metal);
-      }
+      cabinet(W, H, D, 1, [H * 0.45]);
+      interactive('ormarić');
       break;
     }
     case 'shelf': {
@@ -465,34 +570,66 @@ function buildItem(it, g, loader) {
     case 'stove': {
       b(W, H - 0.02, D, 0, (H - 0.02) / 2, 0);
       b(W, 0.02, D, 0, H - 0.01, 0, 0x111111, { roughness: 0.15 });
-      b(W - 0.08, H * 0.45, 0.01, 0, H * 0.4, D / 2 + 0.005, 0x1a1a1a, { roughness: 0.1 });
+      const pv = new THREE.Group();
+      pv.position.set(0, H * 0.175, D / 2);
+      tgt.add(pv);
+      inGroup(pv, () => {
+        b(W - 0.08, H * 0.45, 0.02, 0, H * 0.225, 0.01, 0x1a1a1a, { roughness: 0.1 });
+        b(W * 0.6, 0.02, 0.03, 0, H * 0.42, 0.035, 0xaaaaaa, metal);
+      });
+      part(pv, 'rx', 1.4);
+      b(W - 0.12, 0.01, D - 0.1, 0, H * 0.35, 0, 0x555555, metal);
+      interactive('pećnicu');
       break;
     }
     case 'fridge': {
-      b(W, H, D, 0, H / 2, 0, color, { roughness: 0.3, metalness: 0.3 });
-      b(W - 0.01, 0.006, 0.006, 0, H * 0.62, D / 2 + 0.003, 0x777777);
-      b(0.02, 0.35, 0.03, W / 2 - 0.06, H * 0.78, D / 2 + 0.015, 0x888888, metal);
-      b(0.02, 0.35, 0.03, W / 2 - 0.06, H * 0.45, D / 2 + 0.015, 0x888888, metal);
+      cabinet(W, H, D, 1, [H * 0.62], { roughness: 0.3, metalness: 0.3 });
+      for (let k = 0; k < 3; k++) b(W - 0.06, 0.01, D - 0.1, 0, H * (0.68 + k * 0.1), -0.02, 0xdfe7ea, { glass: true });
+      interactive('hladnjak');
       break;
     }
     case 'washer': {
       b(W, H, D, 0, H / 2, 0, color, { roughness: 0.3 });
-      const door = cyl(Math.min(W, H) * 0.3, Math.min(W, H) * 0.3, 0.04, 0, H * 0.45, D / 2, 0x3a4248, 32, { roughness: 0.1, metalness: 0.4 });
-      door.rotation.x = Math.PI / 2;
+      const rr = Math.min(W, H) * 0.3;
+      const pv = new THREE.Group();
+      pv.position.set(-rr, H * 0.45, D / 2);
+      tgt.add(pv);
+      inGroup(pv, () => {
+        const door = cyl(rr, rr, 0.04, rr, 0, 0.02, 0x3a4248, 32, { roughness: 0.1, metalness: 0.4 });
+        door.rotation.x = Math.PI / 2;
+      });
+      part(pv, 'ry', -1.5);
+      interactive('perilicu');
       b(W - 0.04, 0.1, 0.01, 0, H - 0.07, D / 2 + 0.005, 0xdddddd);
       break;
     }
     case 'tv': {
       b(W, 0.5, D, 0, 0.25, 0);
       const sw = Math.min(W * 0.8, 1.45), sh = sw * 0.57;
-      b(sw, sh, 0.035, 0, 0.58 + sh / 2, -D / 2 + 0.12, 0x0d0d0d, { roughness: 0.15 });
+      const scr = b(sw, sh, 0.035, 0, 0.58 + sh / 2, -D / 2 + 0.12, 0x0d0d0d, { roughness: 0.15 });
+      scr.material = scr.material.clone();
+      scr.material.emissive = new THREE.Color(0x8fb6ff);
+      parts.push({ mat: scr.material, emi: 0.55 });
+      interactive('TV', 0, true);
       b(0.3, 0.05, 0.2, 0, 0.525, -D / 2 + 0.12, 0x222222);
       break;
     }
     case 'lamp': {
       cyl(0.15, 0.15, 0.03, 0, 0.015, 0, 0x2a2a2a);
       cyl(0.012, 0.012, H - 0.3, 0, (H - 0.3) / 2, 0, 0x2a2a2a, 8);
-      cyl(W * 0.35, W * 0.48, 0.3, 0, H - 0.15, 0, color, 24, { emissive: 0xffd9a0, emissiveIntensity: 0.7, double: true });
+      const shade = cyl(W * 0.35, W * 0.48, 0.3, 0, H - 0.15, 0, color, 24, { emissive: 0xffd9a0, emissiveIntensity: 0.7, double: true });
+      shade.material = shade.material.clone();
+      const pt = { mat: shade.material, emi: 0.7 };
+      if (lampBudget > 0 && g.userData?.kind) {
+        lampBudget--;
+        const L = new THREE.PointLight(0xffd6a0, 0, 6, 1.5);
+        L.position.set(0, H - 0.25, 0);
+        tgt.add(L);
+        pt.light = L;
+        pt.li = 3.5;
+      }
+      parts.push(pt);
+      interactive('svjetlo', 1, true);
       break;
     }
     case 'plant': {
@@ -506,17 +643,59 @@ function buildItem(it, g, loader) {
     case 'rug':
     case 'path': {
       const h = Math.max(H, 0.01);
-      b(W, h, D, 0, h / 2 + 0.034, 0, color, it.shape === 'path' ? { tex: 'stone' } : { tex: 'carpet', roughness: 1 });
+      b(W, h, D, 0, h / 2 + 0.004 + jitter(it.id), 0, color, it.shape === 'path' ? { tex: 'stone' } : { tex: 'carpet', roughness: 1 });
       break;
     }
     case 'rug_round': {
-      cyl(W / 2, W / 2, 0.012, 0, 0.04, 0, color, 48, { tex: 'carpet', roughness: 1 });
+      cyl(W / 2, W / 2, 0.012, 0, 0.01 + jitter(it.id), 0, color, 48, { tex: 'carpet', roughness: 1 });
+      break;
+    }
+    case 'balcony':
+    case 'balcony_rail':
+    case 'balcony_wall': {
+      // ploča (gornja ploha = gotovi pod), ograda na tri strane; stražnja strana (-z) je uz zid
+      const st = 0.18;
+      b(W, 0.02, D, 0, -0.01, 0, color, { tex: 'tile', roughness: 0.7 });
+      b(W, st - 0.02, D, 0, -0.02 - (st - 0.02) / 2, 0, 0xe4ded4, { tex: 'plaster', roughness: 0.95 });
+      const Hr = Math.max(0.6, H);
+      const wallT = it.shape === 'balcony_wall' ? 0.12 : 0.06;
+      // dijelovi ograde: prednja (os x) i bočne (os z); bočne završavaju prije prednje (bez preklapanja)
+      const segs = [
+        { ax: 'x', a0: -W / 2, a1: W / 2, f: D / 2 - wallT / 2 },
+        { ax: 'z', a0: -D / 2, a1: D / 2 - wallT, f: -W / 2 + wallT / 2 },
+        { ax: 'z', a0: -D / 2, a1: D / 2 - wallT, f: W / 2 - wallT / 2 },
+      ];
+      const seg = (sg, y, h, th, c, opts, a0 = sg.a0, a1 = sg.a1) => sg.ax === 'x'
+        ? b(a1 - a0, h, th, (a0 + a1) / 2, y, sg.f, c, opts)
+        : b(th, h, a1 - a0, sg.f, y, (a0 + a1) / 2, c, opts);
+      for (const sg of segs) {
+        if (it.shape === 'balcony_wall') {
+          seg(sg, Hr / 2, Hr, wallT, 0xece7df, { tex: 'plaster', roughness: 0.95 });
+          seg(sg, Hr + 0.02, 0.04, wallT + 0.04, 0xd8d2c8, { tex: 'stone' }, sg.a0, sg.ax === 'z' ? sg.a1 - 0.021 : sg.a1);
+        } else if (it.shape === 'balcony_rail') {
+          const rc = 0x2e3236;
+          seg(sg, Hr - 0.02, 0.04, 0.05, rc, metal);
+          seg(sg, 0.1, 0.03, 0.03, rc, metal);
+          const len = sg.a1 - sg.a0, n = Math.max(2, Math.round(len / 0.12));
+          for (let k = 0; k <= n; k++) {
+            const a = sg.a0 + (k * len) / n;
+            seg(sg, 0.06 + (Hr - 0.12) / 2, Hr - 0.12, 0.018, rc, metal, a - 0.009, a + 0.009);
+          }
+        } else {
+          seg(sg, 0.04, 0.08, 0.06, 0x9a9a9a, metal);
+          seg(sg, 0.06 + (Hr - 0.1) / 2, Hr - 0.1, 0.015, 0, { glass: true }, sg.a0 + 0.005, sg.a1 - 0.005);
+          seg(sg, Hr - 0.02, 0.04, 0.06, 0xbfc3c6, metal);
+        }
+      }
       break;
     }
     case 'fireplace': {
       b(W, H, D, 0, H / 2, 0, color, { tex: 'stone' });
       b(W * 0.55, H * 0.5, 0.05, 0, H * 0.3, D / 2 - 0.02, 0x141414);
-      b(W * 0.45, 0.12, 0.03, 0, H * 0.13, D / 2 - 0.01, 0xff8a3d, { emissive: 0xff6a1a, emissiveIntensity: 1.2 });
+      const fire = b(W * 0.45, 0.12, 0.03, 0, H * 0.13, D / 2 - 0.01, 0xff8a3d, { emissive: 0xff6a1a, emissiveIntensity: 1.2 });
+      fire.material = fire.material.clone();
+      parts.push({ mat: fire.material, emi: 1.2 });
+      interactive('vatru', 1, true);
       b(W + 0.1, 0.06, D + 0.06, 0, H + 0.03, 0, 0xd8d2c8);
       break;
     }
@@ -807,6 +986,10 @@ class Engine {
     this.fy = 0; // visina poda aktivne etaže
     this.showAll = false; // u pogledu izvana prikaži i etaže iznad aktivne
     this.levelGroups = [];
+    this.inters = []; // vrata, prozori, ormari, svjetla…
+    this.openState = new Map(); // id -> 0/1 (pamti se kroz ponovnu izgradnju scene)
+    this.aim = null;
+    this.aimAt = 0;
     this._tgt = null;
     this._passive = false;
     this.framed = false;
@@ -829,6 +1012,13 @@ class Engine {
       const code = codeOf(e);
       const fp = this.mode === 'walk' && this.fpv.isLocked;
       const tp = this.mode === 'third' && this.kbd && moveKeys.has(code) && !e.ctrlKey && !e.metaKey;
+      if ((fp || (this.mode === 'third' && this.kbd)) && (code === 'KeyE' || e.key === 'e' || e.key === 'E') && !e.ctrlKey && !e.metaKey) {
+        if (!e.repeat) this._interact();
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
+      }
       if (fp || tp) {
         this.keys.add(code);
         e.preventDefault();
@@ -1154,6 +1344,11 @@ class Engine {
     } else if (!this.fpv.isLocked) {
       text = 'Klikni u prikaz za šetnju. W A S D za hodanje, Shift za trčanje, Esc za izlaz.';
     }
+    if (this.aim && this.mode !== 'orbit') {
+      text = touch ? `Dodirni – ${this.aim}` : this.mode === 'walk' ? `E ili klik – ${this.aim}` : `E – ${this.aim}`;
+    } else if (this.mode === 'orbit' && !touch && text) {
+      text += ' Dvoklik otvara vrata, prozore i ormare.';
+    }
     this.hint.textContent = text;
     this.hint.style.display = text ? 'block' : 'none';
     this.cross.style.display = this.mode === 'walk' && this.fpv.isLocked ? 'block' : 'none';
@@ -1186,11 +1381,13 @@ class Engine {
     this.itemGroups.clear();
     this.wallGroups.clear();
     this.levelGroups = [];
+    this.inters = [];
     this.selHelper = null;
   }
 
   _rebuild() {
     this._clearWorld();
+    lampBudget = 8;
     const p = this.plan;
     if (!p) return;
     // ostale etaže (samo za prikaz, bez odabira i sudara)
@@ -1219,20 +1416,48 @@ class Engine {
 
   _buildLevel(p) {
     const nodes = p.nodes || {};
-    const degree = {};
+    // smjerovi zidova iz svakog čvora
+    const dirs = {};
     for (const w of p.walls || []) {
-      degree[w.a] = (degree[w.a] || 0) + 1;
-      degree[w.b] = (degree[w.b] || 0) + 1;
+      const A = nodes[w.a], B = nodes[w.b];
+      if (!A || !B) continue;
+      const ang = Math.atan2(B.y - A.y, B.x - A.x);
+      (dirs[w.a] ||= []).push({ w, ang, T: w.thickness || 0.2 });
+      (dirs[w.b] ||= []).push({ w, ang: ang + Math.PI, T: w.thickness || 0.2 });
     }
+    // produžetak kraja zida u čvor: samo na kutu/T-spoju, i to do lica poprečnog zida (−2 mm)
+    const ext = (w, nodeId, ang) => {
+      const others = (dirs[nodeId] || []).filter((d) => d.w !== w);
+      let collinear = null, cross = 0;
+      for (const d of others) {
+        const sn = Math.abs(Math.sin(d.ang - ang));
+        if (sn < 0.2 && Math.cos(d.ang - ang) < 0) collinear = d.w;
+        else if (sn >= 0.2) cross = Math.max(cross, d.T / 2 / sn);
+      }
+      // ravni nastavak: jedan od dvaju zidova uđe 1,5 mm u drugi (bez pukotine na spoju)
+      if (collinear) return String(w.id) < String(collinear.id) ? 0.0015 : 0;
+      if (!cross) return 0;
+      return Math.max(0, cross - 0.002);
+    };
     let maxH = p.wallHeight || 2.6;
     for (const w of p.walls || []) {
       maxH = Math.max(maxH, w.height || 2.6);
-      this._buildWall(w, nodes, degree, (p.openings || []).filter((o) => o.wallId === w.id));
+      const A = nodes[w.a], B = nodes[w.b];
+      const ang = A && B ? Math.atan2(B.y - A.y, B.x - A.x) : 0;
+      this._buildWall(w, nodes, { ea: ext(w, w.a, ang), eb: ext(w, w.b, ang + Math.PI) }, (p.openings || []).filter((o) => o.wallId === w.id));
     }
     this._buildFloors(p, nodes, maxH);
+    // tlocrtni obrisi i balkoni – namještaj unutra stoji na gotovom podu (+3 cm)
+    const outs = (p.outlines || []).filter((o) => o.length >= 3).map((o) => o.map(([x, y]) => ({ x, y })));
+    const balconies = (p.items || []).filter((q) => BALCONY.has(q.shape));
+    const onFloor = (it) => {
+      if (BALCONY.has(it.shape)) return true;
+      if (outs.some((o) => inPolygon(it.x, it.y, o))) return true;
+      return balconies.some((q) => { const l = toLocal(q, it.x, it.y); return Math.abs(l.x) <= q.w / 2 && Math.abs(l.z) <= q.d / 2; });
+    };
     for (const it of p.items || []) {
       const g = new THREE.Group();
-      g.position.set(it.x, 0, it.y);
+      g.position.set(it.x, onFloor(it) ? FLOOR : 0, it.y);
       g.rotation.y = -(it.rotation || 0);
       if (!this._passive) {
         g.userData = { kind: 'item', id: it.id, data: it };
@@ -1240,7 +1465,27 @@ class Engine {
       }
       buildItem(it, g, this.loader);
       this._tgt.add(g);
+      if (g.userData.inter) this._register(it.id, [g], g.userData.inter, g.userData.parts || []);
+      if (!this._passive) this._itemColliders(it);
     }
+  }
+
+  // sudari u šetnji: namještaj (orijentirani pravokutnik) i ograde balkona
+  _itemColliders(it) {
+    const sh = it.shape;
+    if (['rug', 'rug_round', 'path', 'deck', 'stairs', 'carport'].includes(sh)) return;
+    const r = it.rotation || 0;
+    const ux = { x: Math.cos(r), z: Math.sin(r) }, uz = { x: -Math.sin(r), z: Math.cos(r) };
+    const W = (x, z) => ({ x: it.x + ux.x * x + uz.x * z, z: it.y + ux.z * x + uz.z * z });
+    if (BALCONY.has(sh)) {
+      const t = sh === 'balcony_wall' ? 0.06 : 0.03;
+      const pts = [W(-it.w / 2 + t, -it.d / 2), W(-it.w / 2 + t, it.d / 2 - t), W(it.w / 2 - t, it.d / 2 - t), W(it.w / 2 - t, -it.d / 2)];
+      for (let i = 0; i < 3; i++) this.colliders.push({ ax: pts[i].x, az: pts[i].z, bx: pts[i + 1].x, bz: pts[i + 1].z, r: t });
+      return;
+    }
+    if ((it.h || 0) < 0.12) return;
+    const trunk = sh === 'tree' || sh === 'umbrella' || sh === 'cypress';
+    this.colliders.push({ obb: true, cx: it.x, cz: it.y, hw: trunk ? 0.12 : it.w / 2, hd: trunk ? 0.12 : it.d / 2, ux, uz });
   }
 
   _applyVisibility() {
@@ -1256,7 +1501,7 @@ class Engine {
     if (this.ground) this.ground.visible = !(this.mode === 'orbit' && this.fy < -0.1);
   }
 
-  _buildWall(w, nodes, degree, openings) {
+  _buildWall(w, nodes, ends, openings) {
     const A = nodes[w.a], B = nodes[w.b];
     if (!A || !B) return;
     const dx = B.x - A.x, dz = B.y - A.y;
@@ -1264,8 +1509,7 @@ class Engine {
     if (L < 0.01) return;
     const ang = Math.atan2(dz, dx);
     const T = w.thickness || 0.2, H = w.height || 2.6;
-    const ea = degree[w.a] > 1 ? T / 2 : 0;
-    const eb = degree[w.b] > 1 ? T / 2 : 0;
+    const ea = ends.ea, eb = ends.eb;
     const g = new THREE.Group();
     g.position.set(A.x, 0, A.y);
     g.rotation.y = -ang;
@@ -1278,63 +1522,105 @@ class Engine {
     const top = mat(0xd9d6d0, { roughness: 1 });
     const faces = [paint, paint, top, paint, side === -1 ? facade : paint, side === 1 ? facade : paint];
 
-    const box = (x0, x1, y0, y1, material = faces, depth = T, z = 0) => {
+    const box = (x0, x1, y0, y1, material = faces, depth = T, z = 0, parent = g) => {
       if (x1 - x0 < 0.002 || y1 - y0 < 0.002) return null;
       const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, depth), material);
       m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z);
       m.castShadow = true;
       m.receiveShadow = true;
-      g.add(m);
+      parent.add(m);
       if (!this._passive && (!Array.isArray(material) || material === faces)) this.wallMeshes.push(m);
       return m;
     };
     const ops = openings.map((o) => ({ ...o, s: o.t * L - o.width / 2, e: o.t * L + o.width / 2 })).sort((a, b) => a.s - b.s);
     const solids = [];
+    const gaps = [];
     let cur = -ea;
     let solidStart = -ea;
     const frameMat = mat(0xf7f7f5, { roughness: 0.5 });
+    const glassMat = mat(0, { glass: true });
+    const sideN0 = side === 0 ? 1 : side;
     for (const o of ops) {
       const s = Math.max(o.s, cur), e = Math.min(o.e, L + eb);
       if (e <= s) continue;
       box(cur, s, 0, H);
       const topY = Math.min(o.sill + o.height, H);
       box(s, e, topY, H);
-      if (o.sill > 0) box(s, e, 0, o.sill);
       const W = e - s;
+      const low = o.sill < 0.3;
+      let I = null;
       if (o.type === 'window' || o.type === 'balcony') {
-        box(s, e, o.sill, topY, mat(0, { glass: true }), 0.02);
-        if (o.sill > 0) box(s, e, o.sill - 0.04, o.sill, frameMat, T + 0.05);
-        box(s, s + 0.06, o.sill, topY, frameMat, 0.08);
-        box(e - 0.06, e, o.sill, topY, frameMat, 0.08);
-        box(s, e, topY - 0.06, topY, frameMat, 0.08);
-        const mullions = o.type === 'balcony' ? 1 : Math.max(0, Math.round(W / 0.9) - 1);
-        for (let i = 1; i <= mullions; i++) {
-          const x = s + (i * W) / (mullions + 1);
-          box(x - 0.03, x + 0.03, o.sill, topY, frameMat, 0.07);
+        if (o.sill > 0) {
+          box(s, e, 0, o.sill - 0.04);
+          box(s, e, o.sill - 0.04, o.sill, frameMat, T + 0.05); // klupčica
         }
-        if (o.type === 'balcony' && o.sill < 0.3) { solids.push([solidStart, s]); solidStart = e; }
+        // fiksni okvir
+        const fd = 0.08;
+        box(s, s + 0.05, o.sill, topY, frameMat, fd);
+        box(e - 0.05, e, o.sill, topY, frameMat, fd);
+        box(s + 0.05, e - 0.05, topY - 0.05, topY, frameMat, fd);
+        const y0 = o.sill + (o.sill > 0 ? 0 : 0.03), y1 = topY - 0.05;
+        if (o.sill <= 0) box(s + 0.05, e - 0.05, 0, 0.03, frameMat, fd); // prag
+        const x0 = s + 0.05, x1 = e - 0.05;
+        const n = o.type === 'balcony' ? 2 : Math.max(1, Math.round(W / 0.9));
+        const pw = (x1 - x0) / n;
+        const sashes = [], partsW = [];
+        for (let i = 0; i < n; i++) {
+          const hingeRight = n > 1 && i >= n / 2;
+          const dir = hingeRight ? -1 : 1;
+          const pv = new THREE.Group();
+          pv.position.set(hingeRight ? x0 + (i + 1) * pw : x0 + i * pw, 0, 0);
+          g.add(pv);
+          const lx0 = Math.min(0, dir * pw), lx1 = Math.max(0, dir * pw), sf = 0.055;
+          box(lx0, lx0 + sf, y0, y1, frameMat, 0.06, 0, pv);
+          box(lx1 - sf, lx1, y0, y1, frameMat, 0.06, 0, pv);
+          box(lx0 + sf, lx1 - sf, y0, y0 + sf, frameMat, 0.06, 0, pv);
+          box(lx0 + sf, lx1 - sf, y1 - sf, y1, frameMat, 0.06, 0, pv);
+          box(lx0 + sf, lx1 - sf, y0 + sf, y1 - sf, glassMat, 0.012, 0, pv);
+          const hy = o.type === 'balcony' ? 1.05 : (y0 + y1) / 2;
+          box(dir > 0 ? lx1 - 0.045 : lx0 + 0.025, dir > 0 ? lx1 - 0.025 : lx0 + 0.045, hy - 0.08, hy + 0.04, mat(0xd9d9d9, { metalness: 0.6, roughness: 0.3 }), 0.02, sideN0 * 0.045, pv);
+          sashes.push(pv);
+          partsW.push({ o: pv, prop: 'ry', delta: -dir * sideN0 * 1.25 });
+        }
+        I = this._register(o.id, sashes, { noun: o.type === 'balcony' ? 'balkonska vrata' : 'prozor', def: 0 }, partsW);
       } else {
         box(s, s + 0.04, 0, topY, frameMat, T + 0.02);
         box(e - 0.04, e, 0, topY, frameMat, T + 0.02);
-        box(s, e, topY - 0.04, topY, frameMat, T + 0.02);
+        box(s + 0.04, e - 0.04, topY - 0.04, topY, frameMat, T + 0.02);
+        if (o.sill > 0) box(s, e, 0, o.sill);
         if (o.type === 'door') {
-          let sideN = side === 0 ? 1 : side;
+          let sideN = sideN0;
           if (o.swingOut) sideN = -sideN;
           const hingeAtE = !!o.flip;
           const pivot = new THREE.Group();
           const leafW = Math.max(0.2, W - 0.09);
-          pivot.position.set(hingeAtE ? e - 0.045 : s + 0.045, 0, sideN * (T / 2));
-          pivot.rotation.y = hingeAtE ? sideN * 1.4 : -sideN * 1.4;
+          pivot.position.set(hingeAtE ? e - 0.045 : s + 0.045, 0, sideN * (T / 2 - 0.03));
           const leaf = new THREE.Mesh(new THREE.BoxGeometry(leafW, topY - 0.05, 0.04), mat(0xece6dc, { roughness: 0.55 }));
           leaf.position.set(hingeAtE ? -leafW / 2 : leafW / 2, (topY - 0.05) / 2, sideN * 0.02);
           leaf.castShadow = true;
           pivot.add(leaf);
-          const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.02), mat(0x8a8a8a, { metalness: 0.7, roughness: 0.3 }));
-          handle.position.set(hingeAtE ? -leafW + 0.08 : leafW - 0.08, 1.02, sideN * 0.06);
-          pivot.add(handle);
+          const hm = mat(0x8a8a8a, { metalness: 0.7, roughness: 0.3 });
+          for (const sz of [-1, 1]) {
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.02), hm);
+            handle.position.set(hingeAtE ? -leafW + 0.08 : leafW - 0.08, 1.02, sideN * 0.02 + sz * 0.045);
+            pivot.add(handle);
+          }
           g.add(pivot);
+          I = this._register(o.id, [pivot], { noun: 'vrata', def: 1 }, [{ o: pivot, prop: 'ry', delta: hingeAtE ? sideN * 1.4 : -sideN * 1.4 }]);
         }
-        if (o.sill < 0.3) { solids.push([solidStart, s]); solidStart = e; }
+      }
+      if (I) {
+        // nevidljiva ploha u otvoru – cilj za klik ili tipku E
+        const proxy = new THREE.Mesh(new THREE.BoxGeometry(W, Math.max(0.1, topY - o.sill), T + 0.04), frameMat);
+        proxy.position.set((s + e) / 2, (o.sill + topY) / 2, 0);
+        proxy.visible = false;
+        proxy.userData.inter = I;
+        g.add(proxy);
+      }
+      if (low) {
+        solids.push([solidStart, s]);
+        solidStart = e;
+        if (I) gaps.push([s, e, I]);
       }
       cur = Math.max(cur, e);
     }
@@ -1347,6 +1633,10 @@ class Engine {
     for (const [s0, s1] of solids) {
       if (s1 - s0 < 0.01) continue;
       this.colliders.push({ ax: A.x + ux * s0, az: A.y + uz * s0, bx: A.x + ux * s1, bz: A.y + uz * s1, r: T / 2 });
+    }
+    // zatvorena vrata i balkonska vrata ne propuštaju
+    for (const [s0, s1, I] of gaps) {
+      this.colliders.push({ ax: A.x + ux * s0, az: A.y + uz * s0, bx: A.x + ux * s1, bz: A.y + uz * s1, r: 0.05, inter: I });
     }
   }
 
@@ -1394,13 +1684,13 @@ class Engine {
     for (const o of p.outlines || []) {
       if (o.length < 3) continue;
       const pts = o.map(([x, y]) => ({ x, y }));
-      mk(pts, slabMat, 0.004, { holes: p.holes });
-      if (Math.abs(elev) > 0.05) {
+      if (Math.abs(elev) <= 0.05) mk(pts, slabMat, 0.004, { holes: p.holes });
+      else {
         // međukatna ploča (25 cm) – vidi se izvana između etaža; otvor za stubište
         curPts = pts;
-        const geo = new THREE.ExtrudeGeometry(withHoles(this._shapeFrom(pts), p.holes), { depth: 0.25, bevelEnabled: false }).rotateX(-Math.PI / 2);
+        const geo = new THREE.ExtrudeGeometry(withHoles(this._shapeFrom(pts), p.holes), { depth: 0.25 - 0.006, bevelEnabled: false }).rotateX(-Math.PI / 2);
         const m = new THREE.Mesh(geo, mat(0xd8d2c8, { tex: 'plaster', roughness: 0.95 }));
-        m.position.y = -0.25;
+        m.position.y = -0.25 + 0.004; // dno 4 mm iznad stropa etaže ispod, vrh 2 mm ispod poda
         m.castShadow = true;
         m.receiveShadow = true;
         this._tgt.add(m);
@@ -1537,6 +1827,7 @@ class Engine {
       if (this.mode === 'walk') {
         if (e.pointerType === 'touch') { this._touchStart(e); return; }
         if (!this.fpv.isLocked) this.fpv.lock();
+        else if (e.button === 0) this._interact();
         return;
       }
       if (e.button !== 0) return;
@@ -1570,7 +1861,8 @@ class Engine {
       if (!p) return;
       const nx = Math.round((d.start.x + p.x - d.g0.x) * 100) / 100;
       const nz = Math.round((d.start.z + p.z - d.g0.z) * 100) / 100;
-      d.g.position.set(nx, 0, nz);
+      d.g.position.x = nx;
+      d.g.position.z = nz;
       d.moved = true;
     });
     const up = (e) => {
@@ -1602,6 +1894,12 @@ class Engine {
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.addEventListener('dblclick', (e) => {
+      if (this.mode !== 'orbit') return;
+      this.raycaster.setFromCamera(this._ndc(e), this.camera);
+      const I = this._interHit(this.raycaster, 80);
+      if (I) this._toggle(I);
+    });
   }
 
   _touchStart(e) {
@@ -1612,7 +1910,7 @@ class Engine {
       Object.assign(this.stick.style, { left: x + 'px', top: y + 'px', display: 'block' });
       Object.assign(this.knob.style, { left: x + 'px', top: y + 'px', display: 'block' });
     } else if (!this.touch.look) {
-      this.touch.look = { id: e.pointerId, x, y };
+      this.touch.look = { id: e.pointerId, x, y, sx: x, sy: y, t0: performance.now(), cx: e.clientX, cy: e.clientY };
     }
     try { this.renderer.domElement.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
     this._updateHint();
@@ -1652,8 +1950,127 @@ class Engine {
       t.vx = t.vz = 0;
       this.stick.style.display = this.knob.style.display = 'none';
     }
-    if (t.look && t.look.id === e.pointerId) t.look = null;
+    if (t.look && t.look.id === e.pointerId) {
+      const L = t.look;
+      t.look = null;
+      if (performance.now() - L.t0 < 300 && Math.hypot(L.x - L.sx, L.y - L.sy) < 8) {
+        if (this.mode === 'third') this._interact();
+        else {
+          this.raycaster.setFromCamera(this._ndc({ clientX: L.cx, clientY: L.cy }), this.camera);
+          const I = this._interHit(this.raycaster, 2.8);
+          if (I) this._toggle(I);
+        }
+      }
+    }
     this._updateHint();
+  }
+
+  // ------------------------------------------------------------------ otvaranje i paljenje
+  // roots: objekti čiji se pogodak računa kao ovaj element; parts: {o, prop, delta} ili {mat, emi, light, li}
+  _register(id, roots, info, parts) {
+    const st = this.openState.has(id) ? this.openState.get(id) : info.def || 0;
+    const I = { id, noun: info.noun, light: !!info.light, t: st, target: st, parts: [] };
+    for (const p of parts) {
+      if (p.o) {
+        const key = p.prop === 'ry' ? ['rotation', 'y'] : p.prop === 'rx' ? ['rotation', 'x'] : p.prop === 'pz' ? ['position', 'z'] : ['position', 'x'];
+        I.parts.push({ ...p, key, base: p.o[key[0]][key[1]] });
+      } else I.parts.push(p);
+    }
+    for (const r of roots) r.userData.inter = I;
+    this._applyInter(I);
+    if (!this._passive) this.inters.push(I);
+    return I;
+  }
+
+  _applyInter(I) {
+    const e = I.t < 0.5 ? 2 * I.t * I.t : 1 - Math.pow(-2 * I.t + 2, 2) / 2; // glatko
+    for (const p of I.parts) {
+      if (p.o) p.o[p.key[0]][p.key[1]] = p.base + p.delta * e;
+      if (p.mat) p.mat.emissiveIntensity = p.emi * I.t;
+      if (p.light) p.light.intensity = (p.li || 0) * I.t;
+    }
+  }
+
+  _toggle(I) {
+    I.target = I.target > 0.5 ? 0 : 1;
+    this.openState.set(I.id, I.target);
+  }
+
+  _label(I) {
+    const on = I.target > 0.5;
+    if (I.light) return (on ? 'Ugasi ' : 'Upali ') + I.noun;
+    return (on ? 'Zatvori ' : 'Otvori ') + I.noun;
+  }
+
+  // prvi element u smjeru zrake (zidovi i namještaj zaklanjaju)
+  _interHit(ray, max) {
+    ray.far = max;
+    const hits = ray.intersectObjects(this.world.children, true);
+    ray.far = Infinity;
+    for (const h of hits) {
+      let o = h.object;
+      if (!o.visible && !o.userData.inter) continue;
+      let vis = true;
+      for (let q = o; q; q = q.parent) if (q !== o && !q.visible) { vis = false; break; }
+      if (!vis) continue;
+      while (o && !o.userData.inter) o = o.parent;
+      if (o) return o.userData.inter;
+      if (!h.object.material?.transparent) return null; // zid ili neprozirni objekt ispred
+    }
+    return null;
+  }
+
+  // što je ispred promatrača (prvo lice: sredina ekrana; treće lice: najbliže ispred lika)
+  _target() {
+    if (this.mode === 'walk') {
+      this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+      return this._interHit(this.raycaster, 2.8);
+    }
+    if (this.mode === 'third') {
+      const tp = this.tp;
+      const hx = Math.sin(tp.heading), hz = Math.cos(tp.heading);
+      const o = new THREE.Vector3(tp.x - hx * 0.2, this.fy + (tp.off || 0) + 1.1, tp.z - hz * 0.2);
+      let best = null;
+      for (const da of [0, -0.35, 0.35, -0.7, 0.7]) {
+        const a = tp.heading + da;
+        this.raycaster.set(o, new THREE.Vector3(Math.sin(a), -0.15, Math.cos(a)).normalize());
+        best = this._interHit(this.raycaster, 2.2);
+        if (best) break;
+      }
+      return best;
+    }
+    return null;
+  }
+
+  _interact() {
+    const I = this._target();
+    if (I) this._toggle(I);
+  }
+
+  _animateInters(dt) {
+    for (const I of this.inters) {
+      if (I.t === I.target) continue;
+      const step = dt * 2.6;
+      I.t = I.target > I.t ? Math.min(I.target, I.t + step) : Math.max(I.target, I.t - step);
+      this._applyInter(I);
+    }
+    // natpis „E – Otvori vrata”
+    if (this.mode !== 'orbit') {
+      const now = performance.now();
+      if (now - this.aimAt > 120) {
+        this.aimAt = now;
+        const active = this.mode === 'third' || this.fpv.isLocked || this.touch.look || this.touch.move;
+        const I = active ? this._target() : null;
+        const label = I ? this._label(I) : '';
+        if (label !== this.aim) {
+          this.aim = label;
+          this._updateHint();
+        }
+      }
+    } else if (this.aim) {
+      this.aim = null;
+      this._updateHint();
+    }
   }
 
   // ------------------------------------------------------------------ šetnja
@@ -1716,6 +2133,14 @@ class Engine {
 
   _blocked(x, z) {
     for (const c of this.colliders) {
+      if (c.inter && c.inter.t > 0.35) continue; // otvorena vrata
+      if (c.obb) {
+        const dx = x - c.cx, dz = z - c.cz;
+        const lx = dx * c.ux.x + dz * c.ux.z, lz = dx * c.uz.x + dz * c.uz.z;
+        const qx = lx - clamp(lx, -c.hw, c.hw), qz = lz - clamp(lz, -c.hd, c.hd);
+        if (qx * qx + qz * qz < RADIUS * RADIUS * 0.8) return true;
+        continue;
+      }
       const abx = c.bx - c.ax, abz = c.bz - c.az;
       const l2 = abx * abx + abz * abz;
       let t = l2 ? ((x - c.ax) * abx + (z - c.az) * abz) / l2 : 0;
@@ -1886,6 +2311,7 @@ class Engine {
   _loop() {
     requestAnimationFrame(this._loop);
     const dt = Math.min(this.clock.getDelta(), 0.05);
+    this._animateInters(dt);
     if (this.mode === 'third') {
       this._thirdUpdate(dt);
       this.indoor.intensity = 0;
@@ -1900,6 +2326,12 @@ class Engine {
       this.orbit.update();
       this.indoor.intensity = 0;
       this.ambient.intensity = 0;
+    }
+    // bliža ravnina kamere prati udaljenost (bolja preciznost dubine izdaleka => nema treperenja ploha)
+    const near = this.mode === 'orbit' ? clamp(this.camera.position.distanceTo(this.orbit.target) * 0.012, 0.1, 2) : 0.08;
+    if (Math.abs(near - this.camera.near) > near * 0.15) {
+      this.camera.near = near;
+      this.camera.updateProjectionMatrix();
     }
     if (this.container && this.container.isConnected) this.renderer.render(this.scene, this.camera);
   }

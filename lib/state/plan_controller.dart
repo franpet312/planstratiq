@@ -7,7 +7,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Offset, Rect;
 
+import 'package:web/web.dart' as web;
 import '../models/catalog.dart';
+import '../models/catalog_gen.dart';
+import '../models/collision.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
@@ -543,7 +546,15 @@ class PlanController extends ChangeNotifier {
   PlacedItem placeItemSmart(CatalogItem c, Offset p) {
     var rot = 0.0;
     var pos = p;
-    if (c.zone == CatalogZone.interior && !floorShapes.contains(c.shape)) {
+    if (balconyShapes.contains(c.shape)) {
+      // balkon se prisloni uz vanjsku stranu najbližeg zida
+      final w = wallNear(p, tol: c.d + 1.2);
+      if (w != null) {
+        final (q, n) = _outsideOf(w, p);
+        rot = math.atan2(-n.dx, n.dy);
+        pos = q + n * (w.thickness / 2 + c.d / 2);
+      }
+    } else if (c.zone == CatalogZone.interior && !floorShapes.contains(c.shape)) {
       final w = wallNear(p, tol: c.d / 2 + 0.45);
       if (w != null) {
         final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
@@ -557,11 +568,107 @@ class PlanController extends ChangeNotifier {
         }
       }
     }
-    return placeItem(c, Offset(roundTo(pos.dx, 0.01), roundTo(pos.dy, 0.01)), rotation: rot);
+    final it = placeItem(c, Offset(roundTo(pos.dx, 0.01), roundTo(pos.dy, 0.01)), rotation: rot);
+    if (collisions) {
+      final r = resolveItemPos(plan, it, it.pos);
+      if (r != null) it.pos = Offset(roundTo(r.dx, 0.005), roundTo(r.dy, 0.005));
+    }
+    return it;
+  }
+
+  /// Najbliža točka na osi zida i normala prema van (strana na kojoj nije prostorija).
+  (Offset, Offset) _outsideOf(Wall w, Offset near) {
+    final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+    final q = closestOnSegment(near, a, b);
+    final v = b - a;
+    final dir = v / math.max(v.distance, 1e-9);
+    var n = Offset(-dir.dy, dir.dx);
+    bool inRoom(Offset x) => plan.rooms.any((r) => pointInPolygon(x, plan.roomPolygon(r)));
+    final probe = w.thickness / 2 + 0.3;
+    final plusIn = inRoom(q + n * probe), minusIn = inRoom(q - n * probe);
+    if (plusIn && !minusIn) {
+      n = -n;
+    } else if (plusIn == minusIn && dot(near - q, n) < 0) {
+      n = -n; // neodređeno: strana na kojoj je kursor
+    }
+    return (q, n);
+  }
+
+  /// Dodaj balkon uz vanjski zid; ako zid nema balkonska vrata, doda ih na sredinu.
+  PlacedItem? addBalcony(String wallId, {String familyId = 'balkon', String? openingId}) {
+    final w = plan.wallById(wallId);
+    if (w == null) return null;
+    PlacedItem? out;
+    mutate(() {
+      final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+      final len = (b - a).distance;
+      if (len < 1.0) return;
+      final ops = plan.openings.where((o) => o.wallId == w.id).toList();
+      var door = ops.where((o) => o.id == openingId).firstOrNull ??
+          ops.where((o) => o.type == OpeningType.balcony).firstOrNull ??
+          ops.where((o) => o.type == OpeningType.door || o.type == OpeningType.passage).firstOrNull;
+      door ??= addOpening(w.id, OpeningType.balcony, 0.5);
+      final t = door?.t ?? 0.5;
+      final model = catalogModels.firstWhere((m) => m.family.id == familyId, orElse: () => catalogModels.firstWhere((m) => m.family.id == 'balkon'));
+      final base = model.variants[model.variants.length ~/ model.family.sizes.length]; // druga veličina
+      final width = math.min(len - 0.1, math.max(base.w, (door?.width ?? 1.6) + 1.2)).clamp(1.2, 5.0).toDouble();
+      final along = a + (b - a) * t;
+      final (q, n) = _outsideOf(w, along + Offset(0.001, 0.001));
+      final depth = base.d;
+      final it = placeItem(base, q + n * (w.thickness / 2 + depth / 2), rotation: math.atan2(-n.dx, n.dy));
+      it.w = roundTo(width, 0.05);
+      it.name = '${model.family.name} ${(it.w * 100).round()} × ${(depth * 100).round()}';
+      out = it;
+    });
+    return out;
   }
 
   void setNodePos(String id, Offset p) => plan.nodes[id]?.pos = p;
-  void setItemPos(String id, Offset p) => plan.itemById(id)?.pos = p;
+  /// Pomakni objekt; uz uključeno sudaranje klizi uz zidove i druge objekte.
+  void setItemPos(String id, Offset p) {
+    final it = plan.itemById(id);
+    if (it == null) return;
+    if (!collisions) {
+      it.pos = p;
+      return;
+    }
+    final r = resolveItemPos(plan, it, p);
+    if (r != null) it.pos = Offset(roundTo(r.dx, 0.005), roundTo(r.dy, 0.005));
+  }
+
+  /// Okreni objekt; ako se pri okretanju zabije u nešto, odmakne se (ili ostane kako je bio).
+  bool setItemRotation(String id, double rot) {
+    final it = plan.itemById(id);
+    if (it == null) return false;
+    if (!collisions) {
+      it.rotation = rot;
+      return true;
+    }
+    final r = resolveItemPos(plan, it, it.pos, rot: rot);
+    if (r == null) return false;
+    it.rotation = rot;
+    it.pos = r;
+    return true;
+  }
+
+  /// Sudaranje namještaja sa zidovima i drugim namještajem (pamti se u pregledniku).
+  bool get collisions => _collisions;
+  bool _collisions = _loadCollisions();
+  static bool _loadCollisions() {
+    try {
+      return web.window.localStorage.getItem('psq.collide') != '0';
+    } catch (_) {
+      return true;
+    }
+  }
+
+  void setCollisions(bool v) {
+    _collisions = v;
+    try {
+      web.window.localStorage.setItem('psq.collide', v ? '1' : '0');
+    } catch (_) {}
+    notifyListeners();
+  }
 
   /// Promijeni duljinu zida – pomiče se krajnja točka B, spojeni zidovi prate.
   void setWallLength(String wallId, double len) {
@@ -645,7 +752,7 @@ class PlanController extends ChangeNotifier {
   void rotateItem(String id, double delta) {
     final it = plan.itemById(id);
     if (it == null) return;
-    mutate(() => it.rotation = (it.rotation + delta) % (2 * math.pi));
+    mutate(() => setItemRotation(id, (it.rotation + delta) % (2 * math.pi)));
   }
 
   void duplicateItem(String id) {
@@ -655,6 +762,23 @@ class PlanController extends ChangeNotifier {
       final copy =
           PlacedItem.fromJson({...it.toJson(), 'id': newId('i'), 'x': it.pos.dx + 0.3, 'y': it.pos.dy + 0.3});
       plan.items.add(copy);
+      if (collisions) {
+        // kopiju stavi do originala, na prvo slobodno mjesto
+        final r = it.rotation;
+        final ux = Offset(math.cos(r), math.sin(r)), uz = Offset(-math.sin(r), math.cos(r));
+        for (final off in [ux * (it.w + 0.05), -ux * (it.w + 0.05), uz * (it.d + 0.05), -uz * (it.d + 0.05)]) {
+          final q = it.pos + off;
+          if (!itemOverlaps(plan, copy, pos: q)) {
+            copy.pos = q;
+            break;
+          }
+          final rq = resolveItemPos(plan, copy, q);
+          if (rq != null) {
+            copy.pos = rq;
+            break;
+          }
+        }
+      }
       selection = Selection(SelKind.item, copy.id);
     });
   }

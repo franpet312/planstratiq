@@ -995,6 +995,25 @@ class ItemSymbols {
         for (var i = 1; i < n; i++) {
           ln(Offset(r.left, r.top + d * i / n), Offset(r.right, r.top + d * i / n), thin);
         }
+      case 'balcony':
+      case 'balcony_rail':
+      case 'balcony_wall':
+        // ploča balkona; ograda na tri strane (stražnja strana je uz zid)
+        box(r, 0, fillOf(color, 0.45));
+        final step = m(0.4);
+        if (step > 5) {
+          for (var x = r.left + step; x < r.right; x += step) {
+            ln(Offset(x, r.top), Offset(x, r.bottom), thin);
+          }
+        }
+        final rt = math.max(2.0, m(shape == 'balcony_wall' ? 0.12 : 0.05));
+        final rail = Paint()
+          ..color = Pal.ink
+          ..strokeWidth = rt
+          ..strokeCap = StrokeCap.square;
+        ln(r.topLeft, r.bottomLeft, rail);
+        ln(r.bottomLeft, r.bottomRight, rail);
+        ln(r.bottomRight, r.topRight, rail);
       case 'path':
         box(r, 0, fillOf(color, 0.5));
         final step = m(0.5);

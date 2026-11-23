@@ -253,6 +253,9 @@ const families = <Family>[
   Family(id: 'rostilj', name: 'Roštilj', category: catGarden, shape: 'grill', sizes: [(0.8, 0.5, 1.05), (1.2, 0.6, 1.1), (1.5, 0.65, 1.15)], price: 300, colors: _appliance, zone: _e, styled: false),
   Family(id: 'bazen', name: 'Bazen', category: catGarden, shape: 'pool', sizes: [(5, 3, 0.3), (6, 3, 0.3), (8, 4, 0.3), (10, 5, 0.3)], price: 12000, colors: _pool, zone: _e, styled: false),
   Family(id: 'terasa', name: 'Terasa od dasaka', category: catGarden, shape: 'deck', sizes: [(3, 2, 0.12), (4, 3, 0.12), (5, 4, 0.12), (6, 4, 0.12)], price: 1000, colors: _wood, zone: _e, styled: false),
+  Family(id: 'balkon', name: 'Balkon, staklena ograda', category: catGarden, shape: 'balcony', sizes: [(2.0, 1.2, 1.0), (3.0, 1.5, 1.0), (4.0, 1.8, 1.0), (5.0, 2.0, 1.0)], price: 2400, colors: _stone, zone: _e, styled: false),
+  Family(id: 'balkon_metal', name: 'Balkon, metalna ograda', category: catGarden, shape: 'balcony_rail', sizes: [(2.0, 1.2, 1.0), (3.0, 1.5, 1.0), (4.0, 1.8, 1.0), (5.0, 2.0, 1.0)], price: 1800, colors: _stone, zone: _e, styled: false),
+  Family(id: 'balkon_zid', name: 'Balkon, zidana ograda', category: catGarden, shape: 'balcony_wall', sizes: [(2.0, 1.2, 1.0), (3.0, 1.5, 1.0), (4.0, 1.8, 1.0), (5.0, 2.0, 1.0)], price: 2000, colors: _stone, zone: _e, styled: false),
   Family(id: 'gredica', name: 'Gredica s cvijećem', category: catGarden, shape: 'flowerbed', sizes: [(1.2, 0.6, 0.4), (2.0, 0.8, 0.4), (3.0, 1.0, 0.4)], price: 120, colors: _stone, zone: _e, styled: false),
 
   // ---------------------------------------------------------------- dvorište
@@ -295,7 +298,7 @@ String _sizeLabel(Family f, (double, double, double) s) {
   final w = (s.$1 * 100).round(), d = (s.$2 * 100).round();
   return switch (f.shape) {
     'bed' || 'bunk' || 'crib' => '${w - 6} × ${d - 8}',
-    'rug' || 'path' || 'deck' || 'pool' || 'kitchen' when f.id != 'donji' => '$w × $d',
+    'rug' || 'path' || 'deck' || 'pool' || 'balcony' || 'balcony_rail' || 'balcony_wall' || 'kitchen' when f.id != 'donji' => '$w × $d',
     'table_round' || 'rug_round' || 'tree' || 'trampoline' || 'umbrella' => 'Ø $w',
     _ => '$w cm',
   };

@@ -100,6 +100,16 @@ function canvasTex(key, size, draw, repeatMeters) {
   texCache.set(k, t);
   return t;
 }
+// UV kvadra u metrima (teksture zidova se ne rastežu; x0/y0 poravnavaju fuge među komadima zida)
+function scaleBoxUV(geo, w, h, d, x0 = 0, y0 = 0) {
+  const uv = geo.attributes.uv;
+  const dims = [[d, h, 0, y0], [d, h, 0, y0], [w, d, x0, 0], [w, d, x0, 0], [w, h, x0, y0], [w, h, -x0 - w, y0]];
+  for (let f = 0; f < 6; f++) {
+    const [su, sv, ou, ov] = dims[f];
+    for (let i = f * 4; i < f * 4 + 4; i++) uv.setXY(i, uv.getX(i) * su + ou, uv.getY(i) * sv + ov);
+  }
+  uv.needsUpdate = true;
+}
 function rnd(seed) {
   let s = seed >>> 0;
   return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -224,6 +234,92 @@ const textures = {
       g.fillRect(0, y + n / rows - 3, n, 3);
     }
   }, 2),
+  // zidne obloge (UV na zidovima je u metrima)
+  wallTile: () => canvasTex('wallTile', 256, (g, n) => {
+    const r = rnd(41), k = 4;
+    for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) {
+      const v = Math.floor(236 + r() * 16);
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.fillRect((i * n) / k, (j * n) / k, n / k, n / k);
+    }
+    g.fillStyle = 'rgba(150,150,150,0.7)';
+    for (let i = 0; i <= k; i++) { g.fillRect((i * n) / k - 1.5, 0, 3, n); g.fillRect(0, (i * n) / k - 1.5, n, 3); }
+  }, 0.8),
+  wallTileL: () => canvasTex('wallTileL', 256, (g, n) => {
+    const r = rnd(43);
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 2; i++) {
+      const v = Math.floor(225 + r() * 22);
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      const off = j % 2 ? n / 4 : 0;
+      g.fillRect(((i * n) / 2 + off) % n, (j * n) / 4, n / 2, n / 4);
+      if (off) g.fillRect(-n / 4, (j * n) / 4, n / 2, n / 4);
+    }
+    noise(g, n, 1500, 0.08, r);
+    g.fillStyle = 'rgba(120,120,120,0.6)';
+    for (let j = 0; j <= 4; j++) g.fillRect(0, (j * n) / 4 - 1, n, 2);
+    for (let j = 0; j < 4; j++) for (let i = 0; i <= 2; i++) g.fillRect(((i * n) / 2 + (j % 2 ? n / 4 : 0)) % (n + 1) - 1, (j * n) / 4, 2, n / 4);
+  }, 1.2),
+  metroTile: () => canvasTex('metroTile', 256, (g, n) => {
+    const r = rnd(47), rows = 8, cols = 4;
+    for (let j = 0; j < rows; j++) for (let i = -1; i < cols; i++) {
+      const x = (i * n) / cols + (j % 2 ? n / cols / 2 : 0), y = (j * n) / rows;
+      const v = Math.floor(238 + r() * 14);
+      g.fillStyle = 'rgb(150,150,150)';
+      g.fillRect(x, y, n / cols, n / rows);
+      const grd = g.createLinearGradient(0, y, 0, y + n / rows);
+      grd.addColorStop(0, `rgb(${v + 3},${v + 3},${v + 3})`);
+      grd.addColorStop(1, `rgb(${v - 14},${v - 14},${v - 14})`);
+      g.fillStyle = grd;
+      g.fillRect(x + 1.5, y + 1.5, n / cols - 3, n / rows - 3);
+    }
+  }, 0.6),
+  woodPanel: () => canvasTex('woodPanel', 256, (g, n) => {
+    const r = rnd(53), k = 8;
+    for (let i = 0; i < k; i++) {
+      const v = Math.floor(200 + r() * 45);
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.fillRect((i * n) / k, 0, n / k, n);
+      g.strokeStyle = 'rgba(0,0,0,0.06)';
+      for (let q = 0; q < 5; q++) {
+        g.beginPath();
+        const x = (i * n) / k + r() * (n / k);
+        g.moveTo(x, 0);
+        g.bezierCurveTo(x + (r() - 0.5) * 6, n * 0.3, x + (r() - 0.5) * 6, n * 0.7, x, n);
+        g.stroke();
+      }
+      g.fillStyle = 'rgba(0,0,0,0.28)';
+      g.fillRect((i * n) / k, 0, 1.5, n);
+    }
+  }, 0.8),
+  brick: () => canvasTex('brick', 256, (g, n) => {
+    const r = rnd(59), rows = 14, cols = 4;
+    g.fillStyle = '#cfc8bd';
+    g.fillRect(0, 0, n, n);
+    for (let j = 0; j < rows; j++) for (let i = -1; i < cols; i++) {
+      const x = (i * n) / cols + (j % 2 ? n / cols / 2 : 0), y = (j * n) / rows;
+      const h = 14 + r() * 10, sat = 0.45 + r() * 0.15, l = 0.38 + r() * 0.12;
+      g.fillStyle = `hsl(${h},${sat * 100}%,${l * 100}%)`;
+      g.fillRect(x + 1.5, y + 1.5, n / cols - 3, n / rows - 3);
+    }
+    noise(g, n, 3000, 0.12, r);
+  }, 1.0),
+  wallpaper: () => canvasTex('wallpaper', 256, (g, n) => {
+    g.fillStyle = '#f4f1ea';
+    g.fillRect(0, 0, n, n);
+    g.strokeStyle = 'rgba(160,140,110,0.35)';
+    g.lineWidth = 2;
+    for (let x = 0; x < n; x += n / 4) {
+      g.beginPath();
+      for (let y = 0; y <= n; y += 4) g.lineTo(x + n / 8 + Math.sin((y / n) * Math.PI * 4) * 10, y);
+      g.stroke();
+    }
+    g.fillStyle = 'rgba(160,140,110,0.3)';
+    for (let x = 0; x < n; x += n / 4) for (let y = 0; y < n; y += n / 4) {
+      g.beginPath();
+      g.arc(x, y + n / 8, 4, 0, Math.PI * 2);
+      g.fill();
+    }
+  }, 0.53),
   plaster: () => canvasTex('plaster', 256, (g, n) => {
     const r = rnd(29);
     g.fillStyle = '#f2f2f2';
@@ -1623,16 +1719,48 @@ class Engine {
     const paint = mat(w.color, { roughness: 0.92 });
     const facade = mat(0xece7df, { tex: 'plaster', roughness: 0.95 });
     const top = mat(0xd9d6d0, { roughness: 1 });
-    const faces = [paint, paint, top, paint, side === -1 ? facade : paint, side === 1 ? facade : paint];
+    // strane zida: obloga prostorije (pločice, drvo…) do visine h, iznad boja prostorije
+    const sides = w.sides || {};
+    const sideMats = (si, fallback) => {
+      if (!si) return { lo: fallback, hi: fallback, h: 0 };
+      const hi = mat(si.paint ?? w.color, { roughness: 0.92 });
+      if (!si.tex && si.color == null) return { lo: hi, hi, h: 0 };
+      const tiled = si.tex && /Tile/.test(si.tex);
+      const lo = mat(si.color ?? 0xffffffff, { tex: si.tex, roughness: tiled ? 0.35 : 0.8 });
+      return si.h > 0 && si.h < H - 0.01 ? { lo, hi, h: si.h } : { lo, hi: lo, h: 0 };
+    };
+    const P = sideMats(sides.p, side === -1 ? facade : paint);
+    const N = sideMats(sides.n, side === 1 ? facade : paint);
+    const faces = [paint, paint, top, paint, P.hi, N.hi];
+    const bands = [...new Set([P.h, N.h].filter((h) => h > 0))].sort((a, b) => a - b);
+    const facesAt = (yMid) => [paint, paint, top, paint, P.h && yMid < P.h ? P.lo : P.hi, N.h && yMid < N.h ? N.lo : N.hi];
 
     const box = (x0, x1, y0, y1, material = faces, depth = T, z = 0, parent = g) => {
       if (x1 - x0 < 0.002 || y1 - y0 < 0.002) return null;
+      if (material === faces) {
+        // komad zida podijeli na visinama obloga (bez preklapanja => bez treperenja)
+        const cuts = [y0, ...bands.filter((h) => h > y0 + 0.005 && h < y1 - 0.005), y1];
+        let last = null;
+        for (let i = 0; i + 1 < cuts.length; i++) {
+          const a = cuts[i], b = cuts[i + 1];
+          const geo = new THREE.BoxGeometry(x1 - x0, b - a, depth);
+          scaleBoxUV(geo, x1 - x0, b - a, depth, x0, a);
+          const m = new THREE.Mesh(geo, facesAt((a + b) / 2));
+          m.position.set((x0 + x1) / 2, (a + b) / 2, z);
+          m.castShadow = true;
+          m.receiveShadow = true;
+          parent.add(m);
+          if (!this._passive) this.wallMeshes.push(m);
+          last = m;
+        }
+        return last;
+      }
       const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, depth), material);
       m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z);
       m.castShadow = true;
       m.receiveShadow = true;
       parent.add(m);
-      if (!this._passive && (!Array.isArray(material) || material === faces)) this.wallMeshes.push(m);
+      if (!this._passive && !Array.isArray(material)) this.wallMeshes.push(m);
       return m;
     };
     const ops = openings.map((o) => ({ ...o, s: o.t * L - o.width / 2, e: o.t * L + o.width / 2 })).sort((a, b) => a.s - b.s);

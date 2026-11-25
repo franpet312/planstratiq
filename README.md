@@ -49,6 +49,9 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Tri načina pogleda: **izvana** (orbit), **treće lice** (animirani lik hoda kućom, kamera ga prati i ne prolazi kroz zidove; povlačenje mišem okreće kameru, kotačić mijenja udaljenost) i **prvo lice**.
 - **Šetnja u prvom licu**: W A S D + miš, ili na mobitelu lijevi palac za hodanje i desni za gledanje; ne prolazi se kroz zidove, kroz vrata da. Položaj osobe vidi se uživo na tlocrtu. Brzi skok u prostoriju.
 
+**Zidovi prostorija**
+- Svaka prostorija ima svoju boju zidova i oblogu: pločice (bijele, metro, sive 30×60, zelene), drvena obloga, cigla, dekorativni beton ili tapeta – do 1,2 / 1,5 / 2,1 m ili cijeli zid, iznad obloge boja. Obloge ulaze u troškovnik.
+
 **Pregled i cijene**
 - Neto površina (po licima zidova) i bruto tlocrtna površina, popis prostorija.
 - Okvirni troškovnik: podovi po materijalu, bojanje zidova (m² i litre), namještaj.

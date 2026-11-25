@@ -314,6 +314,46 @@ class PropertiesPanel extends StatelessWidget {
         _MaterialTile(material: m, selected: m.id == r.floor, area: area, onTap: () => c.updateRoom(r.id, floor: m.id)),
       const SizedBox(height: 8),
       OutlinedButton(onPressed: () => c.setAllFloors(mat.id), child: Text('${mat.name} u svim prostorijama')),
+      const SectionTitle('Zidovi prostorije'),
+      Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final f in wallFinishes)
+          ChoiceChip(
+            avatar: CircleAvatar(backgroundColor: Color(f.id == 'paint' ? (r.wallColor ?? 0xFFF6F5F1) : f.color), radius: 7),
+            label: Text(f.name, style: AppText.ui(size: 11.5)),
+            visualDensity: VisualDensity.compact,
+            selected: r.wallFinish == f.id,
+            onSelected: (_) => c.updateRoom(r.id, wallFinish: f.id, finishHeight: f.id.startsWith('tile') && r.wallFinish == 'paint' ? 0 : null),
+          ),
+      ]),
+      if (r.wallFinish != 'paint') ...[
+        const SizedBox(height: 10),
+        Text('Visina obloge', style: AppText.ui(size: 12, color: Pal.muted)),
+        const SizedBox(height: 6),
+        SegmentedButton<double>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 1.2, label: Text('1,2 m')),
+            ButtonSegment(value: 1.5, label: Text('1,5 m')),
+            ButtonSegment(value: 2.1, label: Text('2,1 m')),
+            ButtonSegment(value: 0, label: Text('Cijeli zid')),
+          ],
+          selected: {[1.2, 1.5, 2.1, 0.0].contains(r.finishHeight) ? r.finishHeight : 0.0},
+          onSelectionChanged: (v) => c.updateRoom(r.id, finishHeight: v.first),
+        ),
+        const SizedBox(height: 4),
+        Text('≈ ${fmtEur(finishById(r.wallFinish).pricePerM2)}/m², materijal i ugradnja', style: AppText.ui(size: 12, color: Pal.muted)),
+      ],
+      if (r.wallFinish == 'paint' || r.finishHeight > 0) ...[
+        const SizedBox(height: 10),
+        Text(r.wallFinish == 'paint' ? 'Boja zidova' : 'Boja iznad obloge', style: AppText.ui(size: 12, color: Pal.muted)),
+        const SizedBox(height: 6),
+        Swatches(
+          colors: [for (final p in wallPaints) p.color],
+          names: [for (final p in wallPaints) p.name],
+          value: r.wallColor ?? -1,
+          onPick: (v) => c.updateRoom(r.id, wallColor: v),
+        ),
+      ],
       const SectionTitle('Kopiranje'),
       Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(

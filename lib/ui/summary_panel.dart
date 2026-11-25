@@ -23,7 +23,7 @@ class SummaryPanel extends StatelessWidget {
     }
     final items = c.plan.items;
     final furniture = items.fold<double>(0, (a, i) => a + (i.price ?? 0));
-    final total = st.floorCost + st.paintCost + furniture;
+    final total = st.floorCost + st.paintCost + st.finishCost + furniture;
 
     return ListView(padding: const EdgeInsets.fromLTRB(16, 14, 16, 24), children: [
       // glavna brojka
@@ -73,6 +73,8 @@ class SummaryPanel extends StatelessWidget {
       for (final e in floorsByMat.entries)
         StatRow('${floorById(e.key).name}, ${fmtM2(e.value)}', fmtEur(e.value * floorById(e.key).pricePerM2)),
       StatRow('Bojanje zidova, ${fmtM2(st.paintArea)}', fmtEur(st.paintCost)),
+      for (final e in st.finishAreas.entries)
+        StatRow('${finishById(e.key).name}, ${fmtM2(e.value)}', fmtEur(e.value * finishById(e.key).pricePerM2)),
       StatRow('Namještaj i oprema, ${items.where((i) => i.price != null).length} kom.', fmtEur(furniture)),
       const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Divider()),
       StatRow('Ukupno okvirno', fmtEur(total), strong: true),
@@ -114,6 +116,10 @@ String buildCsv(PlanController c) {
   b.writeln('${q('Ukupno')};${n(st.netArea)};;;${n(st.floorCost)}');
   b.writeln();
   b.writeln('${q('Bojanje zidova (m²)')};${n(st.paintArea)};${q('Boja (L)')};${n(st.paintLiters)};${n(st.paintCost)}');
+  for (final e in st.finishAreas.entries) {
+    final f = finishById(e.key);
+    b.writeln('${q('Zidna obloga: ${f.name} (m²)')};${n(e.value)};;;${n(e.value * f.pricePerM2)}');
+  }
   b.writeln();
   b.writeln('${q('Namještaj')};${q('Širina (cm)')};${q('Dubina (cm)')};${q('Visina (cm)')};${q('Okvirna cijena (€)')}');
   var furniture = 0.0;
@@ -123,6 +129,6 @@ String buildCsv(PlanController c) {
   }
   b.writeln('${q('Ukupno namještaj')};;;;${n(furniture)}');
   b.writeln();
-  b.writeln('${q('Sveukupno okvirno (€)')};;;;${n(st.floorCost + st.paintCost + furniture)}');
+  b.writeln('${q('Sveukupno okvirno (€)')};;;;${n(st.floorCost + st.paintCost + st.finishCost + furniture)}');
   return b.toString();
 }

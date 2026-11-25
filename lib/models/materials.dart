@@ -50,6 +50,32 @@ const wallPaints = <WallPaint>[
   WallPaint('Ponoćna', 0xFF3E4A5A),
 ];
 
+/// Obloga zidova prostorije (pločice, drvo, cigla…). 'paint' = samo boja.
+class WallFinish {
+  const WallFinish({required this.id, required this.name, required this.color, required this.texture, required this.pricePerM2});
+  final String id;
+  final String name;
+  final int color;
+
+  /// Ime teksture u 3D engineu (null = glatka boja).
+  final String? texture;
+  final double pricePerM2;
+}
+
+const wallFinishes = <WallFinish>[
+  WallFinish(id: 'paint', name: 'Boja', color: 0xFFF6F5F1, texture: null, pricePerM2: paintPricePerM2),
+  WallFinish(id: 'tile_white', name: 'Pločice 20×20, bijele', color: 0xFFF6F6F4, texture: 'wallTile', pricePerM2: 38),
+  WallFinish(id: 'tile_metro', name: 'Metro pločice', color: 0xFFF4F4F1, texture: 'metroTile', pricePerM2: 42),
+  WallFinish(id: 'tile_grey', name: 'Pločice 30×60, sive', color: 0xFFB4B5B2, texture: 'wallTileL', pricePerM2: 40),
+  WallFinish(id: 'tile_green', name: 'Pločice 20×20, zelene', color: 0xFF8FA595, texture: 'wallTile', pricePerM2: 45),
+  WallFinish(id: 'wood', name: 'Drvena obloga', color: 0xFFC49A6C, texture: 'woodPanel', pricePerM2: 60),
+  WallFinish(id: 'brick', name: 'Cigla', color: 0xFFFFFFFF, texture: 'brick', pricePerM2: 65),
+  WallFinish(id: 'concrete', name: 'Dekorativni beton', color: 0xFFB9B7B1, texture: 'concrete', pricePerM2: 32),
+  WallFinish(id: 'wallpaper', name: 'Tapeta', color: 0xFFE6DCCB, texture: 'wallpaper', pricePerM2: 18),
+];
+
+WallFinish finishById(String? id) => wallFinishes.firstWhere((f) => f.id == id, orElse: () => wallFinishes.first);
+
 /// Okvirne jedinične cijene za troškovnik (€).
 const paintPricePerM2 = 6.0; // boja + rad, dva sloja
 const litersPerM2 = 0.25; // dva sloja

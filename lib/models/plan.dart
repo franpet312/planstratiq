@@ -151,6 +151,9 @@ class Room {
     required this.name,
     required this.nodeIds,
     this.floor = 'parket_hrast',
+    this.wallFinish = 'paint',
+    this.wallColor,
+    this.finishHeight = 0,
   });
 
   final String id;
@@ -158,13 +161,33 @@ class Room {
   List<String> nodeIds;
   String floor;
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'nodeIds': nodeIds, 'floor': floor};
+  /// Obloga zidova u prostoriji (id iz [wallFinishes]); 'paint' = samo boja.
+  String wallFinish;
+
+  /// Boja zidova u prostoriji (null = boja samog zida).
+  int? wallColor;
+
+  /// Visina obloge (m); 0 = cijeli zid. Iznad obloge je boja.
+  double finishHeight;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'nodeIds': nodeIds,
+        'floor': floor,
+        if (wallFinish != 'paint') 'wallFinish': wallFinish,
+        if (wallColor != null) 'wallColor': wallColor,
+        if (finishHeight > 0) 'finishHeight': finishHeight,
+      };
 
   factory Room.fromJson(Map<String, dynamic> j) => Room(
         id: j['id'] as String,
         name: (j['name'] as String?) ?? 'Prostorija',
         nodeIds: List<String>.from(j['nodeIds'] as List),
         floor: (j['floor'] as String?) ?? 'parket_hrast',
+        wallFinish: (j['wallFinish'] as String?) ?? 'paint',
+        wallColor: j['wallColor'] is int ? j['wallColor'] as int : null,
+        finishHeight: (j['finishHeight'] as num?)?.toDouble() ?? 0,
       );
 }
 

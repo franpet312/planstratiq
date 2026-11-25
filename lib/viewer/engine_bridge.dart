@@ -11,6 +11,7 @@ import 'package:web/web.dart' as web;
 import '../models/catalog.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
+import '../models/plan.dart';
 import '../models/stairs.dart';
 import '../state/plan_controller.dart';
 
@@ -137,6 +138,21 @@ class Engine3D {
     ];
   }
 
+  /// Završna obrada svake strane zida prema prostoriji uz nju ('p' = lokalni +z, 'n' = −z).
+  static Map<String, dynamic> _wallSides(PlanController c, Wall w) {
+    final out = <String, dynamic>{};
+    for (final (r, sign) in c.roomsBeside(w)) {
+      final f = finishById(r.wallFinish);
+      out[sign > 0 ? 'p' : 'n'] = {
+        'paint': r.wallColor ?? w.color,
+        if (f.id != 'paint') 'color': f.color,
+        if (f.texture != null) 'tex': f.texture,
+        if (f.id != 'paint') 'h': r.finishHeight,
+      };
+    }
+    return out;
+  }
+
   static Map<String, dynamic> _levelJson(PlanController c, int li) {
     final (outlines, sides) = c.levelSceneData(li);
     final plan = c.plan;
@@ -174,7 +190,7 @@ class Engine3D {
         'wallHeight': plan.wallHeight,
         'nodes': {for (final n in plan.nodes.values) n.id: {'x': n.pos.dx, 'y': n.pos.dy}},
         'walls': [
-          for (final w in plan.walls) {...w.toJson(), 'inside': inside[w.id] ?? 0}
+          for (final w in plan.walls) {...w.toJson(), 'inside': inside[w.id] ?? 0, 'sides': _wallSides(c, w)}
         ],
         'openings': plan.openings.map((o) => o.toJson()).toList(),
         'rooms': [

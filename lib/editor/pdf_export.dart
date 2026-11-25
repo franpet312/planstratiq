@@ -245,7 +245,7 @@ class _Pdf {
       ('Prostorija', '${st.rooms.length}'),
       ('Etaža', '${c.plan.levels.length}'),
       ('Vrata / prozori', '${st.doors} / ${st.windows}'),
-      ('Okvirno opremanje', fmtEur(st.floorCost + st.paintCost + furniture)),
+      ('Okvirno opremanje', fmtEur(st.floorCost + st.paintCost + st.finishCost + furniture)),
     ];
     final colW = (area.width - 8) / 3;
     for (var i = 0; i < facts.length; i++) {
@@ -350,6 +350,8 @@ class _Pdf {
       for (final e in byMat.entries)
         ['Pod: ${e.key.name}', '${fmtM(e.value)} m²', fmtEur(e.key.pricePerM2), fmtEur(e.value * e.key.pricePerM2)],
       ['Bojanje zidova (${fmtM(st.paintLiters, 1)} L boje)', '${fmtM(st.paintArea)} m²', fmtEur(paintPricePerM2), fmtEur(st.paintCost)],
+      for (final e in st.finishAreas.entries)
+        ['Zidna obloga: ${finishById(e.key).name}', '${fmtM(e.value)} m²', fmtEur(finishById(e.key).pricePerM2), fmtEur(e.value * finishById(e.key).pricePerM2)],
     ];
     var furniture = 0.0;
     final multi = c.plan.levels.length > 1;
@@ -369,7 +371,7 @@ class _Pdf {
       'Okvirni troškovnik',
       [('STAVKA', 5.4, TextAlign.left), ('KOLIČINA / MJERE', 2.2, TextAlign.right), ('JED. CIJENA', 1.5, TextAlign.right), ('IZNOS', 1.6, TextAlign.right)],
       rows,
-      footer: ['Ukupno okvirno', '', '', fmtEur(st.floorCost + st.paintCost + furniture)],
+      footer: ['Ukupno okvirno', '', '', fmtEur(st.floorCost + st.paintCost + st.finishCost + furniture)],
       note: 'Cijene su okvirne (podovi i boja po prosječnim cijenama, namještaj po cijeni iz kataloga) i ne uključuju radove ni PDV ako nije navedeno.',
     );
   }

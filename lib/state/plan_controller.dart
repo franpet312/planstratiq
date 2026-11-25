@@ -58,6 +58,7 @@ class PlanStats {
     required this.rooms,
     required this.footprint,
     required this.paintArea,
+    this.finishAreas = const {},
     required this.wallLength,
     required this.doors,
     required this.windows,
@@ -66,6 +67,10 @@ class PlanStats {
   final List<RoomStat> rooms;
   final double footprint;
   final double paintArea;
+
+  /// Površine zidnih obloga po vrsti (m²), bez boje.
+  final Map<String, double> finishAreas;
+  double get finishCost => finishAreas.entries.fold(0.0, (a, e) => a + e.value * finishById(e.key).pricePerM2);
   final double wallLength;
   final int doors;
   final int windows;
@@ -791,13 +796,37 @@ class PlanController extends ChangeNotifier {
     });
   }
 
-  void updateRoom(String id, {String? name, String? floor}) {
+  void updateRoom(String id, {String? name, String? floor, String? wallFinish, int? wallColor, bool clearWallColor = false, double? finishHeight}) {
     final r = plan.roomById(id);
     if (r == null) return;
     mutate(() {
       if (name != null) r.name = name;
       if (floor != null) r.floor = floor;
+      if (wallFinish != null) r.wallFinish = wallFinish;
+      if (wallColor != null) r.wallColor = wallColor;
+      if (clearWallColor) r.wallColor = null;
+      if (finishHeight != null) r.finishHeight = finishHeight;
     });
+  }
+
+  /// Prostorije uz zid i strana na kojoj su: +1 = lijevo od smjera a→b (lokalni +z u 3D-u), −1 = desno.
+  List<(Room, int)> roomsBeside(Wall w) {
+    final out = <(Room, int)>[];
+    final wd = plan.nodePos(w.b) - plan.nodePos(w.a);
+    final n = Offset(-wd.dy, wd.dx);
+    for (final r in plan.rooms) {
+      final ids = r.nodeIds;
+      for (var i = 0; i < ids.length; i++) {
+        final a = ids[i], b = ids[(i + 1) % ids.length];
+        if ((a == w.a && b == w.b) || (a == w.b && b == w.a)) {
+          final d = plan.nodePos(b) - plan.nodePos(a);
+          final inward = Offset(-d.dy, d.dx);
+          out.add((r, dot(inward, n) >= 0 ? 1 : -1));
+          break;
+        }
+      }
+    }
+    return out;
   }
 
   void setAllFloors(String floor) => mutate(() {
@@ -891,6 +920,7 @@ class PlanController extends ChangeNotifier {
       final lp = labelPoint(poly);
       clipboard = {
         'kind': 'room', 'level': plan.level.id, 'project': projectId, 'name': r.name, 'floor': r.floor,
+        'wallFinish': r.wallFinish, 'wallColor': r.wallColor, 'finishHeight': r.finishHeight,
         'cx': lp.dx, 'cy': lp.dy, 'width': maxX - minX, 'edges': edges, 'items': items,
       };
       return r.name;
@@ -970,6 +1000,9 @@ class PlanController extends ChangeNotifier {
         if (pointInPolygon(c, plan.roomPolygon(r))) {
           r.name = cb['name'] as String;
           if (cb['floor'] is String) r.floor = cb['floor'] as String;
+          if (cb['wallFinish'] is String) r.wallFinish = cb['wallFinish'] as String;
+          r.wallColor = cb['wallColor'] as int?;
+          r.finishHeight = (cb['finishHeight'] as num?)?.toDouble() ?? 0;
           selection = Selection(SelKind.room, r.id);
           break;
         }
@@ -1030,6 +1063,7 @@ class PlanController extends ChangeNotifier {
   PlanStats _computeStats() {
     final rooms = <RoomStat>[];
     var paint = 0.0, length = 0.0, footprint = 0.0;
+    final finishes = <String, double>{};
     var doors = 0, windows = 0;
     final prev = plan.active;
     final multi = plan.levels.length > 1;
@@ -1044,12 +1078,20 @@ class PlanController extends ChangeNotifier {
       for (final w in plan.walls) {
         final len = plan.wallLength(w);
         length += len;
-        final sides = wallSides(w);
         var area = len * w.height;
         for (final o in plan.openings.where((o) => o.wallId == w.id)) {
           area -= o.width * o.height;
         }
-        paint += math.max(0, area) * sides;
+        area = math.max(0, area);
+        for (final (r, _) in roomsBeside(w)) {
+          if (r.wallFinish == 'paint') {
+            paint += area;
+            continue;
+          }
+          final part = r.finishHeight <= 0 ? 1.0 : (r.finishHeight / w.height).clamp(0.0, 1.0);
+          finishes[r.wallFinish] = (finishes[r.wallFinish] ?? 0) + area * part;
+          paint += area * (1 - part);
+        }
       }
       final res = li == prev ? null : detectFaces(plan);
       final outs = res?.outlines ?? outlines;
@@ -1065,6 +1107,7 @@ class PlanController extends ChangeNotifier {
       rooms: rooms,
       footprint: footprint,
       paintArea: paint,
+      finishAreas: finishes,
       wallLength: length,
       doors: doors,
       windows: windows,

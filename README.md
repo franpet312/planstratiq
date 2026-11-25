@@ -27,7 +27,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 **Etaže**
 - Podrum, prizemlje i katovi: svaka etaža ima svoje zidove, prostorije i namještaj; kota poda računa se sama (svijetla visina + 25 cm ploče).
 - Novi kat preuzima vanjske zidove etaže ispod; na tlocrtu se etaža ispod vidi prozirno (plavo), a kutovi joj služe za hvatanje.
-- Stubište postavljeno u prizemlju automatski probija otvor u ploči kata; u 3D šetnji (prvo i treće lice) stubama se hoda gore-dolje između etaža.
+- Stubište (ravno, L s podestom ili zavojito) postavljeno u prizemlju automatski probija otvor u ploči kata u obliku stubišta; u 3D šetnji (prvo i treće lice) stubama se hoda gore-dolje između etaža.
 - U 3D-u izvana prikazuju se etaže do odabrane (presjek), ili sve etaže s krovom na najvišoj.
 
 **Namještaj i okućnica**

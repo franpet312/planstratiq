@@ -36,6 +36,37 @@ function clipPoly(pts, f) {
   }
   return out;
 }
+const STAIRS = new Set(['stairs', 'stairs_l', 'stairs_spiral']);
+// L-stubište: širina kraka (lokalno: prvi krak uz desni rub od naprijed prema natrag, podest straga desno, drugi krak ulijevo)
+function stairL(W, D) {
+  const fw = clamp(Math.min(W, D) * 0.45, 0.7, Math.max(0.7, Math.min(W, D) - 0.3));
+  const L1 = Math.max(0.3, D - fw), L2 = Math.max(0.3, W - fw);
+  return { fw, L1, L2, r1: L1 / (L1 + L2) };
+}
+const SPIRAL_SWEEP = Math.PI * 1.5;
+// napredak uz stubište 0 (dno) … 1 (vrh) za lokalnu točku, ili null ako točka nije na stubama
+function stairProgress(it, lx, lz, upper) {
+  const W = it.w, D = it.d;
+  if (Math.abs(lx) > W / 2 || Math.abs(lz) > D / 2) return null;
+  if (it.shape === 'stairs_l') {
+    const g = stairL(W, D);
+    if (lx >= W / 2 - g.fw) {
+      if (lz > -D / 2 + g.fw) return (g.r1 * (D / 2 - lz)) / g.L1;
+      return g.r1; // podest
+    }
+    if (lz <= -D / 2 + g.fw) return g.r1 + ((1 - g.r1) * (W / 2 - g.fw - lx)) / g.L2;
+    return null;
+  }
+  if (it.shape === 'stairs_spiral') {
+    const R = Math.min(W, D) / 2;
+    if (Math.hypot(lx, lz) > R) return null;
+    let a = Math.atan2(lx, lz);
+    if (a < 0) a += Math.PI * 2;
+    if (a > SPIRAL_SWEEP) return upper ? 1 : 0;
+    return a / SPIRAL_SWEEP;
+  }
+  return (D / 2 - lz) / D;
+}
 const BALCONY = new Set(['balcony', 'balcony_rail', 'balcony_wall']);
 function inPolygon(x, y, poly) {
   let c = false;
@@ -712,6 +743,63 @@ function buildItem(it, g, loader) {
       parts.push({ mat: fire.material, emi: 1.2 });
       interactive('vatru', 1, true);
       b(W + 0.1, 0.06, D + 0.06, 0, H + 0.03, 0, 0xd8d2c8);
+      break;
+    }
+    case 'stairs_l': {
+      const g = stairL(W, D);
+      const n = Math.max(4, Math.round(H / 0.175));
+      const n1 = clamp(Math.round(n * g.r1), 2, n - 2);
+      const rise = H / n;
+      const run1 = g.L1 / n1, run2 = g.L2 / (n - n1);
+      const xs = W / 2 - g.fw / 2; // os prvog kraka
+      const zs = -D / 2 + g.fw / 2; // os drugog kraka
+      for (let j = 1; j < n1; j++) {
+        const y = j * rise;
+        b(g.fw, 0.04, run1 + 0.02, xs, y - 0.02, D / 2 - run1 * (j - 0.5), color);
+        b(g.fw, rise - 0.04, 0.02, xs, y - rise / 2 - 0.02, D / 2 - run1 * (j - 1), 0xf2f0ec);
+      }
+      // podest
+      b(g.fw, 0.06, g.fw, xs, n1 * rise - 0.03, zs, color);
+      b(g.fw, rise - 0.04, 0.02, xs, n1 * rise - rise / 2 - 0.02, -D / 2 + g.fw, 0xf2f0ec);
+      b(g.fw, n1 * rise - 0.06, 0.08, xs, (n1 * rise - 0.06) / 2, -D / 2 + 0.04, 0xe9e5de); // nosivi zidić ispod podesta
+      for (let j = 1; j <= n - n1; j++) {
+        const y = (n1 + j) * rise;
+        b(run2 + 0.02, 0.04, g.fw, W / 2 - g.fw - run2 * (j - 0.5), y - 0.02, zs, color);
+        b(0.02, rise - 0.04, g.fw, W / 2 - g.fw - run2 * (j - 1), y - rise / 2 - 0.02, zs, 0xf2f0ec);
+      }
+      // rukohvati na unutarnjoj strani krakova
+      const r1 = b(0.04, 0.04, Math.hypot(g.L1, n1 * rise), W / 2 - g.fw + 0.03, (n1 * rise) / 2 + 0.9, D / 2 - g.L1 / 2, 0x333333);
+      r1.rotation.x = Math.atan2(n1 * rise, g.L1);
+      const r2 = b(Math.hypot(g.L2, (n - n1) * rise), 0.04, 0.04, W / 2 - g.fw - g.L2 / 2, n1 * rise + ((n - n1) * rise) / 2 + 0.9, -D / 2 + g.fw - 0.03, 0x333333);
+      r2.rotation.z = -Math.atan2((n - n1) * rise, g.L2);
+      break;
+    }
+    case 'stairs_spiral': {
+      const R = Math.min(W, D) / 2;
+      const n = Math.max(8, Math.round(H / 0.19));
+      const rise = H / n, dA = SPIRAL_SWEEP / n;
+      cyl(0.06, 0.06, H + 0.95, 0, (H + 0.95) / 2, 0, 0x3a3a3a, 16, metal);
+      let prev = null;
+      for (let j = 1; j <= n; j++) {
+        const a0 = (j - 1) * dA;
+        const geo = new THREE.CylinderGeometry(R, R, 0.04, 8, 1, false, a0, dA * 1.08);
+        const m = new THREE.Mesh(geo, mat(color));
+        m.position.y = j * rise - 0.02;
+        m.castShadow = true;
+        m.receiveShadow = true;
+        tgt.add(m);
+        // rukohvat: stupić na vanjskom rubu i spoj s prethodnim
+        const am = a0 + dA / 2;
+        const px = (R - 0.04) * Math.sin(am), pz = (R - 0.04) * Math.cos(am);
+        cyl(0.012, 0.012, 0.9, px, j * rise + 0.45, pz, 0x3a3a3a, 6, metal);
+        const top = new THREE.Vector3(px, j * rise + 0.9, pz);
+        if (prev) {
+          const len = prev.distanceTo(top);
+          const rail = cyl(0.02, 0.02, len, (prev.x + top.x) / 2, (prev.y + top.y) / 2, (prev.z + top.z) / 2, 0x3a3a3a, 6, metal);
+          rail.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(prev).normalize());
+        }
+        prev = top;
+      }
       break;
     }
     case 'stairs': {
@@ -1488,7 +1576,7 @@ class Engine {
   // sudari u šetnji: namještaj (orijentirani pravokutnik) i ograde balkona
   _itemColliders(it) {
     const sh = it.shape;
-    if (['rug', 'rug_round', 'path', 'deck', 'stairs', 'carport'].includes(sh)) return;
+    if (['rug', 'rug_round', 'path', 'deck', 'carport'].includes(sh) || STAIRS.has(sh)) return;
     const r = it.rotation || 0;
     const ux = { x: Math.cos(r), z: Math.sin(r) }, uz = { x: -Math.sin(r), z: Math.cos(r) };
     const W = (x, z) => ({ x: it.x + ux.x * x + uz.x * z, z: it.y + ux.z * x + uz.z * z });
@@ -2367,16 +2455,16 @@ class Engine {
       return { lx: dx * Math.cos(r) + dz * Math.sin(r), lz: -dx * Math.sin(r) + dz * Math.cos(r) };
     };
     for (const it of p.items || []) {
-      if (it.shape !== 'stairs') continue;
+      if (!STAIRS.has(it.shape)) continue;
       const { lx, lz } = local(it);
-      if (Math.abs(lx) > it.w / 2 || Math.abs(lz) > it.d / 2) continue;
-      const k = (it.d / 2 - lz) / it.d; // 0 dno, 1 vrh
+      const k = stairProgress(it, lx, lz, false); // 0 dno, 1 vrh
+      if (k === null) continue;
       return { off: k * it.h, dir: p.hasAbove && k > 0.9 ? 1 : 0 };
     }
     for (const it of p.stairsBelow || []) {
       const { lx, lz } = local(it);
-      if (Math.abs(lx) > it.w / 2 || Math.abs(lz) > it.d / 2) continue;
-      const k = (it.d / 2 - lz) / it.d;
+      const k = stairProgress(it, lx, lz, true);
+      if (k === null) continue;
       const drop = (1 - k) * (it.h + 0.25);
       return { off: -drop, dir: p.hasBelow && k < 0.1 ? -1 : 0 };
     }

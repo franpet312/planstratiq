@@ -44,6 +44,8 @@ const shapeIcons = <String, IconData>{
   'rug_round': Icons.texture,
   'fireplace': Icons.fireplace_outlined,
   'stairs': Icons.stairs_outlined,
+  'stairs_l': Icons.stairs_outlined,
+  'stairs_spiral': Icons.stairs_outlined,
   'bath': Icons.bathtub_outlined,
   'shower': Icons.shower_outlined,
   'toilet': Icons.wc_outlined,

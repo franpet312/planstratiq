@@ -243,6 +243,8 @@ const families = <Family>[
   Family(id: 'garderober', name: 'Garderober', category: catHall, shape: 'wardrobe', sizes: [(0.8, 0.4, 1.9), (1.2, 0.4, 2.0)], price: 220, colors: _wood),
   Family(id: 'klupa_hodnik', name: 'Klupa za predsoblje', category: catHall, shape: 'bench', sizes: [(0.8, 0.35, 0.48), (1.0, 0.38, 0.48)], price: 90, colors: _wood),
   Family(id: 'stube', name: 'Stubište, ravno', category: catHall, shape: 'stairs', sizes: [(0.9, 3.2, 2.6), (1.0, 3.6, 2.8), (1.2, 4.0, 3.0)], price: 3000, colors: _wood, styled: false),
+  Family(id: 'stube_l', name: 'Stubište, L s podestom', category: catHall, shape: 'stairs_l', sizes: [(2.2, 2.6, 2.6), (2.4, 2.9, 2.8), (2.6, 3.1, 3.0)], price: 4200, colors: _wood, styled: false),
+  Family(id: 'stube_spiral', name: 'Stubište, zavojito', category: catHall, shape: 'stairs_spiral', sizes: [(1.6, 1.6, 2.6), (1.8, 1.8, 2.8), (2.0, 2.0, 3.0)], price: 3800, colors: _wood, styled: false),
 
   // ---------------------------------------------------------------- vrt i terasa
   Family(id: 'vrtni_stol', name: 'Vrtni stol', category: catGarden, shape: 'table', sizes: [(0.8, 0.8, 0.74), (1.4, 0.8, 0.74), (2.0, 0.9, 0.74)], price: 200, colors: _outdoor, zone: _e, styled: false),

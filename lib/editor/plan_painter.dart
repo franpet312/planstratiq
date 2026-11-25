@@ -8,6 +8,7 @@ import '../models/catalog.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
+import '../models/stairs.dart';
 import '../models/topology.dart';
 import '../state/plan_controller.dart';
 
@@ -185,15 +186,16 @@ class PlanPainter extends CustomPainter {
       canvas.drawLine(s(c - u * (o.width / 2)), s(c + u * (o.width / 2)), dash);
     }
     // stubište s etaže ispod = otvor u podu ove etaže
-    for (final it in below.items.where((i) => i.shape == 'stairs')) {
+    for (final it in below.items.where((i) => stairShapes.contains(i.shape))) {
+      final pts = [for (final p in stairOutline(it, inset: 0)) s(p)];
+      final path = Path()..addPolygon(pts, true);
+      canvas.drawPath(path, Paint()..color = const Color(0x183A6EA5));
+      canvas.drawPath(path, dash..style = PaintingStyle.stroke);
+      final b = path.getBounds();
       canvas.save();
-      canvas.translate(s(it.pos).dx, s(it.pos).dy);
-      canvas.rotate(it.rotation);
-      final r = Rect.fromCenter(center: Offset.zero, width: it.w * scale, height: it.d * scale);
-      canvas.drawRect(r, Paint()..color = const Color(0x183A6EA5));
-      canvas.drawRect(r, dash..style = PaintingStyle.stroke);
-      canvas.drawLine(r.topLeft, r.bottomRight, dash);
-      canvas.drawLine(r.topRight, r.bottomLeft, dash);
+      canvas.clipPath(path);
+      canvas.drawLine(b.topLeft, b.bottomRight, dash);
+      canvas.drawLine(b.topRight, b.bottomLeft, dash);
       canvas.restore();
     }
   }
@@ -930,6 +932,60 @@ class ItemSymbols {
           ..lineTo(r.right - w * 0.3, r.top + d * 0.3)
           ..lineTo(r.right - w * 0.2, r.bottom);
         c.drawPath(p, line);
+      case 'stairs_l':
+        // prvi krak uz desni rub (odozdo prema gore), podest gore desno, drugi krak ulijevo
+        final fw = m(stairLFlight(w / ppm, d / ppm));
+        final p = Path()
+          ..moveTo(r.right - fw, r.bottom)
+          ..lineTo(r.right, r.bottom)
+          ..lineTo(r.right, r.top)
+          ..lineTo(r.left, r.top)
+          ..lineTo(r.left, r.top + fw)
+          ..lineTo(r.right - fw, r.top + fw)
+          ..close();
+        c.drawPath(p, fillOf(color, 0.25));
+        c.drawPath(p, line);
+        final st = m(0.27);
+        for (var y = r.bottom - st; y > r.top + fw + 2; y -= st) {
+          ln(Offset(r.right - fw, y), Offset(r.right, y), thin);
+        }
+        ln(Offset(r.right - fw, r.top + fw), Offset(r.right - fw, r.top), thin); // podest
+        for (var x = r.right - fw - st; x > r.left + 2; x -= st) {
+          ln(Offset(x, r.top), Offset(x, r.top + fw), thin);
+        }
+        final ax = r.right - fw / 2, ay = r.top + fw / 2;
+        ln(Offset(ax, r.bottom - m(0.15)), Offset(ax, ay));
+        ln(Offset(ax, ay), Offset(r.left + m(0.2), ay));
+        ln(Offset(r.left + m(0.2), ay), Offset(r.left + m(0.4), ay - m(0.12)));
+        ln(Offset(r.left + m(0.2), ay), Offset(r.left + m(0.4), ay + m(0.12)));
+      case 'stairs_spiral':
+        final rad = math.min(w, d) / 2;
+        c.drawCircle(Offset.zero, rad, fillOf(color, 0.25));
+        c.drawCircle(Offset.zero, rad, line);
+        c.drawCircle(Offset.zero, m(0.06), line);
+        const n = 15;
+        const sweep = math.pi * 1.5;
+        // kut u engineu mjeri se od +z (dolje na tlocrtu) prema +x
+        Offset at(double a, double rr) => Offset(rr * math.sin(a), rr * math.cos(a));
+        for (var i = 0; i <= n; i++) {
+          final a = sweep * i / n;
+          ln(at(a, m(0.06)), at(a, rad), thin);
+        }
+        final arc = Path();
+        for (var i = 0; i <= 24; i++) {
+          final q = at(sweep * i / 24, rad * 0.62);
+          if (i == 0) {
+            arc.moveTo(q.dx, q.dy);
+          } else {
+            arc.lineTo(q.dx, q.dy);
+          }
+        }
+        c.drawPath(arc, line);
+        final tip = at(sweep, rad * 0.62), back = at(sweep - 0.25, rad * 0.62);
+        final dir = (tip - back) / (tip - back).distance;
+        final nrm = Offset(-dir.dy, dir.dx);
+        ln(tip, tip - dir * m(0.2) + nrm * m(0.1));
+        ln(tip, tip - dir * m(0.2) - nrm * m(0.1));
       case 'stairs':
         box(r, 1);
         final steps = math.max(2, (d / m(0.28)).floor());

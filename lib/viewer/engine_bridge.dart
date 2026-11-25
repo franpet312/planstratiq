@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:js_interop';
-import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show Offset;
 
@@ -12,6 +11,7 @@ import 'package:web/web.dart' as web;
 import '../models/catalog.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
+import '../models/stairs.dart';
 import '../state/plan_controller.dart';
 
 @JS('Planstratiq3D')
@@ -131,17 +131,10 @@ class Engine3D {
   /// Otvori u podu za stubišta: pravokutnici stubišta s etaže [li] (u tlocrtnim koordinatama).
   static List<List<List<double>>> _stairHoles(PlanController c, int li) {
     if (li < 0 || li >= c.plan.levels.length) return const [];
-    final out = <List<List<double>>>[];
-    for (final it in c.plan.levels[li].items) {
-      if (it.shape != 'stairs') continue;
-      final cs = math.cos(it.rotation), sn = math.sin(it.rotation);
-      final hw = it.w / 2 - 0.02, hd = it.d / 2 - 0.02;
-      out.add([
-        for (final (lx, ly) in [(-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd)])
-          [it.pos.dx + lx * cs - ly * sn, it.pos.dy + lx * sn + ly * cs]
-      ]);
-    }
-    return out;
+    return [
+      for (final it in c.plan.levels[li].items)
+        if (stairShapes.contains(it.shape)) [for (final p in stairOutline(it)) [p.dx, p.dy]]
+    ];
   }
 
   static Map<String, dynamic> _levelJson(PlanController c, int li) {
@@ -209,7 +202,8 @@ class Engine3D {
         'stairsBelow': [
           if (li > 0)
             for (final it in plan.levels[li - 1].items)
-              if (it.shape == 'stairs') {'x': it.pos.dx, 'y': it.pos.dy, 'w': it.w, 'd': it.d, 'h': it.h, 'rotation': it.rotation}
+              if (stairShapes.contains(it.shape))
+                {'shape': it.shape, 'x': it.pos.dx, 'y': it.pos.dy, 'w': it.w, 'd': it.d, 'h': it.h, 'rotation': it.rotation}
         ],
         'hasAbove': li < plan.levels.length - 1,
         'hasBelow': li > 0,

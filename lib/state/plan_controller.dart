@@ -808,6 +808,15 @@ class PlanController extends ChangeNotifier {
 
   void setRoof(bool v) => mutate(() => plan.roof = v);
 
+  void setRoofStyle({String? type, double? pitch, double? overhang, int? color, bool? turn}) => mutate(() {
+        plan.roof = true;
+        if (type != null) plan.roofType = type;
+        if (pitch != null) plan.roofPitch = pitch.clamp(5, 60).toDouble();
+        if (overhang != null) plan.roofOverhang = overhang.clamp(0, 1.5).toDouble();
+        if (color != null) plan.roofColor = color;
+        if (turn != null) plan.roofTurn = turn;
+      });
+
   void deleteSelection() {
     final s = selection;
     if (s.kind == SelKind.none) return;

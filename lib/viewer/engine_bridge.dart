@@ -107,6 +107,13 @@ class Engine3D {
     return {
       'projectId': c.projectId,
       'roof': plan.roof,
+      'roofStyle': {
+        'type': plan.roofType,
+        'pitch': plan.roofPitch,
+        'overhang': plan.roofOverhang,
+        'color': plan.roofColor,
+        'turn': plan.roofTurn,
+      },
       ..._levelJson(c, active),
       'others': [
         for (var i = 0; i < plan.levels.length; i++)

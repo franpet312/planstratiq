@@ -321,6 +321,72 @@ class PropertiesPanel extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- ništa
+  List<Widget> _roof() {
+    final p = c.plan;
+    Widget slider(String label, String value, double v, double min, double max, int div, void Function(double) set) => Row(children: [
+          SizedBox(width: 72, child: Text(label, style: AppText.ui(size: 12.5))),
+          Expanded(
+            child: Slider(
+              value: v.clamp(min, max),
+              min: min,
+              max: max,
+              divisions: div,
+              onChangeStart: (_) => c.beginChange(),
+              onChanged: (x) {
+                set(x);
+                c.plan.roof = true;
+                c.liveUpdate();
+              },
+              onChangeEnd: (_) => c.endChange(),
+            ),
+          ),
+          SizedBox(width: 44, child: Text(value, textAlign: TextAlign.right, style: AppText.narrow(size: 12.5))),
+        ]);
+    return [
+      const SectionTitle('Krov'),
+      SwitchListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        value: p.roof,
+        onChanged: c.setRoof,
+        title: Text('Prikaži krov u 3D-u', style: AppText.ui(size: 13, weight: FontWeight.w500)),
+        subtitle: Text('Krov prati obris najviše etaže (i L, T i U kuće).', style: AppText.ui(size: 12, color: Pal.muted)),
+      ),
+      Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final (id, label) in const [('gable', 'Dvostrešni'), ('hip', 'Četverostrešni'), ('shed', 'Jednostrešni'), ('flat', 'Ravni')])
+          ChoiceChip(
+            label: Text(label),
+            selected: p.roofType == id,
+            onSelected: (_) => c.setRoofStyle(
+              type: id,
+              // jednostrešni krov preko cijele kuće treba manji nagib
+              pitch: id == 'shed' && p.roofPitch > 15 ? 10 : (id != 'shed' && p.roofType == 'shed' && p.roofPitch < 20 ? 30 : null),
+            ),
+          ),
+      ]),
+      if (p.roofType != 'flat') ...[
+        const SizedBox(height: 6),
+        slider('Nagib', '${p.roofPitch.round()}°', p.roofPitch, 5, 60, 55, (x) => p.roofPitch = x.roundToDouble()),
+        slider('Prepust', '${(p.roofOverhang * 100).round()} cm', p.roofOverhang, 0, 1.5, 30, (x) => p.roofOverhang = (x * 20).round() / 20),
+        if (p.roofType == 'gable' || p.roofType == 'shed')
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: p.roofTurn,
+            onChanged: (v) => c.setRoofStyle(turn: v),
+            title: Text(p.roofType == 'shed' ? 'Zakreni smjer pada' : 'Zakreni sljeme za 90°', style: AppText.ui(size: 13)),
+          ),
+      ],
+      const SizedBox(height: 6),
+      Swatches(
+        colors: const [0xFFA5533A, 0xFF8C3B2A, 0xFF5E4033, 0xFF3F4347, 0xFF6E7378, 0xFF2F4A3A, 0xFFB9B3A8],
+        names: const ['Crijep', 'Tamni crijep', 'Smeđi', 'Antracit', 'Sivi lim', 'Zeleni', 'Svijetli'],
+        value: p.roofColor,
+        onPick: (v) => c.setRoofStyle(color: v),
+      ),
+    ];
+  }
+
   List<Widget> _none(BuildContext context) {
     final st = c.stats;
     return [
@@ -352,6 +418,7 @@ class PropertiesPanel extends StatelessWidget {
         const SizedBox(width: 8),
         OutlinedButton(onPressed: () => c.applyToAllWalls(height: c.plan.wallHeight), child: const Text('Na sve')),
       ]),
+      ..._roof(),
       if (c.plan.image != null) ...[
         const SectionTitle('Nacrt u pozadini'),
         Row(children: [

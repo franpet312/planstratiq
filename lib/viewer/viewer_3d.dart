@@ -192,7 +192,16 @@ class _Viewer3DState extends State<Viewer3D> {
                   icon: Icons.roofing,
                   tooltip: c.plan.roof ? 'Sakrij krov' : 'Prikaži krov',
                   active: c.plan.roof,
-                  onTap: () => c.setRoof(!c.plan.roof),
+                  onTap: () {
+                    final on = !c.plan.roof;
+                    c.setRoof(on);
+                    if (on) {
+                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+                        content: Text('Oblik, nagib i boju krova mijenjaš u desnom panelu kad ništa nije odabrano.'),
+                        duration: Duration(seconds: 3),
+                      ));
+                    }
+                  },
                 ),
                 if (_mode == ViewMode3D.orbit && c.plan.levels.length > 1)
                   IconBtn(

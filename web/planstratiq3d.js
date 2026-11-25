@@ -21,6 +21,21 @@ const FLOOR = 0.03; // visina gotovog poda iznad ploče
 let lampBudget = 8; // najviše toliko stvarnih svjetala u lampama (zbog brzine)
 
 const rgb = (c) => Number(c) & 0xffffff;
+const norm2 = (x, y) => { const l = Math.hypot(x, y) || 1; return { x: x / l, y: y / l }; };
+// Sutherland–Hodgman: zadrži dio poligona gdje je f(u, v) ≤ 0
+function clipPoly(pts, f) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const fa = f(a[0], a[1]), fb = f(b[0], b[1]);
+    if (fa <= 0) out.push(a);
+    if ((fa < 0 && fb > 0) || (fa > 0 && fb < 0)) {
+      const k = fa / (fa - fb);
+      out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]);
+    }
+  }
+  return out;
+}
 const BALCONY = new Set(['balcony', 'balcony_rail', 'balcony_wall']);
 function inPolygon(x, y, poly) {
   let c = false;
@@ -1409,7 +1424,7 @@ class Engine {
     this._buildLevel(p);
     this._tgt = this.world;
     this._passive = false;
-    if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y);
+    if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, p.roofStyle || {});
     this._applyVisibility();
     this._updateSelectionHelper();
   }
@@ -1705,54 +1720,303 @@ class Engine {
     }
   }
 
-  _buildRoofs(p, maxH) {
+  // ------------------------------------------------------------------ krov
+  // Krov prati obris zgrade: pravokutni (i zakrenuti) obrisi rastave se na najveće pravokutnike
+  // koji se preklapaju; svaki dobije svoje krovne plohe, a njihova presjecišta daju uvale (L, T, U kuće).
+  _buildRoofs(p, maxH, style = {}) {
+    const type = style.type || 'gable';
+    const t = Math.tan(THREE.MathUtils.degToRad(clamp(style.pitch || 30, 5, 60)));
+    const ov = clamp(style.overhang ?? 0.5, 0, 1.5);
+    const color = style.color ? rgb(style.color) : 0xa5533a;
+    const WT = 0.15; // pola debljine vanjskog zida (obris je po osi zida)
+    const roofMat = mat(color, { tex: 'roof', roughness: 0.85, double: true });
+    const fasciaMat = mat(darker(color, 0.35), { roughness: 0.8 });
+    const wallMat = mat(0xece7df, { tex: 'plaster', roughness: 0.95, double: true });
+
     for (const o of p.outlines || []) {
       if (o.length < 3) continue;
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-      for (const [x, y] of o) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, y); maxZ = Math.max(maxZ, y); }
-      const wallT = 0.15;
-      minX -= wallT; maxX += wallT; minZ -= wallT; maxZ += wallT;
-      const ov = 0.5;
-      const w = maxX - minX, d = maxZ - minZ;
-      const alongX = w >= d;
-      const span = (alongX ? d : w) + 2 * ov;
-      const len = (alongX ? w : d) + 2 * ov;
-      const half = span / 2;
-      const rise = half * Math.tan(THREE.MathUtils.degToRad(28));
-      const slope = Math.hypot(half, rise);
-      const g = new THREE.Group();
-      g.position.set((minX + maxX) / 2, maxH, (minZ + maxZ) / 2);
-      if (!alongX) g.rotation.y = Math.PI / 2;
-      const roofMat = mat(0xa5533a, { tex: 'roof', roughness: 0.85, double: true });
-      for (const sgn of [-1, 1]) {
-        const geo = new THREE.BoxGeometry(len, 0.08, slope);
-        const uv = geo.attributes.uv;
-        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * len, uv.getY(i) * slope);
-        const plane = new THREE.Mesh(geo, roofMat);
-        plane.position.set(0, rise / 2, (sgn * half) / 2);
-        plane.rotation.x = sgn * Math.atan2(rise, half);
-        plane.castShadow = true;
-        plane.receiveShadow = true;
-        g.add(plane);
+      const poly = o.map(([x, y]) => ({ x, y }));
+      // glavni smjer: najdulji brid
+      let ang = 0, best = 0;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        const l = Math.hypot(b.x - a.x, b.y - a.y);
+        if (l > best) { best = l; ang = Math.atan2(b.y - a.y, b.x - a.x); }
       }
-      const inner = half - ov;
-      const innerRise = rise * (inner / half);
-      const tri = new THREE.Shape();
-      tri.moveTo(-inner, 0);
-      tri.lineTo(inner, 0);
-      tri.lineTo(0, innerRise);
-      tri.closePath();
-      const gable = new THREE.ExtrudeGeometry(tri, { depth: 0.2, bevelEnabled: false });
-      for (const sgn of [-1, 1]) {
-        const m = new THREE.Mesh(gable, mat(0xece7df, { tex: 'plaster' }));
-        m.rotation.y = Math.PI / 2;
-        m.position.set(sgn * (len / 2 - ov) - (sgn > 0 ? 0.2 : 0), 0, 0);
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      const toL = (q) => ({ x: q.x * ca + q.y * sa, y: -q.x * sa + q.y * ca });
+      const toW = (u, v) => ({ x: u * ca - v * sa, z: u * sa + v * ca });
+      const lp = poly.map(toL);
+      const rectilinear = lp.every((a, i) => {
+        const b = lp[(i + 1) % lp.length];
+        const dx = Math.abs(b.x - a.x), dy = Math.abs(b.y - a.y);
+        return Math.min(dx, dy) < 0.03 * Math.max(dx, dy, 1e-6) + 0.005;
+      });
+      const inside = (u, v) => inPolygon(u, v, lp);
+
+      // pravokutnici (u lokalnim koordinatama, po osi zida)
+      let rects = [];
+      if (rectilinear) rects = this._rectCover(lp);
+      if (!rects.length) {
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        for (const q of lp) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
+        rects = [{ x0, x1, y0, y1 }];
+      }
+      // stranice na obrisu dobivaju prepust; unutarnje (ispod susjednog krila) ne
+      const exterior = (r, side) => {
+        const n = 8;
+        for (let k = 0; k <= n; k++) {
+          const f = 0.02 + (0.96 * k) / n;
+          let u, v;
+          if (side === 'x0') { u = r.x0 - 0.2; v = r.y0 + (r.y1 - r.y0) * f; }
+          else if (side === 'x1') { u = r.x1 + 0.2; v = r.y0 + (r.y1 - r.y0) * f; }
+          else if (side === 'y0') { v = r.y0 - 0.2; u = r.x0 + (r.x1 - r.x0) * f; }
+          else { v = r.y1 + 0.2; u = r.x0 + (r.x1 - r.x0) * f; }
+          if (inside(u, v)) return false;
+        }
+        return true;
+      };
+      // ravnine krova: H = a·u + b·v + c (visina iznad vrha zida)
+      let all = [];
+      let ux0 = Infinity, ux1 = -Infinity, vy0 = Infinity, vy1 = -Infinity;
+      for (const r of rects) { ux0 = Math.min(ux0, r.x0); ux1 = Math.max(ux1, r.x1); vy0 = Math.min(vy0, r.y0); vy1 = Math.max(vy1, r.y1); }
+      const shedAlongV = (vy1 - vy0 <= ux1 - ux0) !== !!style.turn;
+      rects.forEach((r0, idx) => {
+        const r = { x0: r0.x0 - WT, x1: r0.x1 + WT, y0: r0.y0 - WT, y1: r0.y1 + WT };
+        const e = { x0: exterior(r0, 'x0') ? ov : 0, x1: exterior(r0, 'x1') ? ov : 0, y0: exterior(r0, 'y0') ? ov : 0, y1: exterior(r0, 'y1') ? ov : 0 };
+        const ext = { x0: r.x0 - e.x0, x1: r.x1 + e.x1, y0: r.y0 - e.y0, y1: r.y1 + e.y1 };
+        const longU = (r.x1 - r.x0 >= r.y1 - r.y0) !== !!style.turn;
+        const planes = [];
+        const lower = idx * 0.004; // krila na istoj visini ne smiju biti koplanarna (treperenje)
+        if (type === 'shed') {
+          if (shedAlongV) planes.push({ a: 0, b: -t, c: (vy1 + WT) * t - lower });
+          else planes.push({ a: -t, b: 0, c: (ux1 + WT) * t - lower });
+        } else {
+          if (longU || type === 'hip') {
+            planes.push({ a: 0, b: t, c: -r.y0 * t - lower }); // prednja
+            planes.push({ a: 0, b: -t, c: r.y1 * t - lower }); // stražnja
+          }
+          if (!longU || type === 'hip') {
+            planes.push({ a: t, b: 0, c: -r.x0 * t - lower });
+            planes.push({ a: -t, b: 0, c: r.x1 * t - lower });
+          }
+        }
+        all.push({ r, ext, planes });
+      });
+      if (type === 'shed') {
+        // jedna ravnina preko cijele zgrade => jedan poligon (bez preklapanja)
+        const pl = all[0].planes[0];
+        all = [{ r: null, ext: { x0: ux0 - WT - ov, x1: ux1 + WT + ov, y0: vy0 - WT - ov, y1: vy1 + WT + ov }, planes: [pl], poly: this._offsetPoly(lp, WT + ov) }];
+      }
+
+      const g = new THREE.Group();
+      g.position.y = maxH;
+      const pos = [], uvs = [];
+      const H = (pl, u, v) => pl.a * u + pl.b * v + pl.c;
+      const addPoly = (pts, pl) => {
+        // pts: lokalni [u, v] konveksnog ili jednostavnog poligona
+        if (pts.length < 3) return;
+        const tri = THREE.ShapeUtils.triangulateShape(pts.map(([u, v]) => new THREE.Vector2(u, v)), []);
+        const nrm = Math.hypot(pl.a, pl.b) || 1;
+        const du = -pl.a / nrm, dv = -pl.b / nrm; // smjer pada (za teksturu)
+        for (const [i0, i1, i2] of tri) {
+          for (const k of [i0, i1, i2]) {
+            const [u, v] = pts[k];
+            const w = toW(u, v);
+            pos.push(w.x, H(pl, u, v), w.z);
+            const s = Math.hypot(1, Math.hypot(pl.a, pl.b));
+            uvs.push((u * dv - v * du), (u * du + v * dv) * s);
+          }
+        }
+      };
+      const fascia = [];
+      for (const R of all) {
+        for (let i = 0; i < R.planes.length; i++) {
+          let pts = R.poly ? R.poly.map((q) => [q.x, q.y]) : [[R.ext.x0, R.ext.y0], [R.ext.x1, R.ext.y0], [R.ext.x1, R.ext.y1], [R.ext.x0, R.ext.y1]];
+          const pi = R.planes[i];
+          for (let j = 0; j < R.planes.length; j++) {
+            if (j === i) continue;
+            const pj = R.planes[j];
+            // zadrži dio gdje je pi niža (pi − pj ≤ 0)
+            pts = clipPoly(pts, (u, v) => H(pi, u, v) - H(pj, u, v) - 1e-9);
+          }
+          addPoly(pts, pi);
+          // čeone daske uz rub krova (strehe i zabati)
+          for (let k = 0; k < pts.length; k++) {
+            const a = pts[k], b = pts[(k + 1) % pts.length];
+            const onEdge = (q) => R.poly ? true : Math.abs(q[0] - R.ext.x0) < 1e-6 || Math.abs(q[0] - R.ext.x1) < 1e-6 || Math.abs(q[1] - R.ext.y0) < 1e-6 || Math.abs(q[1] - R.ext.y1) < 1e-6;
+            const sameSide = R.poly ? true : (Math.abs(a[0] - b[0]) < 1e-6 && (Math.abs(a[0] - R.ext.x0) < 1e-6 || Math.abs(a[0] - R.ext.x1) < 1e-6)) || (Math.abs(a[1] - b[1]) < 1e-6 && (Math.abs(a[1] - R.ext.y0) < 1e-6 || Math.abs(a[1] - R.ext.y1) < 1e-6));
+            if (onEdge(a) && onEdge(b) && sameSide) fascia.push([a, b, pi]);
+          }
+        }
+      }
+      if (type !== 'flat' && pos.length) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geo.computeVertexNormals();
+        const m = new THREE.Mesh(geo, roofMat);
         m.castShadow = true;
+        m.receiveShadow = true;
         g.add(m);
+        // čeone daske
+        for (const [a, b, pl] of fascia) {
+          const wa = toW(a[0], a[1]), wb = toW(b[0], b[1]);
+          const ha = H(pl, a[0], a[1]), hb = H(pl, b[0], b[1]);
+          const fg = new THREE.BufferGeometry();
+          const d = 0.16;
+          fg.setAttribute('position', new THREE.Float32BufferAttribute([
+            wa.x, ha + 0.01, wa.z, wb.x, hb + 0.01, wb.z, wb.x, hb - d, wb.z,
+            wa.x, ha + 0.01, wa.z, wb.x, hb - d, wb.z, wa.x, ha - d, wa.z,
+          ], 3));
+          fg.computeVertexNormals();
+          const fm = new THREE.Mesh(fg, fasciaMat);
+          fm.castShadow = true;
+          g.add(fm);
+        }
+      }
+
+      // visina krova u točki (najviša ploha iznad nje)
+      const roofH = (u, v) => {
+        let best = -Infinity;
+        for (const R of all) {
+          if (!R.poly && (u < R.ext.x0 - 1e-6 || u > R.ext.x1 + 1e-6 || v < R.ext.y0 - 1e-6 || v > R.ext.y1 + 1e-6)) continue;
+          let h = Infinity;
+          for (const pl of R.planes) h = Math.min(h, H(pl, u, v));
+          best = Math.max(best, h);
+        }
+        return best;
+      };
+
+      if (type === 'flat') {
+        // ravni krov: ploča s atikom
+        const outer = this._offsetPoly(lp, WT + Math.min(ov, 0.25));
+        const shape = new THREE.Shape(outer.map((q) => new THREE.Vector2(q.x, q.y)));
+        const slab = new THREE.ExtrudeGeometry(shape, { depth: 0.22, bevelEnabled: false });
+        slab.rotateX(Math.PI / 2);
+        const sm = new THREE.Mesh(slab, mat(0xd8d2c8, { tex: 'plaster', roughness: 0.95 }));
+        sm.position.y = 0.22;
+        sm.rotation.y = -ang;
+        sm.castShadow = true;
+        sm.receiveShadow = true;
+        const holder = new THREE.Group();
+        holder.add(sm);
+        g.add(holder);
+        const top = this._offsetPoly(lp, WT + Math.min(ov, 0.25) - 0.02);
+        const roofTop = new THREE.Shape(top.map((q) => new THREE.Vector2(q.x, q.y)));
+        const inner = this._offsetPoly(lp, WT + Math.min(ov, 0.25) - 0.2);
+        roofTop.holes.push(new THREE.Path(inner.map((q) => new THREE.Vector2(q.x, q.y)).reverse()));
+        const parapet = new THREE.ExtrudeGeometry(roofTop, { depth: 0.45, bevelEnabled: false });
+        parapet.rotateX(Math.PI / 2);
+        const pm = new THREE.Mesh(parapet, mat(0xece7df, { tex: 'plaster', roughness: 0.95 }));
+        pm.position.y = 0.22 + 0.45;
+        pm.rotation.y = -ang;
+        pm.castShadow = true;
+        g.add(pm);
+        // pokrov (šljunak/membrana)
+        const cover = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(inner.map((q) => new THREE.Vector2(q.x, q.y)))).rotateX(Math.PI / 2), mat(color, { roughness: 1 }));
+        cover.position.y = 0.226;
+        cover.rotation.y = -ang;
+        cover.receiveShadow = true;
+        g.add(cover);
+      } else {
+        // zabati: zid od vrha zida do krova uz svaki brid obrisa (vanjsko lice zida)
+        const face = this._offsetPoly(lp, WT);
+        for (let i = 0; i < face.length; i++) {
+          const a = face[i], b = face[(i + 1) % face.length];
+          const L = Math.hypot(b.x - a.x, b.y - a.y);
+          if (L < 0.05) continue;
+          const n = Math.max(2, Math.ceil(L / 0.05));
+          const top = [];
+          for (let k = 0; k <= n; k++) {
+            const f = k / n;
+            const u = a.x + (b.x - a.x) * f, v = a.y + (b.y - a.y) * f;
+            top.push([f * L, Math.max(0, roofH(u, v) - 0.005)]);
+          }
+          if (Math.max(...top.map((q) => q[1])) < 0.02) continue;
+          const sh = new THREE.Shape();
+          sh.moveTo(0, 0);
+          for (const [x, y] of top) sh.lineTo(x, y);
+          sh.lineTo(L, 0);
+          sh.closePath();
+          const gm = new THREE.Mesh(new THREE.ShapeGeometry(sh), wallMat);
+          const wa = toW(a.x, a.y), wb = toW(b.x, b.y);
+          gm.position.set(wa.x, 0, wa.z);
+          gm.rotation.y = -Math.atan2(wb.z - wa.z, wb.x - wa.x);
+          gm.castShadow = true;
+          gm.receiveShadow = true;
+          g.add(gm);
+        }
       }
       this.world.add(g);
       this.roofs.push(g);
     }
+  }
+
+  // pomak pravokutnog poligona prema van za d (lokalne koordinate)
+  _offsetPoly(pts, d) {
+    let area = 0;
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; area += a.x * b.y - b.x * a.y; }
+    const s = area > 0 ? 1 : -1; // CCW => vanjska normala desno od smjera
+    const n = pts.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+      const e1 = norm2(p1.x - p0.x, p1.y - p0.y), e2 = norm2(p2.x - p1.x, p2.y - p1.y);
+      const n1 = { x: e1.y * s, y: -e1.x * s }, n2 = { x: e2.y * s, y: -e2.x * s };
+      const bx = n1.x + n2.x, by = n1.y + n2.y;
+      const bl = Math.hypot(bx, by) || 1;
+      const cos = (n1.x * bx + n1.y * by) / bl;
+      const k = d / Math.max(0.2, cos);
+      out.push({ x: p1.x + (bx / bl) * k, y: p1.y + (by / bl) * k });
+    }
+    return out;
+  }
+
+  // najveći pravokutnici (koji se smiju preklapati) što zajedno pokrivaju pravokutni poligon
+  _rectCover(lp) {
+    const snap = (v) => Math.round(v * 100) / 100;
+    const xs = [...new Set(lp.map((q) => snap(q.x)))].sort((a, b) => a - b);
+    const ys = [...new Set(lp.map((q) => snap(q.y)))].sort((a, b) => a - b);
+    const nx = xs.length - 1, ny = ys.length - 1;
+    if (nx < 1 || ny < 1 || nx * ny > 900) return [];
+    const cell = [];
+    for (let i = 0; i < nx; i++) {
+      cell.push([]);
+      for (let j = 0; j < ny; j++) cell[i].push(inPolygon((xs[i] + xs[i + 1]) / 2, (ys[j] + ys[j + 1]) / 2, lp));
+    }
+    // svi maksimalni pravokutnici
+    const cand = [];
+    for (let j0 = 0; j0 < ny; j0++) {
+      for (let j1 = j0; j1 < ny; j1++) {
+        let i = 0;
+        while (i < nx) {
+          const ok = (ii) => { for (let j = j0; j <= j1; j++) if (!cell[ii][j]) return false; return true; };
+          if (!ok(i)) { i++; continue; }
+          let k = i;
+          while (k + 1 < nx && ok(k + 1)) k++;
+          cand.push({ i0: i, i1: k, j0, j1 });
+          i = k + 1;
+        }
+      }
+    }
+    const contains = (a, b) => a.i0 <= b.i0 && a.i1 >= b.i1 && a.j0 <= b.j0 && a.j1 >= b.j1;
+    const maximal = cand.filter((c) => !cand.some((d) => d !== c && contains(d, c) && !(contains(c, d))));
+    const area = (c) => (xs[c.i1 + 1] - xs[c.i0]) * (ys[c.j1 + 1] - ys[c.j0]);
+    // pohlepno pokrivanje: najveći doprinos nepokrivenih ćelija
+    const covered = cell.map((col) => col.map(() => false));
+    const out = [];
+    for (let guard = 0; guard < 40; guard++) {
+      let bestC = null, bestGain = 0;
+      for (const c of maximal) {
+        let gain = 0;
+        for (let i = c.i0; i <= c.i1; i++) for (let j = c.j0; j <= c.j1; j++) if (!covered[i][j]) gain += (xs[i + 1] - xs[i]) * (ys[j + 1] - ys[j]);
+        if (gain > bestGain + 1e-9 || (Math.abs(gain - bestGain) < 1e-9 && bestC && area(c) > area(bestC))) { bestGain = gain; bestC = c; }
+      }
+      if (!bestC || bestGain < 1e-6) break;
+      for (let i = bestC.i0; i <= bestC.i1; i++) for (let j = bestC.j0; j <= bestC.j1; j++) covered[i][j] = true;
+      out.push({ x0: xs[bestC.i0], x1: xs[bestC.i1 + 1], y0: ys[bestC.j0], y1: ys[bestC.j1 + 1] });
+    }
+    return out;
   }
 
   _updateSelectionHelper() {

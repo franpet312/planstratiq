@@ -408,6 +408,21 @@ class Plan {
   /// Prikaži krov u 3D-u (na najvišoj etaži).
   bool roof;
 
+  /// Oblik krova: 'gable' dvostrešni, 'hip' četverostrešni, 'shed' jednostrešni, 'flat' ravni.
+  String roofType = 'gable';
+
+  /// Nagib krovnih ploha u stupnjevima.
+  double roofPitch = 30;
+
+  /// Prepust krova preko zida (m).
+  double roofOverhang = 0.5;
+
+  /// Boja pokrova (ARGB).
+  int roofColor = 0xFFA5533A;
+
+  /// Zakreni sljeme za 90° (dvostrešni krov) ili smjer pada (jednostrešni).
+  bool roofTurn = false;
+
   /// Etaža ispod aktivne (za prozirni prikaz na tlocrtu), ako postoji.
   Level? get levelBelow => active > 0 ? levels[active - 1] : null;
 
@@ -475,6 +490,7 @@ class Plan {
         'version': 3,
         'name': name,
         'roof': roof,
+        'roofStyle': {'type': roofType, 'pitch': roofPitch, 'overhang': roofOverhang, 'color': roofColor, 'turn': roofTurn},
         'active': active,
         'levels': [for (final l in levels) l.toJson(includeImage: includeImage)],
       };
@@ -487,12 +503,22 @@ class Plan {
               if (raw[i] is Map) Level.fromJson(Map<String, dynamic>.from(raw[i] as Map), fallbackId: 'L$i')
           ]
         : [Level.fromJson(j, fallbackId: 'L0')..name = 'Prizemlje']; // stari format (jedna etaža)
-    return Plan(
+    final plan = Plan(
       name: (j['name'] as String?) ?? 'Projekt',
       roof: _b(j['roof']),
       levels: levels.isEmpty ? null : levels,
       active: j['active'] is int ? j['active'] as int : 0,
     );
+    final rs = j['roofStyle'];
+    if (rs is Map) {
+      const types = {'gable', 'hip', 'shed', 'flat'};
+      if (types.contains(rs['type'])) plan.roofType = rs['type'] as String;
+      if (rs['pitch'] is num) plan.roofPitch = (rs['pitch'] as num).toDouble().clamp(5, 60);
+      if (rs['overhang'] is num) plan.roofOverhang = (rs['overhang'] as num).toDouble().clamp(0, 1.5);
+      if (rs['color'] is int) plan.roofColor = rs['color'] as int;
+      plan.roofTurn = _b(rs['turn']);
+    }
+    return plan;
   }
 
   Plan clone() => Plan.fromJson(toJson());

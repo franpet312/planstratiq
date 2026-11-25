@@ -5,6 +5,7 @@ import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../state/plan_controller.dart';
 import 'common.dart';
+import 'pdf_dialog.dart';
 
 /// Pregled projekta: površine po prostorijama i okvirni troškovnik.
 class SummaryPanel extends StatelessWidget {
@@ -86,7 +87,12 @@ class SummaryPanel extends StatelessWidget {
       StatRow('Vrata (uklj. balkonska)', '${st.doors}'),
       StatRow('Prozori', '${st.windows}'),
       const SizedBox(height: 18),
-      FilledButton.icon(onPressed: onExportPlan, icon: const Icon(Icons.image_outlined, size: 18), label: const Text('Spremi tlocrt kao sliku')),
+      FilledButton.icon(
+          onPressed: () => showPdfDialog(context, c),
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+          label: const Text('Izvoz u PDF (tlocrti, površine, troškovnik)')),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(onPressed: onExportPlan, icon: const Icon(Icons.image_outlined, size: 18), label: const Text('Spremi tlocrt kao sliku')),
       const SizedBox(height: 8),
       OutlinedButton.icon(onPressed: onExportCsv, icon: const Icon(Icons.table_view_outlined, size: 18), label: const Text('Izvezi troškovnik (CSV)')),
     ]);

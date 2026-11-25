@@ -51,6 +51,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 **Pregled i cijene**
 - Neto površina (po licima zidova) i bruto tlocrtna površina, popis prostorija.
 - Okvirni troškovnik: podovi po materijalu, bojanje zidova (m² i litre), namještaj.
+- **Izvoz u PDF za ispis** (A4/A3): naslovnica s 3D prikazom i ključnim površinama, tlocrt svake etaže u mjerilu (automatski ili 1:50/1:100/1:200) s kotama, grafičkim mjerilom i natpisnim poljem, popis prostorija i okvirni troškovnik. Prečac Ctrl+P.
 - Izvoz: tlocrt kao PNG s natpisnim poljem, troškovnik kao CSV (Excel), projekt kao datoteka.
 
 ## Prečaci
@@ -61,6 +62,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 | D / P / M | Vrata / prozor / mjerenje |
 | brojke + Enter | Točna duljina zida dok crtaš |
 | Ctrl+Z / Ctrl+Y | Poništi / ponovi |
+| Ctrl+P | Izvoz u PDF |
 | Delete | Obriši odabrano |
 | R / Shift+R | Okreni namještaj ±90° |
 | Ctrl+D | Dupliciraj namještaj |

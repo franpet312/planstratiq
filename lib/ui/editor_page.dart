@@ -14,6 +14,7 @@ import '../viewer/viewer_3d.dart';
 import 'catalog_panel.dart';
 import 'common.dart';
 import 'detect_flow.dart';
+import 'pdf_dialog.dart';
 import 'home_page.dart' show LogoMark;
 import 'plan_preview.dart';
 import 'properties_panel.dart';
@@ -269,6 +270,7 @@ class _EditorPageState extends State<EditorPage> {
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): c.redo,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): c.redo,
         const SingleActivator(LogicalKeyboardKey.keyS, control: true): _exportJson,
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true): () => showPdfDialog(context, c),
       },
       child: Focus(
         autofocus: true,
@@ -348,6 +350,8 @@ class _EditorPageState extends State<EditorPage> {
             switch (v) {
               case 'share':
                 _share();
+              case 'pdf':
+                showPdfDialog(context, c);
               case 'png':
                 _exportPlanPng();
               case 'csv':
@@ -363,6 +367,7 @@ class _EditorPageState extends State<EditorPage> {
           itemBuilder: (_) => const [
             PopupMenuItem(value: 'share', child: ListTile(dense: true, leading: Icon(Icons.link), title: Text('Podijeli poveznicom'))),
             PopupMenuDivider(),
+            PopupMenuItem(value: 'pdf', child: ListTile(dense: true, leading: Icon(Icons.picture_as_pdf_outlined), title: Text('Izvoz u PDF (za ispis)'))),
             PopupMenuItem(value: 'png', child: ListTile(dense: true, leading: Icon(Icons.image_outlined), title: Text('Tlocrt kao slika (PNG)'))),
             PopupMenuItem(value: 'csv', child: ListTile(dense: true, leading: Icon(Icons.table_view_outlined), title: Text('Troškovnik (CSV)'))),
             PopupMenuItem(value: 'json', child: ListTile(dense: true, leading: Icon(Icons.save_alt), title: Text('Projekt kao datoteka'))),

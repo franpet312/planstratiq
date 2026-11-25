@@ -667,6 +667,16 @@ class PlanEditorState extends State<PlanEditor> {
       c.deleteSelection();
       return KeyEventResult.handled;
     }
+    if (ctrl && (k == LogicalKeyboardKey.keyC || k == LogicalKeyboardKey.keyX)) {
+      final what = k == LogicalKeyboardKey.keyC ? c.copySelection() : c.cutSelection();
+      if (what != null) _toast(k == LogicalKeyboardKey.keyC ? 'Kopirano: $what. Ctrl+V zalijepi (i na drugoj etaži).' : 'Izrezano: $what.');
+      return KeyEventResult.handled;
+    }
+    if (ctrl && k == LogicalKeyboardKey.keyV) {
+      final what = c.paste();
+      if (what != null) _toast('Zalijepljeno: $what.');
+      return KeyEventResult.handled;
+    }
     if (c.selection.kind == SelKind.item) {
       final id = c.selection.id;
       if (k == LogicalKeyboardKey.keyR && !ctrl) {

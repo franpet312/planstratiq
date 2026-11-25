@@ -841,6 +841,144 @@ class PlanController extends ChangeNotifier {
     });
   }
 
+  // --------------------------------------------------------- međuspremnik (Ctrl+C / Ctrl+V)
+
+  /// Kopirano: namještaj ili cijela prostorija (zidovi, otvori, namještaj). Dijeli se među projektima.
+  static Map<String, dynamic>? clipboard;
+
+  String? get clipboardLabel => switch (clipboard?['kind']) {
+        'item' => (clipboard!['items'] as List).length == 1 ? 'objekt' : 'objekte',
+        'room' => 'prostoriju „${clipboard!['name']}”',
+        _ => null,
+      };
+
+  /// Kopiraj odabrano. Vraća opis kopiranog ili null.
+  String? copySelection() {
+    final s = selection;
+    if (s.kind == SelKind.item) {
+      final it = plan.itemById(s.id);
+      if (it == null) return null;
+      clipboard = {'kind': 'item', 'level': plan.level.id, 'project': projectId, 'items': [it.toJson()]};
+      return it.name;
+    }
+    if (s.kind == SelKind.room) {
+      final r = plan.roomById(s.id);
+      if (r == null) return null;
+      final poly = plan.roomPolygon(r);
+      final edges = <Map<String, dynamic>>[];
+      for (var i = 0; i < r.nodeIds.length; i++) {
+        final a = r.nodeIds[i], b = r.nodeIds[(i + 1) % r.nodeIds.length];
+        final w = wallBetween(a, b);
+        if (w == null) continue;
+        final pa = plan.nodePos(w.a), pb = plan.nodePos(w.b);
+        edges.add({
+          'ax': pa.dx, 'ay': pa.dy, 'bx': pb.dx, 'by': pb.dy, 't': w.thickness, 'h': w.height, 'color': w.color,
+          'openings': [
+            for (final o in plan.openings.where((o) => o.wallId == w.id))
+              {...o.toJson(), 'cx': pa.dx + (pb.dx - pa.dx) * o.t, 'cy': pa.dy + (pb.dy - pa.dy) * o.t}
+          ],
+        });
+      }
+      final items = [
+        for (final it in plan.items)
+          if (pointInPolygon(it.pos, poly)) it.toJson()
+      ];
+      var minX = double.infinity, maxX = -double.infinity;
+      for (final p in poly) {
+        minX = math.min(minX, p.dx);
+        maxX = math.max(maxX, p.dx);
+      }
+      final lp = labelPoint(poly);
+      clipboard = {
+        'kind': 'room', 'level': plan.level.id, 'project': projectId, 'name': r.name, 'floor': r.floor,
+        'cx': lp.dx, 'cy': lp.dy, 'width': maxX - minX, 'edges': edges, 'items': items,
+      };
+      return r.name;
+    }
+    return null;
+  }
+
+  /// Izreži odabrano (kopiraj pa obriši).
+  String? cutSelection() {
+    final what = copySelection();
+    if (what != null) deleteSelection();
+    return what;
+  }
+
+  /// Zalijepi na aktivnu etažu. Na istoj etaži istog projekta pomakne kopiju u stranu,
+  /// na drugoj etaži zalijepi na isto mjesto (npr. kupaonica iznad kupaonice).
+  String? paste() {
+    final cb = clipboard;
+    if (cb == null) return null;
+    final sameSpot = cb['level'] == plan.level.id && cb['project'] == projectId;
+    String? result;
+    mutate(() {
+      if (cb['kind'] == 'item') {
+        for (final j in (cb['items'] as List).cast<Map<String, dynamic>>()) {
+          final it = PlacedItem.fromJson({...j, 'id': newId('i')});
+          plan.items.add(it);
+          if (sameSpot) {
+            final q = it.pos + Offset(it.w * 0.5 + 0.3, it.d * 0.5 + 0.3);
+            it.pos = collisions ? (resolveItemPos(plan, it, q) ?? q) : q;
+          } else if (collisions) {
+            it.pos = resolveItemPos(plan, it, it.pos) ?? it.pos;
+          }
+          selection = Selection(SelKind.item, it.id);
+          result = it.name;
+        }
+        return;
+      }
+      // prostorija
+      final d = sameSpot ? Offset((cb['width'] as num).toDouble() + 1.0, 0) : Offset.zero;
+      Offset pt(num x, num y) => Offset(x.toDouble(), y.toDouble()) + d;
+      final edges = (cb['edges'] as List).cast<Map<String, dynamic>>();
+      for (final e in edges) {
+        addWall(pt(e['ax'] as num, e['ay'] as num), pt(e['bx'] as num, e['by'] as num), thickness: (e['t'] as num).toDouble());
+      }
+      // svojstva zidova i otvori
+      for (final e in edges) {
+        final a = pt(e['ax'] as num, e['ay'] as num), b = pt(e['bx'] as num, e['by'] as num);
+        for (final w in plan.walls) {
+          final wa = plan.nodePos(w.a), wb = plan.nodePos(w.b);
+          if (distToSegment(wa, a, b) < 0.02 && distToSegment(wb, a, b) < 0.02) {
+            w.height = (e['h'] as num).toDouble();
+            if (e['color'] is int) w.color = e['color'] as int;
+          }
+        }
+        for (final oj in (e['openings'] as List).cast<Map<String, dynamic>>()) {
+          final c = pt(oj['cx'] as num, oj['cy'] as num);
+          final w = wallNear(c, tol: 0.05);
+          if (w == null) continue;
+          final wa = plan.nodePos(w.a), wb = plan.nodePos(w.b);
+          final len = (wb - wa).distance;
+          final t = projectT(c, wa, wb);
+          final exists = plan.openings.any((o) => o.wallId == w.id && (o.t - t).abs() * len < 0.3);
+          if (exists) continue;
+          final o = Opening.fromJson({...oj, 'id': newId('o'), 'wallId': w.id, 't': t});
+          o.t = clampOpeningT(len, o.width, t);
+          plan.openings.add(o);
+        }
+      }
+      for (final j in (cb['items'] as List).cast<Map<String, dynamic>>()) {
+        final it = PlacedItem.fromJson({...j, 'id': newId('i')});
+        it.pos += d;
+        plan.items.add(it);
+      }
+      _syncRooms();
+      final c = pt(cb['cx'] as num, cb['cy'] as num);
+      for (final r in plan.rooms) {
+        if (pointInPolygon(c, plan.roomPolygon(r))) {
+          r.name = cb['name'] as String;
+          if (cb['floor'] is String) r.floor = cb['floor'] as String;
+          selection = Selection(SelKind.room, r.id);
+          break;
+        }
+      }
+      result = cb['name'] as String;
+    });
+    return result;
+  }
+
   /// Brisanje prostorije uklanja njezine zidove koje ne dijeli s drugima.
   void _deleteRoomWalls(String roomId) {
     final r = plan.roomById(roomId);

@@ -33,7 +33,7 @@ class PropertiesPanel extends StatelessWidget {
       SelKind.node => _node(c.plan.nodes[s.id]),
       SelKind.opening => _opening(c.plan.openingById(s.id)),
       SelKind.item => _item(c.plan.itemById(s.id)),
-      SelKind.room => _room(c.plan.roomById(s.id)),
+      SelKind.room => _room(context, c.plan.roomById(s.id)),
       SelKind.none => _none(context),
     };
     return ListView(padding: const EdgeInsets.fromLTRB(16, 6, 16, 20), children: children);
@@ -284,7 +284,7 @@ class PropertiesPanel extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- prostorija
-  List<Widget> _room(Room? r) {
+  List<Widget> _room(BuildContext context, Room? r) {
     if (r == null) return [];
     final poly = c.plan.roomPolygon(r);
     final area = roomNetArea(c.plan, r);
@@ -314,6 +314,20 @@ class PropertiesPanel extends StatelessWidget {
         _MaterialTile(material: m, selected: m.id == r.floor, area: area, onTap: () => c.updateRoom(r.id, floor: m.id)),
       const SizedBox(height: 8),
       OutlinedButton(onPressed: () => c.setAllFloors(mat.id), child: Text('${mat.name} u svim prostorijama')),
+      const SectionTitle('Kopiranje'),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton.icon(
+          onPressed: () {
+            c.select(Selection(SelKind.room, r.id));
+            c.copySelection();
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(const SnackBar(content: Text('Prostorija je kopirana sa zidovima, vratima, prozorima i namještajem. Prebaci se na drugu etažu (ili ostani) i klikni Zalijepi ili Ctrl+V.')));
+          },
+          icon: const Icon(Icons.copy_outlined, size: 18),
+          label: const Text('Kopiraj prostoriju'),
+        ),
+      ]),
       const SizedBox(height: 10),
       Text('Prostorije se prepoznaju same iz zatvorenih zidova. Brisanjem prostorije brišu se njeni zidovi koje ne dijeli s drugima.',
           style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
@@ -397,6 +411,14 @@ class PropertiesPanel extends StatelessWidget {
       const SizedBox(height: 4),
       Text('Klikni zid, prostoriju, vrata ili komad namještaja da vidiš i promijeniš njegove mjere.',
           style: AppText.ui(size: 12.5, color: Pal.muted, height: 1.4)),
+      if (c.clipboardLabel != null) ...[
+        const SizedBox(height: 12),
+        FilledButton.tonalIcon(
+          onPressed: c.paste,
+          icon: const Icon(Icons.content_paste, size: 18),
+          label: Text('Zalijepi ${c.clipboardLabel}'),
+        ),
+      ],
       const SectionTitle('Projekt'),
       StatRow('Neto površina', fmtM2(st.netArea), strong: true),
       StatRow('Tlocrtna (bruto) površina', fmtM2(st.footprint)),

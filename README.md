@@ -9,7 +9,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 ## Što sve radi
 
 **Projekti**
-- Početni ekran s projektima (spremaju se automatski u preglednik), predlošcima kuće i stana i praznim papirom.
+- Početni ekran s projektima (spremaju se automatski u preglednik; slike nacrta u IndexedDB, pa se ne gube ni kod velikih skenova), predlošcima kuće i stana i praznim papirom.
 - Kopiranje, preimenovanje, brisanje, spremanje projekta kao datoteke i otvaranje na drugom računalu.
 
 **Tlocrt (2D)**
@@ -42,7 +42,8 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 
 **3D**
 - Zidovi s otvorima, fasada, podovi s teksturama (parket, laminat, pločice, kamen, beton, tepison), nebo, sjene.
-- Doba dana (položaj sunca), krov, snimka prikaza kao slika.
+- Doba dana (položaj sunca), snimka prikaza kao slika.
+- **Krov koji prati obris kuće** (i L, T, U tlocrte): dvostrešni, četverostrešni, jednostrešni ili ravni s atikom; nagib, prepust, boja pokrova i smjer sljemena. Zabati se sami zatvaraju zidom.
 - Odabir i povlačenje namještaja izravno u 3D-u.
 - **Otvaranje i paljenje**: vrata, prozori i balkonska vrata, ormari, ladice, hladnjak, perilice i pećnica otvaraju se, a lampe, TV i kamin pale. U šetnji tipka E ili klik (na mobitelu dodir), izvana dvoklik. Zatvorena vrata ne propuštaju, a u šetnji se ne prolazi ni kroz namještaj ni kroz ogradu balkona.
 - Tri načina pogleda: **izvana** (orbit), **treće lice** (animirani lik hoda kućom, kamera ga prati i ne prolazi kroz zidove; povlačenje mišem okreće kameru, kotačić mijenja udaljenost) i **prvo lice**.
@@ -63,6 +64,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 | brojke + Enter | Točna duljina zida dok crtaš |
 | Ctrl+Z / Ctrl+Y | Poništi / ponovi |
 | Ctrl+P | Izvoz u PDF |
+| Ctrl+C / Ctrl+X / Ctrl+V | Kopiraj / izreži / zalijepi namještaj ili cijelu prostoriju (i na drugu etažu) |
 | Delete | Obriši odabrano |
 | R / Shift+R | Okreni namještaj ±90° |
 | Ctrl+D | Dupliciraj namještaj |

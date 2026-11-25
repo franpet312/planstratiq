@@ -340,13 +340,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             case 'rename':
               _rename(m);
             case 'dup':
-              setState(() {
-                store.duplicate(m.id);
-                _reload();
+              store.duplicate(m.id).then((_) {
+                if (mounted) setState(_reload);
               });
             case 'export':
               final p = store.load(m.id);
-              if (p != null) downloadText(const JsonEncoder.withIndent('  ').convert(p.toJson()), '${m.name}.planstratiq.json');
+              if (p != null) {
+                store.attachImages(m.id, p).then((_) =>
+                    downloadText(const JsonEncoder.withIndent('  ').convert(p.toJson()), '${m.name}.planstratiq.json'));
+              }
             case 'delete':
               _delete(m);
           }

@@ -50,14 +50,29 @@ class _EditorPageState extends State<EditorPage> {
       onSave: (p) => store.save(widget.projectId, p),
     );
     c.addListener(_onChange);
+    // slike nacrta čuvaju se odvojeno (IndexedDB) i učitavaju naknadno
+    store.attachImages(widget.projectId, c.plan).then((any) {
+      if (any && mounted) c.imagesAttached();
+    });
+    store.error.addListener(_onStoreError);
     final img = widget.initialImage;
     if (img != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _applyImage(img));
     }
   }
 
+  void _onStoreError() {
+    final e = ProjectStore.instance.error.value;
+    if (e != null && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e), duration: const Duration(seconds: 8)));
+    }
+  }
+
   @override
   void dispose() {
+    ProjectStore.instance.error.removeListener(_onStoreError);
     c.removeListener(_onChange);
     c.dispose();
     zoom.dispose();

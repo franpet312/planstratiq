@@ -960,6 +960,15 @@ class PlanController extends ChangeNotifier {
     _changed();
   }
 
+  /// Slike nacrta stigle su naknadno (iz IndexedDB-a) – dekodiraj i osvježi prikaz.
+  void imagesAttached() {
+    _decodePlanImage().then((_) {
+      if (_disposed) return;
+      revision++;
+      notifyListeners();
+    });
+  }
+
   Future<void> _decodePlanImage() async {
     final im = plan.image;
     if (im == null) {

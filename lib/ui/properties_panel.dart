@@ -198,7 +198,14 @@ class PropertiesPanel extends StatelessWidget {
             ),
         ]),
       ],
-      if (o.type == OpeningType.door) ...[
+      if (openingStyles(o.type).isNotEmpty) ...[
+        const SectionTitle('Izvedba'),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final (id, label) in openingStyles(o.type))
+            ChoiceChip(label: Text(label), selected: o.style == id, onSelected: (_) => c.updateOpening(o.id, style: id)),
+        ]),
+      ],
+      if (o.type == OpeningType.door && (o.style == '' || o.style == 'double' || o.style == 'folding')) ...[
         const SectionTitle('Otvaranje'),
         Wrap(spacing: 8, runSpacing: 8, children: [
           OutlinedButton.icon(

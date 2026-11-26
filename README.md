@@ -19,6 +19,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Prostorije se **prepoznaju same** iz zatvorenih zidova (i nepravilnih oblika); zidovi se dijele na T-spojevima i križanjima.
 - Pomicanje zida povlačenjem (spojeni zidovi prate), pomicanje kuta, pomicanje cijele prostorije.
 - Vrata, prozori, balkonska vrata i prolazi; šarke i smjer otvaranja vrata.
+- **Izvedbe otvora**: vrata krilna, dvokrilna, klizna (po zidu, s vodilicom), klizna u zid i harmonika; prozori krilni, klizni i fiksni; balkonska vrata krilna ili klizna stijena – s pravim simbolima na tlocrtu i otvaranjem u 3D-u.
 - Alat za mjerenje, mjerilo, zoom, pinch-zoom na dodir.
 - Učitavanje slike nacrta kao podloge i kalibracija mjerila (dvije točke + stvarna udaljenost).
 - **Automatsko prepoznavanje nacrta**: iz slike se prepoznaju zidovi (s debljinom), vrata i prozori i ucrtaju u tlocrt; mjerilo se procijeni iz širine vrata ili upiše ukupna širina zgrade s kote. Radi u pregledniku (`web/psqdetect.js`), najbolje za nacrte s vodoravnim i okomitim, ispunjenim ili šrafiranim zidovima.

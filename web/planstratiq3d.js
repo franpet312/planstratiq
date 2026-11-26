@@ -2051,27 +2051,51 @@ class Engine {
         const y0 = o.sill + (o.sill > 0 ? 0 : 0.03), y1 = topY - 0.05;
         if (o.sill <= 0) box(s + 0.05, e - 0.05, 0, 0.03, frameMat, fd); // prag
         const x0 = s + 0.05, x1 = e - 0.05;
-        const n = o.type === 'balcony' ? 2 : Math.max(1, Math.round(W / 0.9));
-        const pw = (x1 - x0) / n;
-        const sashes = [], partsW = [];
-        for (let i = 0; i < n; i++) {
-          const hingeRight = n > 1 && i >= n / 2;
-          const dir = hingeRight ? -1 : 1;
-          const pv = new THREE.Group();
-          pv.position.set(hingeRight ? x0 + (i + 1) * pw : x0 + i * pw, 0, 0);
-          g.add(pv);
-          const lx0 = Math.min(0, dir * pw), lx1 = Math.max(0, dir * pw), sf = 0.055;
+        const style = o.style || '';
+        const sf = 0.055;
+        const sash = (pv, lx0, lx1, hx) => {
           box(lx0, lx0 + sf, y0, y1, frameMat, 0.06, 0, pv);
           box(lx1 - sf, lx1, y0, y1, frameMat, 0.06, 0, pv);
           box(lx0 + sf, lx1 - sf, y0, y0 + sf, frameMat, 0.06, 0, pv);
           box(lx0 + sf, lx1 - sf, y1 - sf, y1, frameMat, 0.06, 0, pv);
           box(lx0 + sf, lx1 - sf, y0 + sf, y1 - sf, glassMat, 0.012, 0, pv);
-          const hy = o.type === 'balcony' ? 1.05 : (y0 + y1) / 2;
-          box(dir > 0 ? lx1 - 0.045 : lx0 + 0.025, dir > 0 ? lx1 - 0.025 : lx0 + 0.045, hy - 0.08, hy + 0.04, mat(0xd9d9d9, { metalness: 0.6, roughness: 0.3 }), 0.02, sideN0 * 0.045, pv);
-          sashes.push(pv);
-          partsW.push({ o: pv, prop: 'ry', delta: -dir * sideN0 * 1.25 });
+          if (hx !== null) {
+            const hy = o.type === 'balcony' ? 1.05 : (y0 + y1) / 2;
+            box(hx - 0.01, hx + 0.01, hy - 0.08, hy + 0.04, mat(0xd9d9d9, { metalness: 0.6, roughness: 0.3 }), 0.02, sideN0 * 0.045, pv);
+          }
+        };
+        const noun = o.type === 'balcony' ? 'balkonska vrata' : 'prozor';
+        if (style === 'fixed') {
+          const pv = new THREE.Group();
+          g.add(pv);
+          sash(pv, x0, x1, null);
+        } else if (style === 'sliding') {
+          // dva krila u dvije ravnine; jedno klizi preko drugoga
+          const half = (x1 - x0) / 2;
+          const a = new THREE.Group(), b2 = new THREE.Group();
+          a.position.set(x0, 0, -0.03);
+          b2.position.set(x0 + half - 0.03, 0, 0.03);
+          g.add(a, b2);
+          sash(a, 0, half + 0.03, half - 0.02);
+          sash(b2, 0, half + 0.03, 0.04);
+          I = this._register(o.id, [a, b2], { noun, def: 0 }, [{ o: b2, prop: 'px', delta: -(half - 0.08) }]);
+        } else {
+          const n = o.type === 'balcony' ? 2 : Math.max(1, Math.round(W / 0.9));
+          const pw = (x1 - x0) / n;
+          const sashes = [], partsW = [];
+          for (let i = 0; i < n; i++) {
+            const hingeRight = n > 1 && i >= n / 2;
+            const dir = hingeRight ? -1 : 1;
+            const pv = new THREE.Group();
+            pv.position.set(hingeRight ? x0 + (i + 1) * pw : x0 + i * pw, 0, 0);
+            g.add(pv);
+            const lx0 = Math.min(0, dir * pw), lx1 = Math.max(0, dir * pw);
+            sash(pv, lx0, lx1, dir > 0 ? lx1 - 0.035 : lx0 + 0.035);
+            sashes.push(pv);
+            partsW.push({ o: pv, prop: 'ry', delta: -dir * sideN0 * 1.25 });
+          }
+          I = this._register(o.id, sashes, { noun, def: 0 }, partsW);
         }
-        I = this._register(o.id, sashes, { noun: o.type === 'balcony' ? 'balkonska vrata' : 'prozor', def: 0 }, partsW);
       } else {
         box(s, s + 0.04, 0, topY, frameMat, T + 0.02);
         box(e - 0.04, e, 0, topY, frameMat, T + 0.02);
@@ -2080,22 +2104,76 @@ class Engine {
         if (o.type === 'door') {
           let sideN = sideN0;
           if (o.swingOut) sideN = -sideN;
-          const hingeAtE = !!o.flip;
-          const pivot = new THREE.Group();
-          const leafW = Math.max(0.2, W - 0.09);
-          pivot.position.set(hingeAtE ? e - 0.045 : s + 0.045, 0, sideN * (T / 2 - 0.03));
-          const leaf = new THREE.Mesh(new THREE.BoxGeometry(leafW, topY - 0.05, 0.04), mat(0xece6dc, { roughness: 0.55 }));
-          leaf.position.set(hingeAtE ? -leafW / 2 : leafW / 2, (topY - 0.05) / 2, sideN * 0.02);
-          leaf.castShadow = true;
-          pivot.add(leaf);
+          const style = o.style || '';
+          const leafMat = mat(0xece6dc, { roughness: 0.55 });
           const hm = mat(0x8a8a8a, { metalness: 0.7, roughness: 0.3 });
-          for (const sz of [-1, 1]) {
-            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.02), hm);
-            handle.position.set(hingeAtE ? -leafW + 0.08 : leafW - 0.08, 1.02, sideN * 0.02 + sz * 0.045);
-            pivot.add(handle);
+          const LH = topY - 0.05;
+          // krilo širine lw u grupi pv; ide od x=0 u smjeru dir; kvaka blizu slobodnog ruba
+          const leaf = (pv, lw, dir, z = sideN * 0.02, handle = true) => {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(lw, LH, 0.04), leafMat);
+            m.position.set((dir * lw) / 2, LH / 2, z);
+            m.castShadow = true;
+            pv.add(m);
+            if (handle) {
+              for (const sz of [-1, 1]) {
+                const h = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.02), hm);
+                h.position.set(dir * (lw - 0.08), 1.02, z + sz * 0.045);
+                pv.add(h);
+              }
+            }
+          };
+          const W2 = Math.max(0.2, W - 0.09);
+          if (style === 'double') {
+            const a = new THREE.Group(), b2 = new THREE.Group();
+            a.position.set(s + 0.045, 0, sideN * (T / 2 - 0.03));
+            b2.position.set(e - 0.045, 0, sideN * (T / 2 - 0.03));
+            leaf(a, W2 / 2 - 0.003, 1);
+            leaf(b2, W2 / 2 - 0.003, -1);
+            g.add(a, b2);
+            I = this._register(o.id, [a, b2], { noun: 'vrata', def: 1 }, [
+              { o: a, prop: 'ry', delta: -sideN * 1.4 },
+              { o: b2, prop: 'ry', delta: sideN * 1.4 },
+            ]);
+          } else if (style === 'sliding' || style === 'pocket') {
+            // klizna: po licu zida (s vodilicom) ili u zid
+            const toE = !!o.flip;
+            const pv = new THREE.Group();
+            const z = style === 'sliding' ? sideN * (T / 2 + 0.035) : 0;
+            const lw = style === 'sliding' ? W + 0.06 : W2;
+            pv.position.set(toE ? e + (style === 'sliding' ? 0.03 : -0.045) : s - (style === 'sliding' ? 0.03 : -0.045), 0, z);
+            leaf(pv, lw, toE ? -1 : 1, 0);
+            g.add(pv);
+            if (style === 'sliding') {
+              const rail = new THREE.Mesh(new THREE.BoxGeometry(2 * W + 0.1, 0.05, 0.05), hm);
+              const rx = toE ? e - W + 0.03 : s + W - 0.03;
+              rail.position.set(rx, LH + 0.03, sideN * (T / 2 + 0.035));
+              g.add(rail);
+            }
+            I = this._register(o.id, [pv], { noun: 'vrata', def: 1 }, [{ o: pv, prop: 'px', delta: (toE ? 1 : -1) * (lw - (style === 'sliding' ? 0.1 : 0.05)) }]);
+          } else if (style === 'folding') {
+            const hingeAtE = !!o.flip;
+            const dir = hingeAtE ? -1 : 1;
+            const a = new THREE.Group();
+            a.position.set(hingeAtE ? e - 0.045 : s + 0.045, 0, sideN * (T / 2 - 0.03));
+            leaf(a, W2 / 2, dir, sideN * 0.02, false);
+            const b2 = new THREE.Group();
+            b2.position.set((dir * W2) / 2, 0, 0);
+            leaf(b2, W2 / 2, dir, sideN * 0.02);
+            a.add(b2);
+            g.add(a);
+            const d1 = -dir * sideN * 1.35;
+            I = this._register(o.id, [a, b2], { noun: 'vrata', def: 1 }, [
+              { o: a, prop: 'ry', delta: d1 },
+              { o: b2, prop: 'ry', delta: -2 * d1 },
+            ]);
+          } else {
+            const hingeAtE = !!o.flip;
+            const pivot = new THREE.Group();
+            pivot.position.set(hingeAtE ? e - 0.045 : s + 0.045, 0, sideN * (T / 2 - 0.03));
+            leaf(pivot, W2, hingeAtE ? -1 : 1);
+            g.add(pivot);
+            I = this._register(o.id, [pivot], { noun: 'vrata', def: 1 }, [{ o: pivot, prop: 'ry', delta: hingeAtE ? sideN * 1.4 : -sideN * 1.4 }]);
           }
-          g.add(pivot);
-          I = this._register(o.id, [pivot], { noun: 'vrata', def: 1 }, [{ o: pivot, prop: 'ry', delta: hingeAtE ? sideN * 1.4 : -sideN * 1.4 }]);
         }
       }
       if (I) {

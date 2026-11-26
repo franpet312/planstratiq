@@ -426,42 +426,105 @@ class PlanPainter extends CustomPainter {
       canvas.drawLine(s(p1 + n * ht), s(p1 - n * ht), line);
       switch (o.type) {
         case OpeningType.door:
-          final hinge = o.flip ? p1 : p0;
-          final other = o.flip ? p0 : p1;
-          final h0 = hinge + n * ht;
-          canvas.drawLine(s(h0), s(h0 + n * o.width),
-              Paint()
-                ..color = col
-                ..strokeWidth = sel ? 2.4 : 1.8);
-          final a0 = math.atan2(n.dy, n.dx);
-          final d2 = other - hinge;
-          var sweep = math.atan2(d2.dy, d2.dx) - a0;
-          while (sweep > math.pi) {
-            sweep -= 2 * math.pi;
+          final leaf = Paint()
+            ..color = col
+            ..strokeWidth = sel ? 2.4 : 1.8;
+          final arcP = Paint()
+            ..color = col.withAlpha(150)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.8;
+          void swing(Offset hinge, Offset other, double r) {
+            final h0 = hinge + n * ht;
+            canvas.drawLine(s(h0), s(h0 + n * r), leaf);
+            final a0 = math.atan2(n.dy, n.dx);
+            final d2 = other - hinge;
+            var sweep = math.atan2(d2.dy, d2.dx) - a0;
+            while (sweep > math.pi) {
+              sweep -= 2 * math.pi;
+            }
+            while (sweep < -math.pi) {
+              sweep += 2 * math.pi;
+            }
+            canvas.drawArc(Rect.fromCircle(center: s(h0), radius: r * scale), a0, sweep, false, arcP);
           }
-          while (sweep < -math.pi) {
-            sweep += 2 * math.pi;
+
+          switch (o.style) {
+            case 'double':
+              swing(p0, center, hw);
+              swing(p1, center, hw);
+            case 'sliding':
+              // krilo klizi po licu zida
+              final off = n * (ht + 0.03);
+              final from = o.flip ? p1 : p0, to = o.flip ? p0 : p1;
+              final shift = (to - from) / (to - from).distance * -o.width * 0.9;
+              canvas.drawLine(s(from + off), s(to + off), leaf);
+              canvas.drawLine(s(from + off + shift * 0.2), s(from + off + shift * 0.9), arcP);
+              final tip = from + off + shift * 0.9, dd = shift / shift.distance;
+              canvas.drawLine(s(tip), s(tip - dd * 0.12 + n * 0.06), arcP);
+              canvas.drawLine(s(tip), s(tip - dd * 0.12 - n * 0.06), arcP);
+            case 'pocket':
+              // krilo ulazi u zid
+              final from = o.flip ? p1 : p0, to = o.flip ? p0 : p1;
+              final dd = (from - to) / (from - to).distance;
+              canvas.drawLine(s(from), s(to), leaf);
+              _dashed(canvas, s(from), s(from + dd * o.width * 0.95), arcP);
+            case 'folding':
+              final hinge = o.flip ? p1 : p0;
+              final along = (center - hinge) / (center - hinge).distance;
+              final k = o.width / 4;
+              var q = hinge + n * ht;
+              for (var i = 0; i < 4; i++) {
+                final nq = q + along * k + n * (i.isEven ? k * 0.8 : -k * 0.8);
+                canvas.drawLine(s(q), s(nq), leaf);
+                q = nq;
+              }
+            default:
+              swing(o.flip ? p1 : p0, o.flip ? p0 : p1, o.width);
           }
-          canvas.drawArc(Rect.fromCircle(center: s(h0), radius: o.width * scale), a0, sweep, false,
-              Paint()
-                ..color = col.withAlpha(150)
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = 0.8);
         case OpeningType.window:
           final g = Paint()
             ..color = col
             ..strokeWidth = 0.9;
           canvas.drawLine(s(p0 + n * ht), s(p1 + n * ht), g);
           canvas.drawLine(s(p0 - n * ht), s(p1 - n * ht), g);
-          canvas.drawLine(s(p0), s(p1), Paint()
-            ..color = col
-            ..strokeWidth = 1.4);
+          if (o.style == 'sliding') {
+            canvas.drawLine(s(p0 + n * (ht * 0.3)), s(center + dir * 0.05 + n * (ht * 0.3)), g..strokeWidth = 1.3);
+            canvas.drawLine(s(center - dir * 0.05 - n * (ht * 0.3)), s(p1 - n * (ht * 0.3)), g);
+          } else {
+            canvas.drawLine(s(p0), s(p1), Paint()
+              ..color = col
+              ..strokeWidth = o.style == 'fixed' ? 2.2 : 1.4);
+          }
         case OpeningType.balcony:
-          final g = Paint()
-            ..color = col
-            ..strokeWidth = 1.2;
-          canvas.drawLine(s(p0 + n * (ht * 0.35)), s(center + dir * 0.05 + n * (ht * 0.35)), g);
-          canvas.drawLine(s(center - dir * 0.05 - n * (ht * 0.35)), s(p1 - n * (ht * 0.35)), g);
+          if (o.style == 'sliding') {
+            final g = Paint()
+              ..color = col
+              ..strokeWidth = 1.2;
+            canvas.drawLine(s(p0 + n * (ht * 0.35)), s(center + dir * 0.05 + n * (ht * 0.35)), g);
+            canvas.drawLine(s(center - dir * 0.05 - n * (ht * 0.35)), s(p1 - n * (ht * 0.35)), g);
+          } else {
+            // dva krila koja se otvaraju prema unutra
+            final arcP = Paint()
+              ..color = col.withAlpha(150)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 0.8;
+            for (final (h, other) in [(p0, center), (p1, center)]) {
+              final h0 = h + n * ht;
+              canvas.drawLine(s(h0), s(h0 + n * hw), Paint()
+                ..color = col
+                ..strokeWidth = 1.4);
+              final a0 = math.atan2(n.dy, n.dx);
+              final d2 = other - h;
+              var sweep = math.atan2(d2.dy, d2.dx) - a0;
+              while (sweep > math.pi) {
+                sweep -= 2 * math.pi;
+              }
+              while (sweep < -math.pi) {
+                sweep += 2 * math.pi;
+              }
+              canvas.drawArc(Rect.fromCircle(center: s(h0), radius: hw * scale), a0, sweep, false, arcP);
+            }
+          }
           final t = Paint()
             ..color = col
             ..strokeWidth = 0.7;

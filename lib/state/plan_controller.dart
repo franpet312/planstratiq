@@ -740,7 +740,8 @@ class PlanController extends ChangeNotifier {
       double? sill,
       double? offsetFromStart,
       bool? flip,
-      bool? swingOut}) {
+      bool? swingOut,
+      String? style}) {
     final o = plan.openingById(id);
     final w = o == null ? null : plan.wallById(o.wallId);
     if (o == null || w == null) return;
@@ -752,7 +753,8 @@ class PlanController extends ChangeNotifier {
           ..type = type
           ..width = math.min(p.width, len - 0.12)
           ..height = math.min(p.height, w.height - p.sill - 0.05)
-          ..sill = p.sill;
+          ..sill = p.sill
+          ..style = '';
       }
       if (width != null) o.width = width.clamp(0.3, math.max(0.3, len - 0.1));
       if (height != null) o.height = height.clamp(0.2, w.height);
@@ -760,6 +762,11 @@ class PlanController extends ChangeNotifier {
       if (offsetFromStart != null) o.t = offsetFromStart / len;
       if (flip != null) o.flip = flip;
       if (swingOut != null) o.swingOut = swingOut;
+      if (style != null) {
+        o.style = style;
+        // dvokrilna vrata su šira
+        if (style == 'double' && o.width < 1.2) o.width = math.min(1.4, len - 0.12);
+      }
       o.t = clampOpeningT(len, o.width, o.t);
     });
   }

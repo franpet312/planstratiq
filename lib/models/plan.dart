@@ -93,6 +93,7 @@ class Opening {
     required this.sill,
     this.flip = false,
     this.swingOut = false,
+    this.style = '',
   });
 
   factory Opening.preset(String wallId, OpeningType type, double t) {
@@ -119,6 +120,10 @@ class Opening {
   /// Otvaraju se na drugu stranu zida.
   bool swingOut;
 
+  /// Izvedba: vrata single|double|sliding|pocket|folding, prozor casement|fixed|sliding,
+  /// balkonska vrata casement|sliding. Prazno = uobičajena izvedba.
+  String style;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'wallId': wallId,
@@ -129,6 +134,7 @@ class Opening {
         'sill': sill,
         'flip': flip,
         'swingOut': swingOut,
+        if (style.isNotEmpty) 'style': style,
       };
 
   factory Opening.fromJson(Map<String, dynamic> j) => Opening(
@@ -141,6 +147,7 @@ class Opening {
         sill: _d(j['sill'], 0),
         flip: _b(j['flip']),
         swingOut: _b(j['swingOut']),
+        style: (j['style'] as String?) ?? '',
       );
 }
 
@@ -613,3 +620,12 @@ class Site {
     );
   }
 }
+
+
+/// Izvedbe otvora po vrsti (id, naziv).
+List<(String, String)> openingStyles(OpeningType t) => switch (t) {
+      OpeningType.door => const [('', 'Krilna'), ('double', 'Dvokrilna'), ('sliding', 'Klizna'), ('pocket', 'Klizna u zid'), ('folding', 'Harmonika')],
+      OpeningType.window => const [('', 'Krilni'), ('sliding', 'Klizni'), ('fixed', 'Fiksni')],
+      OpeningType.balcony => const [('', 'Krilna'), ('sliding', 'Klizna stijena')],
+      OpeningType.passage => const [],
+    };

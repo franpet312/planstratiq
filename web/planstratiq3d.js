@@ -18,7 +18,7 @@ const WALK = 1.5;
 const RUN = 3.2;
 const ACCENT = 0x0e6b66;
 const FLOOR = 0.03; // visina gotovog poda iznad ploče
-let lampBudget = 8; // najviše toliko stvarnih svjetala u lampama (zbog brzine)
+let lampBudget = 12; // najviše toliko stvarnih svjetala u lampama (zbog brzine)
 
 const rgb = (c) => Number(c) & 0xffffff;
 const norm2 = (x, y) => { const l = Math.hypot(x, y) || 1; return { x: x / l, y: y / l }; };
@@ -67,6 +67,9 @@ function stairProgress(it, lx, lz, upper) {
   }
   return (D / 2 - lz) / D;
 }
+// rasvjeta: stropna (visi sa stropa), zidna, stolna (stoji na stolu/komodi)
+const CEILING = new Set(['chandelier', 'chandelier_ring', 'pendant', 'pendant_row', 'ceiling_light']);
+const SURFACES = new Set(['table', 'table_round', 'dresser', 'tv_stand', 'kitchen', 'island', 'vanity', 'shelf', 'bench']);
 const BALCONY = new Set(['balcony', 'balcony_rail', 'balcony_wall']);
 function inPolygon(x, y, poly) {
   let c = false;
@@ -754,6 +757,151 @@ function buildItem(it, g, loader) {
       parts.push({ mat: scr.material, emi: 0.55 });
       interactive('TV', 0, true);
       b(0.3, 0.05, 0.2, 0, 0.525, -D / 2 + 0.12, 0x222222);
+      break;
+    }
+    case 'chandelier':
+    case 'chandelier_ring':
+    case 'pendant':
+    case 'pendant_row':
+    case 'ceiling_light':
+    case 'wall_lamp':
+    case 'table_lamp':
+    case 'lamp_arc': {
+      const C = it.ceil ?? 2.57; // strop iznad poda objekta
+      const bulb = mat(0xfff4e0, { emissive: 0xffd9a0, emissiveIntensity: 1.2 }).clone();
+      const glow = { mat: bulb, emi: 1.2 };
+      const addLight = (x, y, z, li, dist = 7) => {
+        if (lampBudget > 0 && g.userData?.kind) {
+          lampBudget--;
+          const L = new THREE.PointLight(0xffd6a0, 0, dist, 1.5);
+          L.position.set(x, y, z);
+          tgt.add(L);
+          if (!glow.light) { glow.light = L; glow.li = li; }
+          else parts.push({ light: L, li });
+        }
+      };
+      const lit = (m) => { m.material = bulb; m.castShadow = false; return m; };
+      const cable = (x, z, y0, y1) => cyl(0.004, 0.004, y0 - y1, x, (y0 + y1) / 2, z, 0x222222, 6);
+      const canopy = (x, z, r = 0.06) => cyl(r, r, 0.04, x, C - 0.02, z, color, 20, metal);
+      if (it.shape === 'chandelier') {
+        const drop = Math.min(H, C - 1.95);
+        canopy(0, 0, 0.08);
+        cyl(0.012, 0.012, drop * 0.45, 0, C - (drop * 0.45) / 2, 0, color, 8, metal);
+        sphere(0.07, 0, C - drop * 0.5, 0, color, 1.3, metal);
+        const ringY = C - drop * 0.75, R = W * 0.4;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.012, 8, 40), mat(color, metal));
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = ringY;
+        tgt.add(ring);
+        const n = 6;
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2, x = Math.sin(a) * R, z = Math.cos(a) * R;
+          const arm = b(R, 0.012, 0.012, x / 2, ringY + 0.02, z / 2, color, metal);
+          arm.rotation.y = a - Math.PI / 2;
+          cyl(0.025, 0.02, 0.04, x, ringY + 0.03, z, color, 12, metal); // čašica
+          cyl(0.01, 0.01, 0.1, x, ringY + 0.1, z, 0xf4efe6, 8);         // svijeća
+          lit(sphere(0.022, x, ringY + 0.17, z, 0xffffff, 1.4));
+          // kristali
+          for (let k = 0; k < 2; k++) {
+            const ca = a + Math.PI / n + k * 0.25;
+            sphere(0.012, Math.sin(ca) * (R * 0.85), ringY - 0.08 - k * 0.05, Math.cos(ca) * (R * 0.85), 0xffffff, 1.6, { glass: true });
+          }
+        }
+        addLight(0, ringY + 0.1, 0, 9, 9);
+      } else if (it.shape === 'chandelier_ring') {
+        const drop = Math.min(H, C - 1.95);
+        canopy(0, 0, 0.1);
+        const ringY = C - drop;
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2;
+          cable(Math.sin(a) * W * 0.45, Math.cos(a) * W * 0.45, C, ringY);
+        }
+        const r1 = new THREE.Mesh(new THREE.TorusGeometry(W / 2, 0.025, 10, 64), mat(color, metal));
+        r1.rotation.x = Math.PI / 2;
+        r1.position.y = ringY;
+        tgt.add(r1);
+        const strip = new THREE.Mesh(new THREE.TorusGeometry(W / 2, 0.012, 8, 64), bulb);
+        strip.rotation.x = Math.PI / 2;
+        strip.position.y = ringY - 0.022;
+        tgt.add(strip);
+        if (W >= 0.8) {
+          const r2 = new THREE.Mesh(new THREE.TorusGeometry(W * 0.3, 0.02, 10, 48), mat(color, metal));
+          r2.rotation.x = Math.PI / 2;
+          r2.position.y = ringY + 0.12;
+          tgt.add(r2);
+          cable(0, W * 0.3, C, ringY + 0.12);
+        }
+        addLight(0, ringY - 0.05, 0, 8, 9);
+      } else if (it.shape === 'pendant' || it.shape === 'pendant_row') {
+        const n = it.shape === 'pendant_row' ? 3 : 1;
+        const r = it.shape === 'pendant_row' ? Math.min(D / 2, W / 7) : W / 2;
+        if (n > 1) b(W * 0.9, 0.03, 0.08, 0, C - 0.015, 0, color, metal);
+        const drop = Math.min(H, C - 1.5);
+        for (let i = 0; i < n; i++) {
+          const x = n === 1 ? 0 : -W * 0.35 + (i * W * 0.7) / (n - 1);
+          if (n === 1) canopy(x, 0);
+          const yb = C - drop;
+          cable(x, 0, C, yb + r * 0.9);
+          const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.03, r, r * 0.9, 28, 1, true), mat(color, { roughness: 0.6, double: true }));
+          shade.position.set(x, yb + r * 0.45, 0);
+          shade.castShadow = true;
+          tgt.add(shade);
+          lit(sphere(r * 0.25, x, yb + r * 0.25, 0, 0xffffff));
+          addLight(x, yb, 0, n > 1 ? 3 : 5, 6);
+        }
+      } else if (it.shape === 'ceiling_light') {
+        const pl = cyl(W / 2, W / 2 - 0.02, Math.max(0.04, H * 0.4), 0, C - Math.max(0.04, H * 0.4) / 2, 0, color, 32, metal);
+        pl.castShadow = false;
+        const dome = sphere(W / 2 - 0.02, 0, C - H * 0.4, 0, 0xffffff, (H * 0.6) / (W / 2));
+        lit(dome);
+        dome.geometry = new THREE.SphereGeometry(W / 2 - 0.02, 28, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+        addLight(0, C - H - 0.1, 0, 6, 8);
+      } else if (it.shape === 'wall_lamp') {
+        const y = 1.75;
+        b(0.1, 0.16, 0.02, 0, y, -D / 2 + 0.01, color, metal);
+        const arm = b(0.015, 0.015, D * 0.7, 0, y, -D / 2 + D * 0.35, color, metal);
+        arm.castShadow = false;
+        const shade = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.3, W * 0.45, H * 0.5, 24, 1, true), mat(0xf2ede2, { roughness: 0.9, double: true, emissive: 0xffd9a0, emissiveIntensity: 0.4 }));
+        shade.position.set(0, y + 0.05, D / 2 - W * 0.45);
+        tgt.add(shade);
+        lit(sphere(0.03, 0, y + 0.02, D / 2 - W * 0.45, 0xffffff));
+        addLight(0, y, D / 2 - W * 0.45, 2.5, 5);
+      } else if (it.shape === 'table_lamp') {
+        const e = it.elev || 0; // stoji na stolu/komodi
+        cyl(W * 0.22, W * 0.26, 0.03, 0, e + 0.015, 0, darker(color, 0.4), 24);
+        const base = sphere(W * 0.2, 0, e + H * 0.22, 0, color, 1.2, { roughness: 0.4 });
+        base.castShadow = true;
+        cyl(0.01, 0.01, H * 0.35, 0, e + H * 0.5, 0, 0xb8b8b8, 8, metal);
+        const shade = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.32, W * 0.5, H * 0.38, 28, 1, true), mat(0xf2ede2, { roughness: 0.95, double: true, emissive: 0xffd9a0, emissiveIntensity: 0.5 }));
+        shade.position.y = e + H * 0.8;
+        shade.castShadow = true;
+        tgt.add(shade);
+        lit(sphere(0.035, 0, e + H * 0.72, 0, 0xffffff));
+        addLight(0, e + H * 0.72, 0, 2.5, 5);
+      } else {
+        // lučna podna lampa: teška baza straga, luk prema naprijed, kupola nad sjedalom
+        cyl(0.17, 0.19, 0.06, 0, 0.03, -D / 2 + 0.18, 0xe8e4dc, 32, { roughness: 0.4 }); // mramorna baza
+        const zb = -D / 2 + 0.18, L = D - 0.4;
+        const curve = new THREE.CubicBezierCurve3(
+          new THREE.Vector3(0, 0.06, zb),
+          new THREE.Vector3(0, H * 0.95, zb - 0.05),
+          new THREE.Vector3(0, H + 0.2, zb + L * 0.75),
+          new THREE.Vector3(0, H - 0.05, zb + L),
+        );
+        const pts = curve.getPoints(32);
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.013, 8), mat(color, metal));
+        tube.castShadow = true;
+        tgt.add(tube);
+        const end = pts[pts.length - 1];
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(0.2, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat(color, { ...metal, double: true }));
+        dome.position.set(0, end.y - 0.12, end.z);
+        dome.castShadow = true;
+        tgt.add(dome);
+        lit(sphere(0.04, 0, end.y - 0.12, end.z, 0xffffff));
+        addLight(0, end.y - 0.2, end.z, 4, 6);
+      }
+      parts.push(glow);
+      interactive('svjetlo', 1, true);
       break;
     }
     case 'lamp': {
@@ -1586,7 +1734,7 @@ class Engine {
 
   _rebuild() {
     this._clearWorld();
-    lampBudget = 8;
+    lampBudget = 12;
     const p = this.plan;
     if (!p) return;
     // ostale etaže (samo za prikaz, bez odabira i sudara)
@@ -1654,7 +1802,18 @@ class Engine {
       if (outs.some((o) => inPolygon(it.x, it.y, o))) return true;
       return balconies.some((q) => { const l = toLocal(q, it.x, it.y); return Math.abs(l.x) <= q.w / 2 && Math.abs(l.z) <= q.d / 2; });
     };
-    for (const it of p.items || []) {
+    const surfaces = (p.items || []).filter((q) => SURFACES.has(q.shape));
+    for (let it of p.items || []) {
+      if (CEILING.has(it.shape)) it = { ...it, ceil: maxH - FLOOR };
+      if (it.shape === 'table_lamp') {
+        // stolna lampa stoji na stolu/komodi ispod sebe
+        let elev = 0;
+        for (const q of surfaces) {
+          const l = toLocal(q, it.x, it.y);
+          if (Math.abs(l.x) <= q.w / 2 && Math.abs(l.z) <= q.d / 2) elev = Math.max(elev, q.shape === 'kitchen' || q.shape === 'island' ? 0.9 : q.h);
+        }
+        it = { ...it, elev };
+      }
       const g = new THREE.Group();
       g.position.set(it.x, onFloor(it) ? FLOOR : 0, it.y);
       g.rotation.y = -(it.rotation || 0);
@@ -1672,7 +1831,14 @@ class Engine {
   // sudari u šetnji: namještaj (orijentirani pravokutnik) i ograde balkona
   _itemColliders(it) {
     const sh = it.shape;
-    if (['rug', 'rug_round', 'path', 'deck', 'carport'].includes(sh) || STAIRS.has(sh)) return;
+    if (['rug', 'rug_round', 'path', 'deck', 'carport', 'wall_lamp', 'table_lamp'].includes(sh) || STAIRS.has(sh) || CEILING.has(sh)) return;
+    if (sh === 'lamp_arc') {
+      // samo baza blokira prolaz (luk je iznad glave)
+      const r = it.rotation || 0;
+      const bz = -it.d / 2 + 0.18;
+      this.colliders.push({ obb: true, cx: it.x - Math.sin(r) * bz, cz: it.y + Math.cos(r) * bz, hw: 0.19, hd: 0.19, ux: { x: Math.cos(r), z: Math.sin(r) }, uz: { x: -Math.sin(r), z: Math.cos(r) } });
+      return;
+    }
     const r = it.rotation || 0;
     const ux = { x: Math.cos(r), z: Math.sin(r) }, uz = { x: -Math.sin(r), z: Math.cos(r) };
     const W = (x, z) => ({ x: it.x + ux.x * x + uz.x * z, z: it.y + ux.z * x + uz.z * z });

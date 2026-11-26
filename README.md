@@ -37,7 +37,8 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - **Uvoz kataloga trgovine** (CSV ili JSON): naziv, mjere, cijena, boja, link na proizvod i GLB 3D model. Vrsta namještaja se prepoznaje iz naziva. Predložak CSV-a preuzima se iz kataloga.
 - Povuci objekt na tlocrt ili u 3D; uz zid se sam okrene leđima prema zidu.
 - Rotacija ručicom (korak 15°), strelice za pomak 1 cm, dupliciranje, promjena mjera i boje.
-- **Sudaranje**: namještaj ne ulazi u zidove ni u drugi namještaj – pri povlačenju klizi uz prepreku (stolice se smiju podvući pod stol, tepisi i terase leže ispod svega). Isključuje se u svojstvima objekta.
+- **Rasvjeta** (kategorija „Rasvjeta”): klasični luster s kristalima, LED prsten, viseće lampe (pojedinačne i niz od tri iznad stola), plafonjera, zidna, stolna, podna i lučna podna lampa. Sve svijetle u 3D-u i pale se/gase (E, klik, dvoklik). Stropna rasvjeta visi s pravog stropa etaže, zidna se sama prisloni uz zid, a stolna lampa stoji na stolu ili komodi ispod sebe.
+- **Sudaranje**: namještaj ne ulazi u zidove ni u drugi namještaj – pri povlačenju klizi uz prepreku (stolice se smiju podvući pod stol, tepisi i terase leže ispod svega, lusteri vise iznad stola, stolna lampa smije na stol ili komodu, ali ne u kauč, a lučnoj lampi smeta samo baza). Isključuje se u svojstvima objekta.
 - **Balkoni**: ploča s ogradom (staklena, metalna ili zidana) uz vanjski zid. Dodaje se iz kataloga (sama se prisloni uz zid s vanjske strane) ili jednim klikom iz svojstava vanjskog zida / balkonskih vrata – ako zid nema balkonska vrata, dodaju se.
 
 **3D**

@@ -911,6 +911,56 @@ class ItemSymbols {
         final sw = math.min(w * 0.8, m(1.45));
         c.drawRect(Rect.fromCenter(center: Offset(0, r.top + m(0.12)), width: sw, height: math.max(2, m(0.05))),
             Paint()..color = Pal.ink);
+      case 'chandelier':
+      case 'chandelier_ring':
+      case 'ceiling_light':
+      case 'pendant':
+        // stropna rasvjeta: isprekidani krug (iznad ravnine presjeka) i križ
+        final rad = math.min(w, d) / 2;
+        c.drawCircle(Offset.zero, rad, fillOf(const Color(0xFFF3E4B8), 0.35));
+        final dash = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Pal.ink;
+        for (var i = 0; i < 16; i += 2) {
+          c.drawArc(Rect.fromCircle(center: Offset.zero, radius: rad), i * math.pi / 8, math.pi / 8, false, dash);
+        }
+        final k = rad * 0.7;
+        ln(Offset(-k, -k), Offset(k, k), thin);
+        ln(Offset(k, -k), Offset(-k, k), thin);
+        if (shape == 'chandelier') {
+          for (var i = 0; i < 6; i++) {
+            final a = i * math.pi / 3;
+            c.drawCircle(Offset(math.sin(a), math.cos(a)) * rad * 0.8, math.max(1.5, rad * 0.08), line);
+          }
+        }
+      case 'pendant_row':
+        final dash2 = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Pal.ink;
+        ln(Offset(r.left + w * 0.05, 0), Offset(r.right - w * 0.05, 0), thin);
+        final pr = math.min(d / 2, w / 7);
+        for (var i = 0; i < 3; i++) {
+          final x = -w * 0.35 + i * w * 0.35;
+          c.drawCircle(Offset(x, 0), pr, fillOf(const Color(0xFFF3E4B8), 0.35));
+          c.drawCircle(Offset(x, 0), pr, dash2);
+        }
+      case 'wall_lamp':
+        c.drawArc(Rect.fromCenter(center: Offset(0, r.top), width: w, height: d * 2), 0, math.pi, true, fillOf(const Color(0xFFF3E4B8), 0.6));
+        c.drawArc(Rect.fromCenter(center: Offset(0, r.top), width: w, height: d * 2), 0, math.pi, true, line);
+      case 'table_lamp':
+        oval(r, fillOf(const Color(0xFFF3E4B8), 0.6));
+        c.drawCircle(Offset.zero, math.min(w, d) * 0.15, line);
+      case 'lamp_arc':
+        // baza straga, luk do kupole naprijed
+        final base = Offset(0, r.top + m(0.18));
+        c.drawCircle(base, m(0.18), fillOf(color, 0.5));
+        c.drawCircle(base, m(0.18), line);
+        final tip = Offset(0, r.bottom - m(0.2));
+        ln(base, tip, line);
+        c.drawCircle(tip, m(0.2), fillOf(const Color(0xFFF3E4B8), 0.6));
+        c.drawCircle(tip, m(0.2), line);
       case 'lamp':
         oval(r, fillOf(const Color(0xFFF3E4B8), 0.6));
         ln(Offset(r.left, 0), Offset(r.right, 0), thin);

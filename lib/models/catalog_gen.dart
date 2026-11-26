@@ -116,6 +116,20 @@ const _stone = <NamedColor>[
   NamedColor('pješčenjak', 0xFFD3BE97),
 ];
 
+const _lightMetal = <NamedColor>[
+  NamedColor('crna', 0xFF2B2B2B),
+  NamedColor('zlatna', 0xFFC9A55A),
+  NamedColor('krom', 0xFFD0D2D4),
+  NamedColor('mesing', 0xFFB08D57),
+  NamedColor('bijela', 0xFFF0EEE9),
+];
+const _lampShade = <NamedColor>[
+  NamedColor('crna', 0xFF2B2B2B),
+  NamedColor('bijela', 0xFFF0EEE9),
+  NamedColor('zlatna', 0xFFC9A55A),
+  NamedColor('kadulja', 0xFF9DAE95),
+  NamedColor('terakota', 0xFFC27A5E),
+];
 const _metalFinish = <NamedColor>[NamedColor('krom', 0xFFD0D2D4), NamedColor('crna', 0xFF2E2E2E)];
 const _pool = <NamedColor>[NamedColor('plava', 0xFF4FB3E0), NamedColor('tirkizna', 0xFF4FC6C0)];
 const _car = <NamedColor>[
@@ -188,7 +202,15 @@ const families = <Family>[
   Family(id: 'komoda_niska', name: 'Niska komoda', category: catLiving, shape: 'dresser', sizes: [(1.2, 0.45, 0.75), (1.6, 0.45, 0.75), (2.0, 0.45, 0.8)], price: 250, colors: _wood, legVariants: true),
   Family(id: 'tepih', name: 'Tepih', category: catLiving, shape: 'rug', sizes: [(1.6, 2.3, 0.01), (2.0, 3.0, 0.01), (2.4, 3.4, 0.01)], price: 120, colors: _fabric),
   Family(id: 'tepih_okrugli', name: 'Okrugli tepih', category: catLiving, shape: 'rug_round', sizes: [(1.2, 1.2, 0.01), (1.6, 1.6, 0.01), (2.0, 2.0, 0.01)], price: 90, colors: _fabric),
-  Family(id: 'lampa', name: 'Podna lampa', category: catLiving, shape: 'lamp', sizes: [(0.35, 0.35, 1.5), (0.45, 0.45, 1.7)], price: 60, colors: _shade),
+  Family(id: 'lampa', name: 'Podna lampa', category: catLight, shape: 'lamp', sizes: [(0.35, 0.35, 1.5), (0.45, 0.45, 1.7)], price: 60, colors: _shade),
+  Family(id: 'lampa_luk', name: 'Podna lampa, lučna', category: catLight, shape: 'lamp_arc', sizes: [(0.4, 1.6, 1.9), (0.4, 2.0, 2.1)], price: 140, colors: _lightMetal, styled: false),
+  Family(id: 'luster', name: 'Luster, klasični s kristalima', category: catLight, shape: 'chandelier', sizes: [(0.6, 0.6, 0.6), (0.8, 0.8, 0.75), (1.0, 1.0, 0.9)], price: 220, colors: _lightMetal, styled: false),
+  Family(id: 'luster_prsten', name: 'Luster, LED prsten', category: catLight, shape: 'chandelier_ring', sizes: [(0.6, 0.6, 0.6), (0.8, 0.8, 0.6), (1.2, 1.2, 0.7)], price: 160, colors: _lightMetal, styled: false),
+  Family(id: 'visilica', name: 'Viseća lampa', category: catLight, shape: 'pendant', sizes: [(0.3, 0.3, 0.8), (0.45, 0.45, 0.9), (0.6, 0.6, 0.9)], price: 70, colors: _lampShade, styled: false),
+  Family(id: 'visilica_niz', name: 'Viseće lampe u nizu (3)', category: catLight, shape: 'pendant_row', sizes: [(1.2, 0.3, 0.9), (1.6, 0.3, 0.9)], price: 150, colors: _lampShade, styled: false),
+  Family(id: 'plafonjera', name: 'Plafonjera', category: catLight, shape: 'ceiling_light', sizes: [(0.35, 0.35, 0.1), (0.5, 0.5, 0.12)], price: 45, colors: _lightMetal, styled: false),
+  Family(id: 'zidna_lampa', name: 'Zidna lampa', category: catLight, shape: 'wall_lamp', sizes: [(0.2, 0.18, 0.3)], price: 40, colors: _lightMetal, styled: false),
+  Family(id: 'stolna_lampa', name: 'Stolna lampa', category: catLight, shape: 'table_lamp', sizes: [(0.3, 0.3, 0.5), (0.4, 0.4, 0.62)], price: 35, colors: _shade, styled: false),
   Family(id: 'kamin', name: 'Kamin', category: catLiving, shape: 'fireplace', sizes: [(1.0, 0.45, 1.0), (1.2, 0.5, 1.1), (1.6, 0.5, 1.1)], price: 1500, colors: _stone, styled: false),
   Family(id: 'biljka', name: 'Sobna biljka', category: catLiving, shape: 'plant', sizes: [(0.4, 0.4, 0.8), (0.5, 0.5, 1.2), (0.7, 0.7, 1.7)], price: 40, colors: _green, styled: false),
 

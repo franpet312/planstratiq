@@ -559,8 +559,10 @@ class PlanController extends ChangeNotifier {
         rot = math.atan2(-n.dx, n.dy);
         pos = q + n * (w.thickness / 2 + c.d / 2);
       }
+    } else if (ceilingShapes.contains(c.shape) || c.shape == 'table_lamp') {
+      // stropna i stolna rasvjeta: točno gdje je pušteno, bez prislanjanja uz zid
     } else if (c.zone == CatalogZone.interior && !floorShapes.contains(c.shape)) {
-      final w = wallNear(p, tol: c.d / 2 + 0.45);
+      final w = wallNear(p, tol: c.shape == 'wall_lamp' ? 1.5 : c.d / 2 + 0.45);
       if (w != null) {
         final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
         final q = closestOnSegment(p, a, b);
@@ -569,7 +571,7 @@ class PlanController extends ChangeNotifier {
           final n = away / away.distance;
           // stražnja strana objekta (lokalno -y) okrenuta je prema zidu (-n)
           rot = roundTo(math.atan2(-n.dx, n.dy), math.pi / 12);
-          pos = q + n * (w.thickness / 2 + c.d / 2 + 0.01);
+          pos = q + n * (w.thickness / 2 + c.d / 2 + (c.shape == 'wall_lamp' ? 0.002 : 0.01));
         }
       }
     }

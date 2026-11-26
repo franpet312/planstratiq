@@ -16,6 +16,20 @@ const balconyShapes = {'balcony', 'balcony_rail', 'balcony_wall'};
 /// Oblici na koje se smije staviti namještaj (ne sudaraju se s drugim objektima).
 bool isFloorLike(String shape) => floorShapes.contains(shape);
 
+/// Rasvjeta koja visi sa stropa – ne sudara se s namještajem na podu.
+const ceilingShapes = {'chandelier', 'chandelier_ring', 'pendant', 'pendant_row', 'ceiling_light'};
+
+/// Površine na koje se može staviti stolna lampa.
+const surfaceShapes = {'table', 'table_round', 'dresser', 'tv_stand', 'kitchen', 'island', 'vanity', 'shelf', 'bench'};
+
+/// „Sloj” objekta: pod, strop, zid (zidna lampa na ~1,8 m) ili na površini (stolna lampa).
+String collisionLayer(String shape) {
+  if (ceilingShapes.contains(shape)) return 'ceiling';
+  if (shape == 'wall_lamp') return 'wall';
+  if (shape == 'table_lamp') return 'top';
+  return 'floor';
+}
+
 const _tuckable = {'chair', 'stool', 'pouf'};
 const _tuckInto = {'table', 'table_round', 'island', 'kitchen', 'vanity'};
 
@@ -42,6 +56,11 @@ Obb? itemObb(PlacedItem it, [Offset? pos, double? rot]) {
       return Obb(p, 0.15, 0.15, r);
     case 'carport':
       return null;
+    case 'lamp_arc':
+      // luk prolazi iznad sjedala; sudara se samo teška baza straga
+      final cs = math.cos(r), sn = math.sin(r);
+      final bz = -it.d / 2 + 0.18;
+      return Obb(p + Offset(-sn * bz, cs * bz), 0.19, 0.19, r);
   }
   return Obb(p, it.w / 2, it.d / 2, r);
 }
@@ -72,6 +91,13 @@ Offset? separation(Obb a, Obb b, {double eps = 0.004}) {
 
 bool _pairExempt(PlacedItem a, PlacedItem b) {
   if (isFloorLike(a.shape) || isFloorLike(b.shape)) return true;
+  final la = collisionLayer(a.shape), lb = collisionLayer(b.shape);
+  if (la != lb) {
+    // stolna lampa smije na stol/komodu, ali ne u kauč ili krevet
+    if (la == 'top') return surfaceShapes.contains(b.shape);
+    if (lb == 'top') return surfaceShapes.contains(a.shape);
+    return true; // strop/zid/pod se međusobno ne diraju
+  }
   if (a.shape == 'carport' || b.shape == 'carport') return true;
   if (_tuckable.contains(a.shape) && _tuckInto.contains(b.shape)) return true;
   if (_tuckable.contains(b.shape) && _tuckInto.contains(a.shape)) return true;

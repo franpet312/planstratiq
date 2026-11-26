@@ -84,6 +84,7 @@ const catWork = 'Radni kutak i dječja';
 const catHall = 'Predsoblje i ostalo';
 const catGarden = 'Vrt i terasa';
 const catYard = 'Dvorište';
+const catLight = 'Rasvjeta';
 
 const _i = CatalogZone.interior;
 const _e = CatalogZone.exterior;

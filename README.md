@@ -33,6 +33,10 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Novi kat preuzima vanjske zidove etaže ispod; na tlocrtu se etaža ispod vidi prozirno (plavo), a kutovi joj služe za hvatanje.
 - Stubište (ravno, L s podestom ili zavojito) postavljeno u prizemlju automatski probija otvor u ploči kata u obliku stubišta; u 3D šetnji (prvo i treće lice) stubama se hoda gore-dolje između etaža.
 - **Potkrovlje** („Dodaj potkrovlje” u izborniku etaža): obodni zidovi su koljenski zid (zadano 1,2 m), krov počinje na njegovom vrhu, a strop je kosi – bijela obloga ispod krova. Unutarnji pregradni zidovi idu do kosog stropa i sami se odrežu po krovu (zabatni oblik).
+  - Svi zidovi potkrovlja idu do krova i režu se po stvarnoj plohi krova (i u L/T kućama gdje se krila spajaju): unutarnji do kosog stropa, vanjski do pokrova – zabat je pravi zid, pa prozor na zabatu smije ići visoko. Dijelovi krovova koji su ušli u susjedno krilo ne vide se iznutra.
+  - Upozorenja: objekt viši od kosog stropa iznad sebe i prozor/vrata koji sežu iznad kosog stropa. Automatsko opremanje ne stavlja previsoke objekte, a kuhinja pod niskim stropom dobije niže gornje elemente (i bez visokog hladnjaka).
+  - Na tlocrtu je niski dio prostorije šrafiran (svjetlije ispod 2 m, tamnije ispod 1 m), a uz površinu piše korisna površina (≥ 2 m računa se cijela, 1–2 m pola, ispod 1 m ništa); isto u panelu prostorije.
+  - Krovni prozor (Predsoblje i ostalo → Krovni prozor): postavi se točno gdje ga pustiš, okrene niz pad krova; u 3D sjedi u ravnini krova, a iznutra se vidi svijetlo okno sa špaletom i ručkom.
 - U 3D-u izvana prikazuju se etaže do odabrane (presjek), ili sve etaže s krovom na najvišoj.
 
 **Namještaj i okućnica**

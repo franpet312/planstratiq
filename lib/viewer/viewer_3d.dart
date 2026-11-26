@@ -31,6 +31,7 @@ class _Viewer3DState extends State<Viewer3D> {
   Selection _sentSel = Selection.none;
   Timer? _debounce;
   bool _timeOpen = false;
+  bool _measure = false;
   static bool _showAll = false;
 
   PlanController get c => widget.c;
@@ -201,6 +202,15 @@ class _Viewer3DState extends State<Viewer3D> {
                         duration: Duration(seconds: 3),
                       ));
                     }
+                  },
+                ),
+                IconBtn(
+                  icon: Icons.straighten,
+                  tooltip: _measure ? 'Završi mjerenje' : 'Izmjeri udaljenost: klikni dvije točke',
+                  active: _measure,
+                  onTap: () {
+                    setState(() => _measure = !_measure);
+                    engine.setMeasure(_measure);
                   },
                 ),
                 if (_mode == ViewMode3D.orbit && c.plan.levels.length > 1)

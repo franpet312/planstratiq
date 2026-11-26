@@ -21,6 +21,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Vrata, prozori, balkonska vrata i prolazi; šarke i smjer otvaranja vrata.
 - **Izvedbe otvora**: vrata krilna, dvokrilna, klizna (po zidu, s vodilicom), klizna u zid i harmonika; prozori krilni, klizni i fiksni; balkonska vrata krilna ili klizna stijena – s pravim simbolima na tlocrtu i otvaranjem u 3D-u.
 - Alat za mjerenje, mjerilo, zoom, pinch-zoom na dodir.
+- **Bilješke** (alat N): tekst na žutom (ili drugom) papiriću na tlocrtu, povlači se, uređuje u svojstvima i ispisuje u PDF-u.
 - Učitavanje slike nacrta kao podloge i kalibracija mjerila (dvije točke + stvarna udaljenost).
 - **Automatsko prepoznavanje nacrta**: iz slike se prepoznaju zidovi (s debljinom), vrata i prozori i ucrtaju u tlocrt; mjerilo se procijeni iz širine vrata ili upiše ukupna širina zgrade s kote. Radi u pregledniku (`web/psqdetect.js`), najbolje za nacrte s vodoravnim i okomitim, ispunjenim ili šrafiranim zidovima.
 - **PDF nacrti i nagnuti skenovi**: nacrt se može učitati i kao PDF (prva stranica se iscrta u visokoj rezoluciji), a nagnut sken ili fotografija automatski se izravna (do ±6°).
@@ -51,6 +52,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Doba dana (položaj sunca), snimka prikaza kao slika.
 - **Krov koji prati obris kuće** (i L, T, U tlocrte): dvostrešni, četverostrešni, jednostrešni ili ravni s atikom; nagib, prepust, boja pokrova i smjer sljemena. Zabati se sami zatvaraju zidom.
 - Odabir i povlačenje namještaja izravno u 3D-u.
+- **Mjerenje u 3D-u** (ravnalo u alatnoj traci): klikni dvije točke na zidu, podu ili namještaju – izvana, u prvom ili trećem licu – i vidiš udaljenost, a kod kosih mjera i vodoravni razmak i visinu.
 - **Otvaranje i paljenje**: vrata, prozori i balkonska vrata, ormari, ladice, hladnjak, perilice i pećnica otvaraju se, a lampe, TV i kamin pale. U šetnji tipka E ili klik (na mobitelu dodir), izvana dvoklik. Zatvorena vrata ne propuštaju, a u šetnji se ne prolazi ni kroz namještaj ni kroz ogradu balkona.
 - Tri načina pogleda: **izvana** (orbit), **treće lice** (animirani lik hoda kućom, kamera ga prati i ne prolazi kroz zidove; povlačenje mišem okreće kameru, kotačić mijenja udaljenost) i **prvo lice**.
 - **Šetnja u prvom licu**: W A S D + miš, ili na mobitelu lijevi palac za hodanje i desni za gledanje; ne prolazi se kroz zidove, kroz vrata da. Položaj osobe vidi se uživo na tlocrtu. Brzi skok u prostoriju.

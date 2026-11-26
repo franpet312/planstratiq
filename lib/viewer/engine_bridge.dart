@@ -80,6 +80,7 @@ class Engine3D {
       );
   void setTime(double hour) => _js.setOptions(jsonEncode({'time': hour}));
   void setShowAll(bool v) => _js.setOptions(jsonEncode({'showAll': v}));
+  void setMeasure(bool v) => _js.setOptions(jsonEncode({'measure': v}));
   void frame() => _js.frame();
   void walkTo(Offset p) => _js.walkTo(p.dx, p.dy);
 

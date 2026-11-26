@@ -1545,6 +1545,98 @@ class Engine {
     const o = typeof json === 'string' ? JSON.parse(json) : json;
     if (o.time != null) this.setTime(o.time);
     if (o.showAll != null) { this.showAll = !!o.showAll; this._applyVisibility(); }
+    if (o.measure != null) this._setMeasure(!!o.measure);
+  }
+
+  // ------------------------------------------------------------------ mjerenje u 3D-u
+  _setMeasure(on) {
+    const m = (this.meas ||= { on: false, pts: [] });
+    m.on = on;
+    this._clearMeasure();
+    if (!m.label) {
+      m.label = document.createElement('div');
+      Object.assign(m.label.style, {
+        position: 'absolute', transform: 'translate(-50%, -130%)', padding: '4px 9px', borderRadius: '7px',
+        background: '#b0562b', color: '#fff', font: '700 13px Archivo, system-ui, sans-serif', pointerEvents: 'none',
+        whiteSpace: 'nowrap', display: 'none', boxShadow: '0 2px 8px rgba(0,0,0,.25)',
+      });
+      this.renderer.domElement.parentElement?.appendChild(m.label);
+    }
+    this._updateHint();
+  }
+
+  _clearMeasure() {
+    const m = this.meas;
+    if (!m) return;
+    m.pts = [];
+    if (m.group) { this.scene.remove(m.group); m.group = null; }
+    if (m.label) m.label.style.display = 'none';
+  }
+
+  // točka na površini ispod zrake (zidovi, pod, namještaj; staklo i nevidljivo se preskače)
+  _surfacePoint(ray) {
+    const hits = ray.intersectObjects(this.world.children, true);
+    for (const h of hits) {
+      const o = h.object;
+      if (!o.visible || o.isPoints || o.isLine) continue;
+      let vis = true;
+      for (let q = o.parent; q; q = q.parent) if (!q.visible) { vis = false; break; }
+      if (!vis) continue;
+      if (o.material?.transparent && (o.material.opacity ?? 1) < 0.5) continue;
+      return h.point.clone();
+    }
+    const p = new THREE.Vector3();
+    return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.fy), p) ? p : null;
+  }
+
+  _measureAt(ndc) {
+    const m = this.meas;
+    if (!m?.on) return false;
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const p = this._surfacePoint(this.raycaster);
+    if (!p) return true;
+    if (m.pts.length >= 2) this._clearMeasure();
+    m.pts.push(p);
+    if (!m.group) { m.group = new THREE.Group(); this.scene.add(m.group); }
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 10), new THREE.MeshBasicMaterial({ color: 0xb0562b, depthTest: false }));
+    dot.position.copy(p);
+    dot.renderOrder = 999;
+    m.group.add(dot);
+    if (m.pts.length === 2) {
+      const [a, b] = m.pts;
+      const mk = (pts, color, dashed) => {
+        const g = new THREE.BufferGeometry().setFromPoints(pts);
+        const mt = dashed ? new THREE.LineDashedMaterial({ color, dashSize: 0.08, gapSize: 0.06, depthTest: false }) : new THREE.LineBasicMaterial({ color, depthTest: false });
+        const l = new THREE.Line(g, mt);
+        if (dashed) l.computeLineDistances();
+        l.renderOrder = 998;
+        m.group.add(l);
+      };
+      mk([a, b], 0xb0562b, false);
+      const dy = b.y - a.y;
+      if (Math.abs(dy) > 0.05) {
+        const c = new THREE.Vector3(b.x, a.y, b.z);
+        mk([a, c, b], 0x5f6b73, true);
+      }
+    }
+    this._updateHint();
+    return true;
+  }
+
+  _updateMeasureLabel() {
+    const m = this.meas;
+    if (!m?.label) return;
+    if (!m.on || m.pts.length < 2) { m.label.style.display = 'none'; return; }
+    const [a, b] = m.pts;
+    const mid = a.clone().add(b).multiplyScalar(0.5).project(this.camera);
+    if (mid.z > 1) { m.label.style.display = 'none'; return; }
+    const el = this.renderer.domElement;
+    const f = (v) => v.toFixed(2).replace('.', ',');
+    const d = a.distanceTo(b), dy = Math.abs(b.y - a.y), dh = Math.hypot(b.x - a.x, b.z - a.z);
+    m.label.textContent = dy > 0.05 && dh > 0.05 ? `${f(d)} m  ·  vodoravno ${f(dh)}  ·  visina ${f(dy)}` : `${f(d)} m`;
+    m.label.style.left = ((mid.x + 1) / 2) * el.clientWidth + 'px';
+    m.label.style.top = ((1 - mid.y) / 2) * el.clientHeight + 'px';
+    m.label.style.display = 'block';
   }
 
   setMode(mode) {
@@ -1816,7 +1908,11 @@ class Engine {
     } else if (!this.fpv.isLocked) {
       text = 'Klikni u prikaz za šetnju. W A S D za hodanje, Shift za trčanje, Esc za izlaz.';
     }
-    if (this.aim && this.mode !== 'orbit') {
+    if (this.meas?.on) {
+      const n = this.meas.pts.length;
+      const how = touch ? 'Dodirni' : this.mode === 'walk' ? 'Klikni (križić)' : 'Klikni';
+      text = n === 1 ? `Mjerenje: ${how.toLowerCase()} drugu točku.` : `Mjerenje: ${how.toLowerCase()} prvu točku (zid, pod, namještaj).`;
+    } else if (this.aim && this.mode !== 'orbit') {
       text = touch ? `Dodirni – ${this.aim}` : this.mode === 'walk' ? `E ili klik – ${this.aim}` : `E – ${this.aim}`;
     } else if (this.mode === 'orbit' && !touch && text) {
       text += ' Dvoklik otvara vrata, prozore i ormare.';
@@ -3017,14 +3113,14 @@ class Engine {
       this.kbd = true;
       if (this.mode === 'third') {
         if (e.pointerType === 'touch') { this._touchStart(e); return; }
-        this.tpDrag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+        this.tpDrag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, id: e.pointerId };
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
         return;
       }
       if (this.mode === 'walk') {
         if (e.pointerType === 'touch') { this._touchStart(e); return; }
         if (!this.fpv.isLocked) this.fpv.lock();
-        else if (e.button === 0) this._interact();
+        else if (e.button === 0 && !this._measureAt(new THREE.Vector2(0, 0))) this._interact();
         return;
       }
       if (e.button !== 0) return;
@@ -3065,7 +3161,9 @@ class Engine {
     const up = (e) => {
       if (this.mode === 'third') {
         if (e.pointerType === 'touch') { this._touchEnd(e); return; }
+        const td = this.tpDrag;
         this.tpDrag = null;
+        if (td && this.meas?.on && Math.hypot(e.clientX - td.sx, e.clientY - td.sy) < 5) this._measureAt(this._ndc(e));
         return;
       }
       if (this.mode === 'walk') { if (e.pointerType === 'touch') this._touchEnd(e); return; }
@@ -3084,6 +3182,7 @@ class Engine {
       this.down = null;
       if (!dn) return;
       if (Math.hypot(e.clientX - dn.x, e.clientY - dn.y) > 5) return;
+      if (this._measureAt(this._ndc(e))) return;
       const hit = dn.hit;
       if (hit && (hit.kind === 'item' || hit.kind === 'wall' || hit.kind === 'room')) this.emit('select', { kind: hit.kind, id: hit.id });
       else this.emit('select', { kind: '', id: '' });
@@ -3151,7 +3250,8 @@ class Engine {
       const L = t.look;
       t.look = null;
       if (performance.now() - L.t0 < 300 && Math.hypot(L.x - L.sx, L.y - L.sy) < 8) {
-        if (this.mode === 'third') this._interact();
+        if (this._measureAt(this._ndc({ clientX: L.cx, clientY: L.cy }))) { /* mjerenje */ }
+        else if (this.mode === 'third') this._interact();
         else {
           this.raycaster.setFromCamera(this._ndc({ clientX: L.cx, clientY: L.cy }), this.camera);
           const I = this._interHit(this.raycaster, 2.8);
@@ -3509,6 +3609,7 @@ class Engine {
     requestAnimationFrame(this._loop);
     const dt = Math.min(this.clock.getDelta(), 0.05);
     this._animateInters(dt);
+    this._updateMeasureLabel();
     if (this.mode === 'third') {
       this._thirdUpdate(dt);
       this.indoor.intensity = 0;

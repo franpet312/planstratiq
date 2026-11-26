@@ -647,6 +647,16 @@ class PlanController extends ChangeNotifier {
     }
   }
 
+  /// Pomakni objekt tako da razmak sa strane [side] do prepreke bude točno [value] m.
+  void setItemGap(String id, String side, double value) {
+    final it = plan.itemById(id);
+    if (it == null) return;
+    final g = itemGaps(plan, it).where((g) => g.side == side).firstOrNull;
+    if (g == null || g.distance < 1e-6) return;
+    final dir = (g.to - g.from) / g.distance;
+    mutate(() => setItemPos(id, it.pos + dir * (g.distance - math.max(0, value))));
+  }
+
   /// Okreni objekt; ako se pri okretanju zabije u nešto, odmakne se (ili ostane kako je bio).
   bool setItemRotation(String id, double rot) {
     final it = plan.itemById(id);

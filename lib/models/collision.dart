@@ -146,3 +146,72 @@ bool itemOverlaps(Plan plan, PlacedItem it, {Offset? pos, double? rot}) {
   if (me == null) return false;
   return obstaclesFor(plan, it).any((ob) => separation(me, ob) != null);
 }
+
+// ---------------------------------------------------------------- udaljenosti do prepreka
+
+/// Udaljenost uz zraku [o] + t·[d] (d jedinični) do ulaska u [b], ili null.
+double? rayObb(Offset o, Offset d, Obb b) {
+  final rel = o - b.c;
+  final lo = Offset(dot(rel, b.ux), dot(rel, b.uz));
+  final ld = Offset(dot(d, b.ux), dot(d, b.uz));
+  var tmin = -double.infinity, tmax = double.infinity;
+  for (final (p, v, h) in [(lo.dx, ld.dx, b.hw), (lo.dy, ld.dy, b.hd)]) {
+    if (v.abs() < 1e-12) {
+      if (p < -h || p > h) return null;
+      continue;
+    }
+    var t1 = (-h - p) / v, t2 = (h - p) / v;
+    if (t1 > t2) (t1, t2) = (t2, t1);
+    tmin = math.max(tmin, t1);
+    tmax = math.min(tmax, t2);
+    if (tmin > tmax) return null;
+  }
+  if (tmax < 0) return null;
+  return tmin >= 0 ? tmin : null; // počinje unutra => nije razmak
+}
+
+/// Razmak od jedne strane objekta do najbliže prepreke.
+class Gap {
+  Gap(this.side, this.from, this.to, this.distance);
+
+  /// 'back' | 'front' | 'left' | 'right' (u odnosu na objekt; straga je strana uz zid)
+  final String side;
+  final Offset from, to;
+  final double distance;
+}
+
+/// Razmaci od četiri strane objekta do zidova i drugog namještaja (do [maxDist] m).
+List<Gap> itemGaps(Plan plan, PlacedItem it, {double maxDist = 6}) {
+  final me = itemObb(it);
+  if (me == null) return const [];
+  final obstacles = <Obb>[for (final w in plan.walls) wallObb(plan, w)];
+  for (final o in plan.items) {
+    if (o.id == it.id || isFloorLike(o.shape) || collisionLayer(o.shape) != collisionLayer(it.shape)) continue;
+    final ob = itemObb(o);
+    if (ob != null) obstacles.add(ob);
+  }
+  final out = <Gap>[];
+  for (final (side, dir, half, across) in [
+    ('back', -me.uz, me.hd, me.ux),
+    ('front', me.uz, me.hd, me.ux),
+    ('left', -me.ux, me.hw, me.uz),
+    ('right', me.ux, me.hw, me.uz),
+  ]) {
+    // tri zrake (sredina i blizu rubova) – najkraća vrijedi
+    double? best;
+    Offset? bestFrom;
+    final span = (identical(across, me.ux) ? me.hw : me.hd) * 0.8;
+    for (final k in [0.0, -1.0, 1.0]) {
+      final from = me.c + dir * half + across * (span * k);
+      for (final ob in obstacles) {
+        final t = rayObb(from, dir, ob);
+        if (t != null && t <= maxDist && (best == null || t < best - 1e-6)) {
+          best = t;
+          bestFrom = from;
+        }
+      }
+    }
+    if (best != null) out.add(Gap(side, bestFrom!, bestFrom + dir * best, best));
+  }
+  return out;
+}

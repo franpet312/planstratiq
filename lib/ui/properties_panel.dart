@@ -5,6 +5,7 @@ import 'package:web/web.dart' as web;
 
 import '../app/theme.dart';
 import '../models/catalog_gen.dart';
+import '../models/collision.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
@@ -216,6 +217,36 @@ class PropertiesPanel extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- objekt
+  // razmaci do zidova i namještaja: upiši broj i objekt se pomakne točno toliko od prepreke
+  List<Widget> _gapFields(PlacedItem it) {
+    final gaps = {for (final g in itemGaps(plan, it, maxDist: 6)) g.side: g};
+    if (gaps.isEmpty) return const [];
+    Widget f(String side, String label) {
+      final g = gaps[side];
+      if (g == null) return const Expanded(child: SizedBox());
+      return Expanded(
+        child: NumField(
+          key: _k('gap_$side'),
+          label: label,
+          value: g.distance * 100,
+          suffix: 'cm',
+          decimals: 0,
+          onSubmit: (v) => c.setItemGap(it.id, side, v / 100),
+        ),
+      );
+    }
+
+    return [
+      const SectionTitle('Udaljenost do zida / namještaja'),
+      Row(children: [f('left', 'Lijevo'), const SizedBox(width: 6), f('right', 'Desno')]),
+      Row(children: [f('back', 'Iza'), const SizedBox(width: 6), f('front', 'Ispred')]),
+      Text('Iste mjere vidiš na tlocrtu (narančasto, u cm). Upiši broj i objekt se pomakne točno toliko od prepreke.',
+          style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+    ];
+  }
+
+  Plan get plan => c.plan;
+
   List<Widget> _item(PlacedItem? it) {
     if (it == null) return [];
     final cat = catalogById(it.catalogId);
@@ -241,6 +272,7 @@ class PropertiesPanel extends StatelessWidget {
       const SizedBox(height: 6),
       Text('Na tlocrtu povuci kružić iznad objekta za slobodnu rotaciju, strelicama ga pomakni za 1 cm.',
           style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+      ..._gapFields(it),
       if (cat?.variant != null || it.productUrl != null) ...[
         const SizedBox(height: 10),
         if (cat?.variant != null) Text('Varijanta: ${cat!.variant}', style: AppText.ui(size: 12, color: Pal.inkSoft)),

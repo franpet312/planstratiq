@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
 import '../models/catalog.dart';
+import '../models/collision.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
@@ -579,10 +580,38 @@ class PlanPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------- odabir
+  // razmaci odabranog objekta do zidova i namještaja (kote u cm)
+  void _gaps(Canvas canvas, PlacedItem it) {
+    if (isFloorLike(it.shape) && !balconyShapes.contains(it.shape)) return;
+    final line = Paint()
+      ..color = const Color(0xFFB0562B)
+      ..strokeWidth = 1.2;
+    for (final g in itemGaps(plan, it, maxDist: 4)) {
+      if (g.distance < 0.005) continue;
+      final a = s(g.from), b = s(g.to);
+      canvas.drawLine(a, b, line);
+      final d = (b - a);
+      final n = d.distance < 1e-6 ? const Offset(1, 0) : Offset(-d.dy, d.dx) / d.distance;
+      for (final q in [a, b]) {
+        canvas.drawLine(q - n * 4, q + n * 4, line);
+      }
+      final label = '${(g.distance * 100).round()}';
+      final tp = TextPainter(
+        text: TextSpan(text: label, style: AppText.narrow(size: 11, weight: FontWeight.w700, color: Colors.white)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final mid = (a + b) / 2;
+      final box = Rect.fromCenter(center: mid, width: tp.width + 8, height: tp.height + 2);
+      canvas.drawRRect(RRect.fromRectAndRadius(box, const Radius.circular(4)), Paint()..color = const Color(0xFFB0562B));
+      tp.paint(canvas, box.topLeft + const Offset(4, 1));
+    }
+  }
+
   void _selectionOverlay(Canvas canvas) {
     if (st.selection.kind != SelKind.item) return;
     final it = plan.itemById(st.selection.id);
     if (it == null) return;
+    _gaps(canvas, it);
     canvas.save();
     final c = s(it.pos);
     canvas.translate(c.dx, c.dy);

@@ -37,7 +37,11 @@ class PlanPaintState {
     this.guides = const [],
     this.walker,
     this.dropGhost,
+    this.site,
   });
+
+  /// Parcela (pravokutnik) za prikaz ruba i ulice.
+  final Rect? site;
 
   final Plan plan;
   final double scale;
@@ -88,6 +92,7 @@ class PlanPainter extends CustomPainter {
       canvas.drawRect(Offset.zero & size, Paint()..color = Pal.paper);
       _grid(canvas, size);
       _image(canvas);
+      _site(canvas);
       _ghostBelow(canvas);
     }
     _rooms(canvas);
@@ -106,6 +111,55 @@ class PlanPainter extends CustomPainter {
       _previews(canvas);
       _walker(canvas);
     }
+  }
+
+  // rub parcele (isprekidano), ulica i mjere parcele
+  void _site(Canvas canvas) {
+    final r = st.site;
+    if (r == null) return;
+    final tl = s(r.topLeft), br = s(r.bottomRight);
+    final rect = Rect.fromPoints(tl, br);
+    canvas.drawRect(rect, Paint()..color = const Color(0x1A5E8C3A));
+    final dash = Paint()
+      ..color = const Color(0xFF4E7A35)
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+    final corners = [rect.topLeft, rect.topRight, rect.bottomRight, rect.bottomLeft];
+    for (var i = 0; i < 4; i++) {
+      final a = corners[i], b = corners[(i + 1) % 4];
+      final len = (b - a).distance;
+      final d = (b - a) / len;
+      for (var t = 0.0; t < len; t += 14) {
+        canvas.drawLine(a + d * t, a + d * math.min(t + 8, len), dash);
+      }
+    }
+    // ulica
+    final street = plan.site.street;
+    final band = st.scale * 9;
+    final sr = switch (street) {
+      'N' => Rect.fromLTRB(rect.left - 400, rect.top - band - st.scale * 2, rect.right + 400, rect.top - st.scale * 2),
+      'E' => Rect.fromLTRB(rect.right + st.scale * 2, rect.top - 400, rect.right + st.scale * 2 + band, rect.bottom + 400),
+      'W' => Rect.fromLTRB(rect.left - st.scale * 2 - band, rect.top - 400, rect.left - st.scale * 2, rect.bottom + 400),
+      _ => Rect.fromLTRB(rect.left - 400, rect.bottom + st.scale * 2, rect.right + 400, rect.bottom + st.scale * 2 + band),
+    };
+    canvas.drawRect(sr, Paint()..color = const Color(0x22303A40));
+    final tp = TextPainter(
+      text: TextSpan(text: 'ULICA', style: AppText.narrow(size: 11, weight: FontWeight.w700, color: const Color(0x99303A40))),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    canvas.save();
+    canvas.translate(sr.center.dx, sr.center.dy);
+    if (street == 'E' || street == 'W') canvas.rotate(-math.pi / 2);
+    tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+    canvas.restore();
+    // mjere parcele
+    final lbl = TextPainter(
+      text: TextSpan(
+          text: 'Parcela ${fmtM(r.width, 1)} × ${fmtM(r.height, 1)} m · ${fmtM(r.width * r.height, 0)} m²',
+          style: AppText.ui(size: 11, weight: FontWeight.w600, color: const Color(0xFF4E7A35))),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    lbl.paint(canvas, rect.topLeft + const Offset(6, 5));
   }
 
   Map<String, _WallInfo> _wallInfo() {

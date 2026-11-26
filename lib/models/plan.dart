@@ -446,6 +446,9 @@ class Plan {
   /// Zakreni sljeme za 90° (dvostrešni krov) ili smjer pada (jednostrešni).
   bool roofTurn = false;
 
+  /// Parcela i okolina kuće.
+  Site site = Site();
+
   /// Etaža ispod aktivne (za prozirni prikaz na tlocrtu), ako postoji.
   Level? get levelBelow => active > 0 ? levels[active - 1] : null;
 
@@ -514,6 +517,7 @@ class Plan {
         'name': name,
         'roof': roof,
         'roofStyle': {'type': roofType, 'pitch': roofPitch, 'overhang': roofOverhang, 'color': roofColor, 'turn': roofTurn},
+        'site': site.toJson(),
         'active': active,
         'levels': [for (final l in levels) l.toJson(includeImage: includeImage)],
       };
@@ -541,8 +545,71 @@ class Plan {
       if (rs['color'] is int) plan.roofColor = rs['color'] as int;
       plan.roofTurn = _b(rs['turn']);
     }
+    if (j['site'] is Map) plan.site = Site.fromJson(Map<String, dynamic>.from(j['site'] as Map));
     return plan;
   }
 
   Plan clone() => Plan.fromJson(toJson());
+}
+
+
+/// Parcela (pravokutnik oko kuće), ograda, ulica i okolni krajolik.
+class Site {
+  Site({
+    this.width = 0,
+    this.depth = 0,
+    this.offsetX = 0,
+    this.offsetY = 0,
+    this.fence = 'wood',
+    this.fenceHeight = 1.2,
+    this.street = 'S',
+    this.surroundings = 'suburb',
+    this.driveway = true,
+  });
+
+  /// Širina (istok–zapad) i dubina (sjever–jug) parcele u m; 0 = automatski oko kuće.
+  double width, depth;
+
+  /// Pomak parcele u odnosu na sredinu kuće (m).
+  double offsetX, offsetY;
+
+  /// none | wood | metal | panel | hedge | wall
+  String fence;
+  double fenceHeight;
+
+  /// Strana parcele na ulici: N, S, E, W (sjever je gore na tlocrtu).
+  String street;
+
+  /// none | suburb (susjedstvo) | countryside (selo, polja) | city (grad)
+  String surroundings;
+
+  /// Prilaz od ulaza u parcelu do kuće.
+  bool driveway;
+
+  Map<String, dynamic> toJson() => {
+        'width': width,
+        'depth': depth,
+        'offsetX': offsetX,
+        'offsetY': offsetY,
+        'fence': fence,
+        'fenceHeight': fenceHeight,
+        'street': street,
+        'surroundings': surroundings,
+        'driveway': driveway,
+      };
+
+  factory Site.fromJson(Map<String, dynamic> j) {
+    double d(String k, double def) => (j[k] as num?)?.toDouble() ?? def;
+    return Site(
+      width: d('width', 0),
+      depth: d('depth', 0),
+      offsetX: d('offsetX', 0),
+      offsetY: d('offsetY', 0),
+      fence: (j['fence'] as String?) ?? 'wood',
+      fenceHeight: d('fenceHeight', 1.2),
+      street: (j['street'] as String?) ?? 'S',
+      surroundings: (j['surroundings'] as String?) ?? 'suburb',
+      driveway: j['driveway'] != false,
+    );
+  }
 }

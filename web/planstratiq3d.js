@@ -323,6 +323,48 @@ const textures = {
       g.fill();
     }
   }, 0.53),
+  asphalt: () => canvasTex('asphalt', 256, (g, n) => {
+    const r = rnd(61);
+    g.fillStyle = '#8c8c8c';
+    g.fillRect(0, 0, n, n);
+    noise(g, n, 16000, 0.35, r);
+  }, 2),
+  paving: () => canvasTex('paving', 256, (g, n) => {
+    const r = rnd(67), k = 8;
+    g.fillStyle = '#9a9a9a';
+    g.fillRect(0, 0, n, n);
+    for (let j = 0; j < k; j++) for (let i = 0; i < k / 2; i++) {
+      const v = Math.floor(200 + r() * 40);
+      g.fillStyle = `rgb(${v},${v - 3},${v - 8})`;
+      const off = j % 2 ? n / k : 0;
+      g.fillRect(((i * 2 * n) / k + off) % n + 1, (j * n) / k + 1, (2 * n) / k - 2, n / k - 2);
+      if (off && i === k / 2 - 1) g.fillRect(1, (j * n) / k + 1, n / k - 2, n / k - 2);
+    }
+  }, 1.6),
+  lawn: () => canvasTex('lawn', 256, (g, n) => {
+    const r = rnd(71);
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = i % 2 ? '#d9d9d9' : '#eeeeee';
+      g.fillRect(0, (i * n) / 4, n, n / 4);
+    }
+    noise(g, n, 9000, 0.25, r);
+  }, 6),
+  field: () => canvasTex('field', 256, (g, n) => {
+    const r = rnd(73);
+    g.fillStyle = '#e6e6e6';
+    g.fillRect(0, 0, n, n);
+    for (let x = 0; x < n; x += 8) {
+      g.fillStyle = 'rgba(0,0,0,0.12)';
+      g.fillRect(x, 0, 3, n);
+    }
+    noise(g, n, 6000, 0.2, r);
+  }, 6),
+  facadeWin: () => canvasTex('facadeWin', 256, (g, n) => {
+    g.fillStyle = '#f0f0f0';
+    g.fillRect(0, 0, n, n);
+    g.fillStyle = '#3d4a55';
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) g.fillRect(i * 128 + 30, j * 128 + 24, 68, 78);
+  }, 6),
   plaster: () => canvasTex('plaster', 256, (g, n) => {
     const r = rnd(29);
     g.fillStyle = '#f2f2f2';
@@ -1472,6 +1514,7 @@ class Engine {
 
   setMode(mode) {
     if (mode === this.mode) return;
+    queueMicrotask(() => this._applyNight());
     if (this.mode === 'orbit') this.savedOrbit = { pos: this.camera.position.clone(), target: this.orbit.target.clone() };
     if (this.fpv.isLocked) this.fpv.unlock();
     this.keys.clear();
@@ -1586,24 +1629,71 @@ class Engine {
 
   setTime(h) {
     this.time = h;
-    const t = clamp((h - 6) / 14, 0, 1);
-    const elev = THREE.MathUtils.degToRad(Math.max(3, 62 * Math.sin(Math.PI * t)));
-    const az = Math.PI * t;
+    // sunce: izlazi u 6, zalazi u 20; izvan toga je ispod obzora (noć)
+    const t = (h - 6) / 14;
+    const elevDeg = 62 * Math.sin(Math.PI * t);
+    const elev = THREE.MathUtils.degToRad(Math.max(3, elevDeg));
+    const az = Math.PI * clamp(t, 0, 1);
     const dir = new THREE.Vector3(Math.cos(elev) * Math.cos(az), Math.sin(elev), Math.cos(elev) * Math.sin(az));
-    this.sky.material.uniforms.sunPosition.value.copy(dir);
+    // noć: 0 danju, 1 kad je sunce ~8° ispod obzora
+    const night = clamp((2 - elevDeg) / 10, 0, 1);
+    this.night = night;
+    const skyDir = new THREE.Vector3(Math.cos(az), Math.sin(THREE.MathUtils.degToRad(elevDeg)), Math.sin(az)).normalize();
+    this.sky.material.uniforms.sunPosition.value.copy(night > 0 ? skyDir : dir);
     const c = this.center || new THREE.Vector3();
-    this.sun.position.copy(c).addScaledVector(dir, 60);
-    this.sun.target.position.copy(c);
-    const warm = new THREE.Color(0xffb27a), white = new THREE.Color(0xfff4e6);
+    const warm = new THREE.Color(0xffb27a), white = new THREE.Color(0xfff4e6), moon = new THREE.Color(0x9fb4ff);
     const k = clamp(Math.sin(elev) / Math.sin(THREE.MathUtils.degToRad(35)), 0, 1);
-    this.sun.color.copy(warm).lerp(white, k);
-    this.sun.intensity = 0.8 + 2.2 * k;
-    this.hemi.intensity = 0.25 + 0.35 * k;
+    if (night > 0) {
+      // mjesečina s istoka-jugoistoka
+      const md = new THREE.Vector3(-0.4, 0.75, 0.5).normalize();
+      this.sun.position.copy(c).addScaledVector(night > 0.5 ? md : dir, 60);
+    } else {
+      this.sun.position.copy(c).addScaledVector(dir, 60);
+    }
+    this.sun.target.position.copy(c);
+    this.sun.color.copy(warm).lerp(white, k).lerp(moon, night);
+    this.sun.intensity = (0.8 + 2.2 * k) * (1 - night) + 0.22 * night;
+    this.hemi.intensity = (0.25 + 0.35 * k) * (1 - night) + 0.05 * night;
+    this.hemi.color.set(0xdfeeff).lerp(new THREE.Color(0x3a4a70), night);
+    this.scene.environmentIntensity = 0.45 * (1 - night) + 0.04 * night;
+    this.scene.fog.color.set(0xcfdbe3).lerp(new THREE.Color(0x0d1524), night);
     const half = Math.max(20, (this.extent || 20) * 0.9);
     const sc = this.sun.shadow.camera;
     Object.assign(sc, { left: -half, right: half, top: half, bottom: -half });
     sc.updateProjectionMatrix();
-    this.renderer.toneMappingExposure = 0.75 + 0.25 * k;
+    this.renderer.toneMappingExposure = (0.75 + 0.25 * k) * (1 - night) + 1.05 * night;
+    // zvijezde
+    if (!this.stars) {
+      const pts = [];
+      const rr = rnd(99);
+      for (let i = 0; i < 1500; i++) {
+        const u = rr() * Math.PI * 2, v = Math.acos(rr() * 0.95);
+        pts.push(Math.sin(v) * Math.cos(u) * 800, Math.cos(v) * 800, Math.sin(v) * Math.sin(u) * 800);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      this.stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+      this.scene.add(this.stars);
+    }
+    this.stars.material.opacity = clamp((night - 0.4) / 0.6, 0, 1) * 0.9;
+    this.stars.visible = night > 0.4;
+    this._applyNight();
+  }
+
+  // noću svijetle prozori, ulična rasvjeta i prozori susjeda
+  _applyNight() {
+    const n = this.night || 0;
+    const glass = mat(0, { glass: true });
+    glass.emissive = glass.emissive || new THREE.Color();
+    glass.emissive.set(0xffcf8f);
+    glass.emissiveIntensity = this.mode === 'orbit' ? 0.55 * n : 0;
+    for (const { m, e, op } of this.nightMats || []) {
+      m.emissiveIntensity = e * n;
+      if (op !== undefined) {
+        m.opacity = op * n;
+        m.visible = n > 0.05;
+      }
+    }
   }
 
   screenshot() {
@@ -1757,6 +1847,7 @@ class Engine {
     this._tgt = this.world;
     this._passive = false;
     if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, p.roofStyle || {});
+    this._buildSite(p.site, p.projectId);
     this._applyVisibility();
     this._updateSelectionHelper();
   }
@@ -1864,6 +1955,7 @@ class Engine {
     for (const r of this.roofs) r.visible = this.mode !== 'third' && !hiddenAbove;
     // podrum se izvana ne vidi ispod trave
     if (this.ground) this.ground.visible = !(this.mode === 'orbit' && this.fy < -0.1);
+    if (this.siteGroup) this.siteGroup.visible = this.ground.visible;
   }
 
   _buildWall(w, nodes, ends, openings) {
@@ -2099,6 +2191,352 @@ class Engine {
       mk(pts, mat(r.floorColor, { tex: r.floorTexture, roughness: r.floorTexture === 'wood' ? 0.82 : 0.86, env: 0.3, double: true }), 0.03,
         { userData: { kind: 'room', id: r.id }, holes: p.holes });
       if (!this._passive) mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true, holes: p.ceilHoles });
+    }
+  }
+
+  // ------------------------------------------------------------------ parcela i okolina
+  // Sve je u koordinatama „uz ulicu” (a) i „prema ulici” (o): rub parcele prema ulici je na o = e.
+  _buildSite(site, seedKey) {
+    this.siteGroup = null;
+    this.nightMats = [];
+    if (!site || !site.rect) {
+      this.ground.material = mat(0xa9bb92, { tex: 'grass', roughness: 1 });
+      return;
+    }
+    const G = new THREE.Group();
+    this.world.add(G);
+    this.siteGroup = G;
+    const [x0, y0, x1, y1] = site.rect;
+    const N = { S: [0, 1], N: [0, -1], E: [1, 0], W: [-1, 0] }[site.street] || [0, 1];
+    const T = [-N[1], N[0]]; // smjer uz ulicu
+    const toW = (a, o) => ({ x: T[0] * a + N[0] * o, z: T[1] * a + N[1] * o });
+    const toA = (x, z) => ({ a: T[0] * x + T[1] * z, o: N[0] * x + N[1] * z });
+    const corners = [toA(x0, y0), toA(x1, y0), toA(x1, y1), toA(x0, y1)];
+    const a0 = Math.min(...corners.map((c) => c.a)), a1 = Math.max(...corners.map((c) => c.a));
+    const oB = Math.min(...corners.map((c) => c.o)), e = Math.max(...corners.map((c) => c.o));
+    const hb = site.house;
+    const hc = [toA(hb[0], hb[1]), toA(hb[2], hb[1]), toA(hb[2], hb[3]), toA(hb[0], hb[3])];
+    const hFront = Math.max(...hc.map((c) => c.o));
+    const hMid = (Math.min(...hc.map((c) => c.a)) + Math.max(...hc.map((c) => c.a))) / 2;
+    const door = site.door ? toA(site.door[0], site.door[1]) : null;
+    const gateA = clamp(door ? door.a : hMid, a0 + 2.5, a1 - 2.5);
+    const r = rnd(Array.from(String(seedKey || 'p')).reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7));
+    const ang = Math.atan2(T[1], T[0]);
+
+    // pravokutnik u (a, o) na visini y
+    const slab = (A0, A1, O0, O1, y, h, m, cast = false) => {
+      const w = A1 - A0, d = O1 - O0;
+      if (w <= 0 || d <= 0) return null;
+      const geo = new THREE.BoxGeometry(w, h, d);
+      scaleBoxUV(geo, w, h, d);
+      // UV gornje plohe u metrima svijeta (teksture se ne rastežu)
+      const msh = new THREE.Mesh(geo, m);
+      const c = toW((A0 + A1) / 2, (O0 + O1) / 2);
+      msh.position.set(c.x, y + h / 2, c.z);
+      msh.rotation.y = -ang;
+      msh.receiveShadow = true;
+      msh.castShadow = cast;
+      G.add(msh);
+      return msh;
+    };
+    const env = site.env || 'suburb';
+    const meadow = env === 'city' ? 0x9aa58a : 0xb2b98d;
+    this.ground.material = mat(env === 'none' ? 0xa9bb92 : meadow, { tex: 'grass', roughness: 1 });
+
+    // travnjak parcele
+    slab(a0, a1, oB, e, -0.012, 0.01, mat(0x8db567, { tex: 'lawn', roughness: 1 }));
+    // pločnik, rubnjak, cesta, pločnik preko
+    const L = 400;
+    const walk = mat(0xc9c5bc, { tex: 'paving', roughness: 0.9 });
+    const road = mat(0x55585b, { tex: 'asphalt', roughness: 0.95 });
+    slab(-L, L, e, e + 2, -0.01, 0.12, walk);
+    slab(-L, L, e + 2, e + 2.15, -0.01, 0.14, mat(0xb9b6ae, { roughness: 0.9 }));
+    slab(-L, L, e + 2.15, e + 9.15, -0.01, 0.02, road);
+    for (let a = -L; a < L; a += 6) slab(a, a + 3, e + 5.6, e + 5.72, 0.012, 0.002, mat(0xf2f2f0, { roughness: 0.6 }));
+    slab(-L, L, e + 9.15, e + 9.3, -0.01, 0.14, mat(0xb9b6ae, { roughness: 0.9 }));
+    slab(-L, L, e + 9.3, e + 11.3, -0.01, 0.12, walk);
+    // prilaz od ulice do kuće (do ulaznih vrata, ako ih ima)
+    if (site.driveway) {
+      const dA = door ? door.a : gateA;
+      const end = door ? door.o + 0.15 : hFront;
+      if (end < e) {
+        slab(gateA - 1.6, gateA + 1.6, Math.max(end, e - 6), e, -0.01, 0.025, mat(0xbdb8ae, { tex: 'paving', roughness: 0.9 }));
+        if (door && Math.abs(dA - gateA) > 1.6) {
+          // staza od prilaza do vrata
+          const lo = Math.min(dA, gateA), hi = Math.max(dA, gateA);
+          slab(lo - 0.6, hi + 0.6, end, end + 1.2, -0.01, 0.028, mat(0xbdb8ae, { tex: 'paving', roughness: 0.9 }));
+        }
+        if (end < e - 6) slab(dA - 0.6, dA + 0.6, end, e - 6 + 0.01, -0.01, 0.028, mat(0xbdb8ae, { tex: 'paving', roughness: 0.9 }));
+        // upušteni rubnjak na ulazu
+        slab(gateA - 1.6, gateA + 1.6, e, e + 2.15, -0.01, 0.125, mat(0xbdb8ae, { tex: 'paving', roughness: 0.9 }));
+      }
+    }
+
+    // ograda po rubu parcele (s ulazom na strani ulice)
+    if (site.fence && site.fence !== 'none') {
+      const fh = clamp(site.fenceH || 1.2, 0.4, 2.2);
+      const edges = [
+        [[a0, e], [gateA - 2.2, e]],
+        [[gateA + 2.2, e], [a1, e]],
+        [[a1, e], [a1, oB]],
+        [[a1, oB], [a0, oB]],
+        [[a0, oB], [a0, e]],
+      ];
+      for (const [[pa, po], [qa, qo]] of edges) this._fence(G, toW(pa, po), toW(qa, qo), site.fence, fh);
+      // stupovi ulaza
+      for (const ga of [gateA - 2.2, gateA + 2.2]) {
+        const c = toW(ga, e);
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, fh + 0.2, 0.3), mat(0xd8d2c8, { tex: 'plaster', roughness: 0.95 }));
+        post.position.set(c.x, (fh + 0.2) / 2, c.z);
+        post.castShadow = true;
+        G.add(post);
+      }
+    }
+
+    // ulična rasvjeta
+    const poleMat = mat(0x3a3d40, { metalness: 0.5, roughness: 0.5 });
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xf6f2e8, emissive: 0xffd9a0, emissiveIntensity: 0 });
+    this.nightMats.push({ m: headMat, e: 2.2 });
+    for (let a = Math.floor(a0 / 24) * 24 - 72; a < a1 + 72; a += 24) {
+      const c = toW(a, e + 1.6);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 5, 8), poleMat);
+      pole.position.set(c.x, 2.5, c.z);
+      G.add(pole);
+      const arm = toW(a, e + 2.4);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.22), headMat);
+      head.position.set(arm.x, 4.95, arm.z);
+      head.rotation.y = -ang;
+      G.add(head);
+    }
+
+    if (env === 'none') return;
+    // drveće (instancirano)
+    const trees = [];
+    const free = (a, o) => !(a > a0 - 1 && a < a1 + 1 && o > oB - 1 && o < e + 12);
+    const lotW = 22;
+    // susjedstvo: kuće lijevo i desno uz ulicu i preko ceste
+    const houses = [];
+    if (env === 'suburb' || env === 'countryside') {
+      const gap = env === 'suburb' ? 0 : 14;
+      const depth = Math.max(18, e - oB);
+      for (const dir of [-1, 1]) {
+        let a = dir < 0 ? a0 - gap : a1 + gap;
+        for (let k = 0; k < (env === 'suburb' ? 4 : 2); k++) {
+          const w = lotW + r() * 6;
+          const la0 = dir < 0 ? a - w : a, la1 = dir < 0 ? a : a + w;
+          houses.push({ a0: la0, a1: la1, o0: e - depth, o1: e, front: e });
+          a = dir < 0 ? la0 - (env === 'suburb' ? 0 : 20 + r() * 30) : la1 + (env === 'suburb' ? 0 : 20 + r() * 30);
+        }
+      }
+      if (env === 'suburb') {
+        for (let a = a0 - 70 + r() * 6; a < a1 + 70; a += lotW + r() * 6) houses.push({ a0: a, a1: a + lotW, o0: e + 11.3, o1: e + 11.3 + depth, front: e + 11.3, across: true });
+      } else {
+        for (let i = 0; i < 3; i++) {
+          const a = a0 - 60 + r() * (a1 - a0 + 120);
+          houses.push({ a0: a, a1: a + 24, o0: e + 30 + r() * 30, o1: e + 60 + r() * 20, front: e + 30, across: true, farm: true });
+        }
+      }
+      for (const h of houses) this._neighbor(G, h, toW, ang, r, env, trees, free);
+      if (env === 'countryside') {
+        // polja
+        const cols = [0xc9b66a, 0x9db86b, 0xb58e5a, 0x8fae5c];
+        for (let i = 0; i < 8; i++) {
+          const fa = a0 - 150 + r() * 300, fo = r() < 0.5 ? oB - 40 - r() * 120 : e + 40 + r() * 120;
+          const fw = 40 + r() * 60, fd = 30 + r() * 50;
+          if (!free(fa, fo)) continue;
+          const f = slab(fa, fa + fw, fo, fo + fd, -0.011, 0.005, mat(cols[i % cols.length], { tex: 'field', roughness: 1 }));
+          if (f) f.rotation.y += (r() - 0.5) * 0.3;
+        }
+      }
+    }
+    if (env === 'city') {
+      // stambene zgrade uokolo
+      const facade = mat(0xe3ddd3, { tex: 'facadeWin', roughness: 0.9 });
+      const blocks = [];
+      for (let a = a0 - 90; a < a1 + 90; a += 34) blocks.push([a, e + 14, 26, 14 + r() * 6]);
+      for (const dir of [-1, 1]) for (let k = 0; k < 2; k++) blocks.push([dir < 0 ? a0 - 6 - 30 * (k + 1) : a1 + 6 + 30 * k, oB - 4, 24, e - oB - 2]);
+      for (let a = a0 - 60; a < a1 + 60; a += 36) blocks.push([a, oB - 40, 28, 16]);
+      for (const [ba, bo, bw, bd] of blocks) {
+        const h = 9 + Math.floor(r() * 5) * 3;
+        const m = slab(ba, ba + bw, bo, bo + bd, 0, h, facade, true);
+        if (m) {
+          const win = new THREE.MeshStandardMaterial({ color: 0x2b3640, emissive: 0xffc98a, emissiveIntensity: 0, transparent: true, opacity: 0.0 });
+          this.nightMats.push({ m: win, e: 0.6, op: 0.55 });
+          const glow = m.clone();
+          glow.material = win;
+          glow.scale.set(1.004, 0.98, 1.004);
+          G.add(glow);
+        }
+      }
+    }
+    // stabla po okolici i drvored uz ulicu
+    const n = env === 'city' ? 40 : env === 'countryside' ? 260 : 120;
+    for (let i = 0; i < n; i++) {
+      const a = a0 - 160 + r() * (a1 - a0 + 320), o = oB - 160 + r() * (e - oB + 320);
+      if (!free(a, o) || (o > e - 1 && o < e + 12)) continue;
+      if (houses.some((h) => a > h.a0 + 2 && a < h.a1 - 2 && o > h.front - 16 && o < h.front + 16 && o > Math.min(h.o0, h.o1) && o < Math.max(h.o0, h.o1))) continue;
+      trees.push([a, o, 0.8 + r() * 0.9, r()]);
+    }
+    for (let a = a0 - 70; a < a1 + 70; a += 12) if (Math.abs(a - gateA) > 4) trees.push([a + r() * 2, e + 10.3, 0.75 + r() * 0.2, r(), true]);
+    this._trees(G, trees.map(([a, o, s, k, st]) => ({ ...toW(a, o), s, k, st })));
+    // brda u daljini
+    const hills = new THREE.Group();
+    const hm = mat(0x7f9a74, { roughness: 1 });
+    const cx = (x0 + x1) / 2, cz = (y0 + y1) / 2;
+    for (let i = 0; i < 26; i++) {
+      const t = (i / 26) * Math.PI * 2 + r() * 0.2;
+      const R = 250 + r() * 100, rad = 70 + r() * 80, h = 14 + r() * 34;
+      const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), hm);
+      hill.position.set(cx + Math.cos(t) * R, -1, cz + Math.sin(t) * R);
+      hill.scale.set(rad, h, rad * (0.6 + r() * 0.6));
+      hill.rotation.y = r() * 3;
+      hills.add(hill);
+    }
+    G.add(hills);
+    this._applyNight();
+  }
+
+  _fence(G, p, q, type, fh) {
+    const dx = q.x - p.x, dz = q.z - p.z, len = Math.hypot(dx, dz);
+    if (len < 0.2) return;
+    const ang = Math.atan2(dz, dx);
+    const grp = new THREE.Group();
+    grp.position.set(p.x, 0, p.z);
+    grp.rotation.y = -ang;
+    G.add(grp);
+    const box = (w, h, d, x, y, z, m, cast = true) => {
+      const geo = new THREE.BoxGeometry(w, h, d);
+      scaleBoxUV(geo, w, h, d, x - w / 2, y - h / 2);
+      const b = new THREE.Mesh(geo, m);
+      b.position.set(x, y, z);
+      b.castShadow = cast;
+      b.receiveShadow = true;
+      grp.add(b);
+      return b;
+    };
+    if (type === 'hedge') {
+      box(len, fh, 0.7, len / 2, fh / 2, 0, mat(0x4d7436, { tex: 'carpet', roughness: 1 }));
+      return;
+    }
+    if (type === 'wall') {
+      box(len, fh, 0.2, len / 2, fh / 2, 0, mat(0xe6e0d6, { tex: 'plaster', roughness: 0.95 }));
+      box(len + 0.04, 0.05, 0.26, len / 2, fh + 0.025, 0, mat(0xb9b3a8, { tex: 'stone', roughness: 0.8 }));
+      return;
+    }
+    const n = Math.max(1, Math.round(len / 2.2));
+    const step = len / n;
+    const postMat = type === 'wood' ? mat(0x7a5a3e, { roughness: 0.8 }) : mat(type === 'panel' ? 0x2f5a3a : 0x2e3236, { metalness: 0.4, roughness: 0.5 });
+    for (let i = 0; i <= n; i++) box(0.08, fh + 0.05, 0.08, i * step, (fh + 0.05) / 2, 0, postMat);
+    if (type === 'wood') {
+      box(len, fh - 0.08, 0.025, len / 2, (fh - 0.08) / 2 + 0.05, 0.05, mat(0xa77d55, { tex: 'woodPanel', roughness: 0.85 }));
+    } else if (type === 'panel') {
+      const m = mat(0x2f5a3a, { roughness: 0.6, opacity: 0.45 });
+      m.depthWrite = false;
+      box(len, fh - 0.05, 0.01, len / 2, fh / 2, 0, m, false);
+    } else {
+      box(len, 0.04, 0.04, len / 2, fh - 0.05, 0, postMat);
+      box(len, 0.04, 0.04, len / 2, 0.12, 0, postMat);
+      const bars = Math.floor(len / 0.12);
+      const geo = new THREE.BoxGeometry(0.02, fh - 0.15, 0.02);
+      const inst = new THREE.InstancedMesh(geo, postMat, bars);
+      const m4 = new THREE.Matrix4();
+      for (let i = 0; i < bars; i++) {
+        m4.makeTranslation((i + 0.5) * (len / bars), (fh - 0.15) / 2 + 0.07, 0);
+        inst.setMatrixAt(i, m4);
+      }
+      inst.castShadow = true;
+      grp.add(inst);
+    }
+  }
+
+  // jednostavna susjedna kuća na svojoj parceli
+  _neighbor(G, h, toW, ang, r, env, trees, free) {
+    const lotW = h.a1 - h.a0;
+    const w = Math.min(lotW - 6, 9 + r() * 4), d = 8 + r() * 3.5;
+    const floors = h.farm ? 1 : r() < 0.45 ? 2 : 1;
+    const H = floors * 2.9;
+    const am = (h.a0 + h.a1) / 2 + (r() - 0.5) * (lotW - w - 6);
+    const setback = 5 + r() * 3;
+    const oc = h.across ? h.front + setback + d / 2 : h.front - setback - d / 2;
+    const c = toW(am, oc);
+    const grp = new THREE.Group();
+    grp.position.set(c.x, 0, c.z);
+    grp.rotation.y = -ang;
+    G.add(grp);
+    const walls = [0xf1ebe0, 0xe8dcc7, 0xdfe3e0, 0xf3e6d8, 0xd9cdbd, 0xece7df][Math.floor(r() * 6)];
+    const roofC = [0xa5533a, 0x8c3b2a, 0x5e4033, 0x3f4347][Math.floor(r() * 4)];
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, H, d), mat(walls, { tex: 'plaster', roughness: 0.95 }));
+    scaleBoxUV(body.geometry, w, H, d);
+    body.position.y = H / 2;
+    body.castShadow = body.receiveShadow = true;
+    grp.add(body);
+    // prozori (noću svijetle)
+    const win = new THREE.MeshStandardMaterial({ color: 0x33404b, roughness: 0.2, emissive: 0xffcf8f, emissiveIntensity: 0 });
+    this.nightMats.push({ m: win, e: 0.9 * (0.4 + r() * 0.6) });
+    for (let f = 0; f < floors; f++) {
+      for (let i = 0; i < Math.floor(w / 2.6); i++) {
+        const x = -w / 2 + 1.3 + i * ((w - 2.6) / Math.max(1, Math.floor(w / 2.6) - 1));
+        for (const sz of [-1, 1]) {
+          const m = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.3, 0.04), win);
+          m.position.set(x, f * 2.9 + 1.55, sz * (d / 2 + 0.02));
+          grp.add(m);
+        }
+      }
+    }
+    // dvostrešni krov
+    const pitch = 0.6, ov = 0.5;
+    const rise = (d / 2 + ov) * pitch;
+    const shape = new THREE.Shape([new THREE.Vector2(-d / 2 - ov, 0), new THREE.Vector2(d / 2 + ov, 0), new THREE.Vector2(0, rise)]);
+    const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: w + 2 * ov, bevelEnabled: false }), mat(roofC, { tex: 'roof', roughness: 0.85 }));
+    roof.rotation.y = Math.PI / 2;
+    roof.position.set(-w / 2 - ov, H - ov * pitch, 0);
+    roof.castShadow = true;
+    grp.add(roof);
+    // vrt: drvo ili dva
+    for (let k = 0; k < 2; k++) {
+      const ta = h.a0 + 2 + r() * (lotW - 4);
+      const to = h.across ? h.front + setback + d + 3 + r() * 6 : h.front - setback - d - 3 - r() * 6;
+      if (free(ta, to)) trees.push([ta, to, 0.8 + r() * 0.6, r()]);
+    }
+    // živica uz ulicu
+    if (env === 'suburb' && r() < 0.7) {
+      const p = toW(h.a0 + 0.5, h.front + (h.across ? 0.5 : -0.5)), q = toW(h.a1 - 4.5, h.front + (h.across ? 0.5 : -0.5));
+      this._fence(G, p, q, r() < 0.5 ? 'hedge' : 'wood', 1.1);
+    }
+  }
+
+  _trees(G, list) {
+    if (!list.length) return;
+    const trunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 1, 6);
+    const crownGeo = new THREE.IcosahedronGeometry(1, 1);
+    const coneGeo = new THREE.ConeGeometry(1, 1, 8);
+    const trunks = new THREE.InstancedMesh(trunkGeo, mat(0x5e4a36, { roughness: 1 }), list.length);
+    const crowns = new THREE.InstancedMesh(crownGeo, mat(0xffffff, { roughness: 1 }), list.length);
+    const cones = new THREE.InstancedMesh(coneGeo, mat(0x3e5f34, { roughness: 1 }), list.length);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
+    const col = new THREE.Color();
+    let nc = 0, nk = 0;
+    list.forEach((t, i) => {
+      const s = t.s * 4;
+      const conifer = !t.st && t.k > 0.75;
+      m4.compose(pos.set(t.x, s * 0.25, t.z), q.identity(), sc.set(s * 0.12, s * 0.5, s * 0.12));
+      trunks.setMatrixAt(i, m4);
+      if (conifer) {
+        m4.compose(pos.set(t.x, s * 0.25 + s * 0.55, t.z), q.identity(), sc.set(s * 0.32, s * 1.2, s * 0.32));
+        cones.setMatrixAt(nk++, m4);
+      } else {
+        q.setFromEuler(new THREE.Euler(0, t.k * 6, 0));
+        m4.compose(pos.set(t.x, s * 0.5 + s * 0.3, t.z), q, sc.set(s * 0.42, s * 0.38, s * 0.42));
+        crowns.setMatrixAt(nc, m4);
+        crowns.setColorAt(nc++, col.setHSL(0.25 + t.k * 0.07, 0.45 + t.k * 0.2, 0.17 + t.k * 0.08));
+      }
+    });
+    crowns.count = nc;
+    cones.count = nk;
+    for (const m of [trunks, crowns, cones]) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+      G.add(m);
     }
   }
 
@@ -2961,13 +3399,14 @@ class Engine {
     if (this.mode === 'third') {
       this._thirdUpdate(dt);
       this.indoor.intensity = 0;
-      this.ambient.intensity = 0.25;
+      this.ambient.intensity = 0.25 * (1 - 0.7 * (this.night || 0));
     } else if (this.mode === 'walk') {
       const active = this.fpv.isLocked || this.touch.move || this.touch.look;
       if (this.fpv.isLocked || this.touch.move) this._walk(dt);
       if (active) this._emitPose(false);
-      this.indoor.intensity = 2.2;
-      this.ambient.intensity = 0.55;
+      const nn = this.night || 0;
+      this.indoor.intensity = 2.2 * (1 - 0.75 * nn);
+      this.ambient.intensity = 0.55 * (1 - 0.7 * nn);
     } else {
       this.orbit.update();
       this.indoor.intensity = 0;

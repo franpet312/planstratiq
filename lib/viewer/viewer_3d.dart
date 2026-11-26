@@ -228,20 +228,21 @@ class _Viewer3DState extends State<Viewer3D> {
                     Row(children: [
                       Text('Doba dana', style: AppText.ui(size: 12, weight: FontWeight.w600, color: Pal.muted)),
                       const Spacer(),
-                      Text('${_hour.floor()}:${((_hour % 1) * 60).round().toString().padLeft(2, '0')} h',
+                      Text('${_hour.floor() % 24}:${((_hour % 1) * 60).round().toString().padLeft(2, '0')} h',
                           style: AppText.narrow(size: 14, weight: FontWeight.w700)),
                     ]),
                     Slider(
                       value: _hour,
-                      min: 6,
-                      max: 20,
-                      divisions: 56,
+                      min: 0,
+                      max: 24,
+                      divisions: 96,
                       onChanged: (v) {
                         setState(() => _hour = v);
                         engine.setTime(v);
                       },
                     ),
-                    Text('Sjever je na vrhu tlocrta.', style: AppText.ui(size: 11.5, color: Pal.muted)),
+                    Text(_hour < 5.5 || _hour > 20.5 ? 'Noć: svijetle lampe i lusteri koje si postavio.' : 'Sjever je na vrhu tlocrta.',
+                        style: AppText.ui(size: 11.5, color: Pal.muted)),
                   ]),
                 ),
               ),

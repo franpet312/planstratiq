@@ -872,6 +872,79 @@ class PlanController extends ChangeNotifier {
     });
   }
 
+  // --------------------------------------------------------- parcela i okolina
+
+  /// Obuhvat kuće (svi zidovi svih etaža).
+  Rect? houseBounds() {
+    var minX = double.infinity, minY = double.infinity, maxX = -double.infinity, maxY = -double.infinity;
+    for (final l in plan.levels) {
+      for (final n in l.nodes.values) {
+        minX = math.min(minX, n.pos.dx);
+        maxX = math.max(maxX, n.pos.dx);
+        minY = math.min(minY, n.pos.dy);
+        maxY = math.max(maxY, n.pos.dy);
+      }
+    }
+    if (!minX.isFinite) return null;
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
+  /// Parcela: zadana širina/dubina ili automatski oko kuće (ulica ispred, vrt iza).
+  Rect? siteRect() {
+    final h = houseBounds();
+    if (h == null) return null;
+    final s = plan.site;
+    const side = 4.0, front = 7.0, back = 9.0;
+    double l = side, r = side, t = side, b = side;
+    switch (s.street) {
+      case 'N':
+        t = front;
+        b = back;
+      case 'E':
+        r = front;
+        l = back;
+      case 'W':
+        l = front;
+        r = back;
+      default:
+        b = front;
+        t = back;
+    }
+    var rect = Rect.fromLTRB(h.left - l, h.top - t, h.right + r, h.bottom + b);
+    if (s.width > 0 || s.depth > 0) {
+      rect = Rect.fromCenter(
+        center: rect.center,
+        width: s.width > 0 ? s.width : rect.width,
+        height: s.depth > 0 ? s.depth : rect.height,
+      );
+    }
+    return rect.shift(Offset(s.offsetX, s.offsetY));
+  }
+
+  /// Ulazna vrata prizemlja okrenuta prema ulici (za prilaz), ili null.
+  Offset? entranceTowardStreet() {
+    final g = plan.levels[plan.groundIndex];
+    final dir = switch (plan.site.street) { 'N' => const Offset(0, -1), 'E' => const Offset(1, 0), 'W' => const Offset(-1, 0), _ => const Offset(0, 1) };
+    Offset? best;
+    var bestScore = -double.infinity;
+    for (final o in g.openings) {
+      if (o.type != OpeningType.door && o.type != OpeningType.passage) continue;
+      final w = g.walls.where((w) => w.id == o.wallId).firstOrNull;
+      if (w == null) continue;
+      final a = g.nodes[w.a]?.pos, b = g.nodes[w.b]?.pos;
+      if (a == null || b == null) continue;
+      final c = a + (b - a) * o.t;
+      final score = dot(c, dir);
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  void updateSite(void Function(Site s) f) => mutate(() => f(plan.site));
+
   // --------------------------------------------------------- međuspremnik (Ctrl+C / Ctrl+V)
 
   /// Kopirano: namještaj ili cijela prostorija (zidovi, otvori, namještaj). Dijeli se među projektima.

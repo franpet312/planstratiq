@@ -54,6 +54,15 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 **Zidovi prostorija**
 - Svaka prostorija ima svoju boju zidova i oblogu: pločice (bijele, metro, sive 30×60, zelene), drvena obloga, cigla, dekorativni beton ili tapeta – do 1,2 / 1,5 / 2,1 m ili cijeli zid, iznad obloge boja. Obloge ulaze u troškovnik.
 
+**Parcela i okolina**
+- Kuća stoji na parceli (automatski oko kuće ili zadane širine i dubine) s ograđenim travnjakom: drvena, metalna, žičana ograda, živica ili zid, s ulazom i prilazom do ulaznih vrata.
+- Ispred je ulica s pločnicima, rubnjacima, uličnom rasvjetom i drvoredom.
+- Okolina po izboru: **susjedstvo** (susjedne kuće sa svojim vrtovima), **selo** (polja, rijetke kuće, puno drveća) ili **grad** (stambene zgrade); u daljini brežuljci.
+- Na tlocrtu se vidi rub parcele, ulica i površina parcele.
+
+**Noć**
+- Doba dana ide od 0 do 24 h: noću je nebo tamno sa zvijezdama i mjesecom, svijetle lampe i lusteri, prozori kuće, susjeda i ulična rasvjeta.
+
 **Pregled i cijene**
 - Neto površina (po licima zidova) i bruto tlocrtna površina, popis prostorija.
 - Okvirni troškovnik: podovi po materijalu, bojanje zidova (m² i litre), namještaj.

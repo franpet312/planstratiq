@@ -375,6 +375,75 @@ class PropertiesPanel extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- ništa
+  List<Widget> _site() {
+    final st = c.plan.site;
+    final r = c.siteRect();
+    Widget chips<T>(List<(T, String)> opts, T value, void Function(T) on) => Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final (v, label) in opts)
+            ChoiceChip(label: Text(label), selected: value == v, visualDensity: VisualDensity.compact, onSelected: (_) => on(v)),
+        ]);
+    Widget slider(String label, String value, double v, double min, double max, void Function(double) set) => Row(children: [
+          SizedBox(width: 78, child: Text(label, style: AppText.ui(size: 12.5))),
+          Expanded(
+            child: Slider(
+              value: v.clamp(min, max),
+              min: min,
+              max: max,
+              onChangeStart: (_) => c.beginChange(),
+              onChanged: (x) {
+                set(x);
+                c.liveUpdate();
+              },
+              onChangeEnd: (_) => c.endChange(),
+            ),
+          ),
+          SizedBox(width: 48, child: Text(value, textAlign: TextAlign.right, style: AppText.narrow(size: 12.5))),
+        ]);
+    return [
+      const SectionTitle('Parcela i okolina'),
+      Text('Okolina', style: AppText.ui(size: 12, color: Pal.muted)),
+      const SizedBox(height: 6),
+      chips([('suburb', 'Susjedstvo'), ('countryside', 'Selo'), ('city', 'Grad'), ('none', 'Bez okoline')], st.surroundings,
+          (v) => c.updateSite((s) => s.surroundings = v)),
+      const SizedBox(height: 10),
+      Text('Ulica je s ove strane parcele', style: AppText.ui(size: 12, color: Pal.muted)),
+      const SizedBox(height: 6),
+      chips([('S', 'Dolje (jug)'), ('N', 'Gore (sjever)'), ('E', 'Desno (istok)'), ('W', 'Lijevo (zapad)')], st.street,
+          (v) => c.updateSite((s) => s.street = v)),
+      const SizedBox(height: 10),
+      Text('Ograda', style: AppText.ui(size: 12, color: Pal.muted)),
+      const SizedBox(height: 6),
+      chips([('wood', 'Drvena'), ('metal', 'Metalna'), ('panel', 'Žičana'), ('hedge', 'Živica'), ('wall', 'Zid'), ('none', 'Bez')], st.fence,
+          (v) => c.updateSite((s) => s.fence = v)),
+      if (st.fence != 'none') slider('Visina', '${fmtM(st.fenceHeight, 1)} m', st.fenceHeight, 0.5, 2.0, (x) => st.fenceHeight = (x * 10).round() / 10),
+      SwitchListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        value: st.driveway,
+        onChanged: (v) => c.updateSite((s) => s.driveway = v),
+        title: Text('Prilaz i staza do ulaznih vrata', style: AppText.ui(size: 13)),
+      ),
+      if (r != null) ...[
+        slider('Širina', '${fmtM(r.width, 1)} m', r.width, 8, 80, (x) => st.width = x.roundToDouble()),
+        slider('Dubina', '${fmtM(r.height, 1)} m', r.height, 8, 100, (x) => st.depth = x.roundToDouble()),
+        slider('Pomak ↔', '${fmtM(st.offsetX, 1)} m', st.offsetX, -20, 20, (x) => st.offsetX = (x * 2).round() / 2),
+        slider('Pomak ↕', '${fmtM(st.offsetY, 1)} m', st.offsetY, -20, 20, (x) => st.offsetY = (x * 2).round() / 2),
+        Row(children: [
+          Expanded(child: Text('Površina parcele ${fmtM(r.width * r.height, 0)} m²', style: AppText.ui(size: 12, color: Pal.muted))),
+          TextButton(
+            onPressed: () => c.updateSite((s) {
+              s.width = 0;
+              s.depth = 0;
+              s.offsetX = 0;
+              s.offsetY = 0;
+            }),
+            child: const Text('Automatski'),
+          ),
+        ]),
+      ],
+    ];
+  }
+
   List<Widget> _roof() {
     final p = c.plan;
     Widget slider(String label, String value, double v, double min, double max, int div, void Function(double) set) => Row(children: [
@@ -481,6 +550,7 @@ class PropertiesPanel extends StatelessWidget {
         OutlinedButton(onPressed: () => c.applyToAllWalls(height: c.plan.wallHeight), child: const Text('Na sve')),
       ]),
       ..._roof(),
+      ..._site(),
       if (c.plan.image != null) ...[
         const SectionTitle('Nacrt u pozadini'),
         Row(children: [

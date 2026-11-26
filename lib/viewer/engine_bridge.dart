@@ -115,6 +115,7 @@ class Engine3D {
         'color': plan.roofColor,
         'turn': plan.roofTurn,
       },
+      'site': _siteJson(c),
       ..._levelJson(c, active),
       'others': [
         for (var i = 0; i < plan.levels.length; i++)
@@ -136,6 +137,24 @@ class Engine3D {
       for (final it in c.plan.levels[li].items)
         if (stairShapes.contains(it.shape)) [for (final p in stairOutline(it)) [p.dx, p.dy]]
     ];
+  }
+
+  static Map<String, dynamic>? _siteJson(PlanController c) {
+    final r = c.siteRect();
+    final h = c.houseBounds();
+    if (r == null || h == null) return null;
+    final s = c.plan.site;
+    final door = c.entranceTowardStreet();
+    return {
+      'rect': [r.left, r.top, r.right, r.bottom],
+      'house': [h.left, h.top, h.right, h.bottom],
+      'street': s.street,
+      'fence': s.fence,
+      'fenceH': s.fenceHeight,
+      'env': s.surroundings,
+      'driveway': s.driveway,
+      if (door != null) 'door': [door.dx, door.dy],
+    };
   }
 
   /// Završna obrada svake strane zida prema prostoriji uz nju ('p' = lokalni +z, 'n' = −z).

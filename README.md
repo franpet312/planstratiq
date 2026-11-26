@@ -70,6 +70,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Neto površina (po licima zidova) i bruto tlocrtna površina, popis prostorija.
 - Okvirni troškovnik: podovi po materijalu, bojanje zidova (m² i litre), namještaj.
 - **Izvoz u PDF za ispis** (A4/A3): naslovnica s 3D prikazom i ključnim površinama, tlocrt svake etaže u mjerilu (automatski ili 1:50/1:100/1:200) s kotama, grafičkim mjerilom i natpisnim poljem, popis prostorija i okvirni troškovnik. Prečac Ctrl+P.
+- **Popis za kupnju po trgovinama** (cijela kuća): isti proizvodi zbrojeni u količine, zbroj po trgovini i ukupno, poveznica na svaki proizvod; preuzimanje kao CSV i kao list u PDF-u.
 - Izvoz: tlocrt kao PNG s natpisnim poljem, troškovnik kao CSV (Excel), projekt kao datoteka.
 
 ## Prečaci

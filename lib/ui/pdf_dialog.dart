@@ -82,6 +82,7 @@ Future<void> showPdfDialog(BuildContext context, PlanController c) async {
                 (v) => o.plans = v),
             check('Popis prostorija', 'Neto površine, opsezi i podovi', o.rooms, (v) => o.rooms = v),
             check('Okvirni troškovnik', 'Podovi, bojanje i namještaj', o.costs, (v) => o.costs = v),
+            check('Popis za kupnju', 'Namještaj po trgovinama, s količinama', o.shopping, (v) => o.shopping = v),
             if (busy) ...[
               const SizedBox(height: 8),
               const LinearProgressIndicator(),
@@ -97,7 +98,7 @@ Future<void> showPdfDialog(BuildContext context, PlanController c) async {
         actions: [
           TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('Odustani')),
           FilledButton.icon(
-            onPressed: busy || !(o.cover || o.plans || o.rooms || o.costs) ? null : run,
+            onPressed: busy || !(o.cover || o.plans || o.rooms || o.costs || o.shopping) ? null : run,
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
             label: const Text('Izradi PDF'),
           ),

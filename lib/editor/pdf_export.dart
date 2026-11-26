@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../app/theme.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
+import '../models/shopping.dart';
 import '../state/plan_controller.dart';
 import 'plan_export.dart';
 import 'plan_painter.dart';
@@ -28,12 +29,13 @@ class PdfOptions {
     this.plans = true,
     this.rooms = true,
     this.costs = true,
+    this.shopping = true,
   });
   Paper paper;
 
   /// Nazivnik mjerila (50, 100, 200…); 0 = automatski najveće mjerilo koje stane.
   int scale;
-  bool cover, plans, rooms, costs;
+  bool cover, plans, rooms, costs, shopping;
 }
 
 @JS('psqPdf')
@@ -264,6 +266,7 @@ class _Pdf {
       if (o.plans) for (final l in c.plan.levels) 'Tlocrt – ${l.name}',
       if (o.rooms) 'Popis prostorija',
       if (o.costs) 'Okvirni troškovnik',
+      if (o.shopping) 'Popis za kupnju',
     ];
     for (final t in toc) {
       if (y > area.bottom - 8) break;
@@ -385,7 +388,30 @@ class _Pdf {
     }
     if (o.rooms) roomsPages();
     if (o.costs) costPages();
+    if (o.shopping) shoppingPages();
     if (pages.isEmpty) coverPage();
+  }
+
+  void shoppingPages() {
+    final list = shoppingList(c.plan);
+    if (list.isEmpty) return;
+    final rows = <List<String>>[];
+    var all = 0.0;
+    for (final e in list.entries) {
+      final sum = e.value.fold<double>(0, (a, l) => a + l.total);
+      all += sum;
+      rows.add([e.key.toUpperCase(), '', '', fmtEur(sum)]);
+      for (final l in e.value) {
+        rows.add(['   ${l.name}', '${l.qty}', '${(l.w * 100).round()}×${(l.d * 100).round()}×${(l.h * 100).round()}', l.price == null ? '—' : fmtEur(l.total)]);
+      }
+    }
+    table(
+      'Popis za kupnju',
+      [('PROIZVOD (PO TRGOVINAMA)', 5.2, TextAlign.left), ('KOM', 0.8, TextAlign.right), ('MJERE (cm)', 2.0, TextAlign.right), ('IZNOS', 1.6, TextAlign.right)],
+      rows,
+      footer: ['Sve trgovine', '', '', fmtEur(all)],
+      note: 'Isti proizvodi iste boje i mjera zbrojeni su. Poveznice na proizvode nalaze se u popisu za kupnju (CSV) u aplikaciji.',
+    );
   }
 
   void discard() {

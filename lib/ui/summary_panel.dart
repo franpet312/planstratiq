@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 
 import '../app/theme.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
+import '../models/shopping.dart';
 import '../state/plan_controller.dart';
 import 'common.dart';
+import 'catalog_panel.dart' show storeColor;
 import 'pdf_dialog.dart';
+import 'web_files.dart';
 
 /// Pregled projekta: površine po prostorijama i okvirni troškovnik.
 class SummaryPanel extends StatelessWidget {
@@ -21,7 +25,7 @@ class SummaryPanel extends StatelessWidget {
     for (final r in st.rooms) {
       floorsByMat[r.material.id] = (floorsByMat[r.material.id] ?? 0) + r.area;
     }
-    final items = c.plan.items;
+    final items = [for (final l in c.plan.levels) ...l.items];
     final furniture = items.fold<double>(0, (a, i) => a + (i.price ?? 0));
     final total = st.floorCost + st.paintCost + st.finishCost + furniture;
 
@@ -85,6 +89,7 @@ class SummaryPanel extends StatelessWidget {
         'za podove i boju, a ne uključuju gradnju, instalacije ni stolariju.',
         style: AppText.ui(size: 11.5, color: Pal.muted, height: 1.4),
       ),
+      ..._shopping(context),
       const SectionTitle('Gradnja'),
       StatRow('Ukupna duljina zidova', '${fmtM(st.wallLength)} m'),
       StatRow('Vrata (uklj. balkonska)', '${st.doors}'),
@@ -100,6 +105,58 @@ class SummaryPanel extends StatelessWidget {
       OutlinedButton.icon(onPressed: onExportCsv, icon: const Icon(Icons.table_view_outlined, size: 18), label: const Text('Izvezi troškovnik (CSV)')),
     ]);
   }
+  List<Widget> _shopping(BuildContext context) {
+    final list = shoppingList(c.plan);
+    if (list.isEmpty) return const [];
+    final all = list.values.expand((l) => l).fold<double>(0, (a, l) => a + l.total);
+    return [
+      const SectionTitle('Popis za kupnju po trgovinama'),
+      for (final e in list.entries)
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: 6),
+            dense: true,
+            leading: Container(width: 10, height: 10, decoration: BoxDecoration(color: storeColor(e.key == genericStore ? null : e.key), shape: BoxShape.circle)),
+            title: Text(e.key, style: AppText.ui(size: 13, weight: FontWeight.w600)),
+            subtitle: Text('${e.value.fold<int>(0, (a, l) => a + l.qty)} kom.', style: AppText.ui(size: 11.5, color: Pal.muted)),
+            trailing: Text(fmtEur(e.value.fold<double>(0, (a, l) => a + l.total)), style: AppText.narrow(size: 13.5, weight: FontWeight.w700)),
+            children: [
+              for (final l in e.value)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(children: [
+                    SizedBox(width: 26, child: Text('${l.qty}×', style: AppText.narrow(size: 12.5, weight: FontWeight.w600))),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(l.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppText.ui(size: 12.5)),
+                        Text('${(l.w * 100).round()}×${(l.d * 100).round()}×${(l.h * 100).round()} cm', style: AppText.ui(size: 11, color: Pal.muted)),
+                      ]),
+                    ),
+                    Text(l.price == null ? '—' : fmtEur(l.total), style: AppText.narrow(size: 12.5)),
+                    if (l.url != null)
+                      IconButton(
+                        tooltip: 'Otvori proizvod',
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        onPressed: () => web.window.open(l.url!, '_blank'),
+                      ),
+                  ]),
+                ),
+            ],
+          ),
+        ),
+      StatRow('Sve trgovine', fmtEur(all), strong: true),
+      const SizedBox(height: 6),
+      OutlinedButton.icon(
+        onPressed: () => downloadText(shoppingCsv(c.plan), '${c.plan.name} - popis za kupnju.csv', mime: 'text/csv;charset=utf-8'),
+        icon: const Icon(Icons.shopping_cart_outlined, size: 18),
+        label: const Text('Preuzmi popis za kupnju (CSV)'),
+      ),
+    ];
+  }
+
   List<Widget> _issuesSection() {
     final issues = c.issues;
     return [
@@ -155,7 +212,7 @@ String buildCsv(PlanController c) {
   b.writeln();
   b.writeln('${q('Namještaj')};${q('Širina (cm)')};${q('Dubina (cm)')};${q('Visina (cm)')};${q('Okvirna cijena (€)')}');
   var furniture = 0.0;
-  for (final i in c.plan.items) {
+  for (final i in [for (final l in c.plan.levels) ...l.items]) {
     furniture += i.price ?? 0;
     b.writeln('${q(i.name)};${(i.w * 100).round()};${(i.d * 100).round()};${(i.h * 100).round()};${i.price == null ? '' : n(i.price!)}');
   }

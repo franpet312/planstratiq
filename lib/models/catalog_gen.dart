@@ -116,6 +116,7 @@ const _stone = <NamedColor>[
   NamedColor('pješčenjak', 0xFFD3BE97),
 ];
 
+const _rad = <NamedColor>[NamedColor('bijela', 0xFFF4F4F2), NamedColor('antracit', 0xFF3F4347), NamedColor('crna', 0xFF1E1E1E)];
 const _elec = <NamedColor>[NamedColor('bijela', 0xFFF4F4F2), NamedColor('antracit', 0xFF3F4347), NamedColor('crna', 0xFF1E1E1E)];
 const _lightMetal = <NamedColor>[
   NamedColor('crna', 0xFF2B2B2B),
@@ -211,6 +212,13 @@ const families = <Family>[
   Family(id: 'visilica_niz', name: 'Viseće lampe u nizu (3)', category: catLight, shape: 'pendant_row', sizes: [(1.2, 0.3, 0.9), (1.6, 0.3, 0.9)], price: 150, colors: _lampShade, styled: false),
   Family(id: 'plafonjera', name: 'Plafonjera', category: catLight, shape: 'ceiling_light', sizes: [(0.35, 0.35, 0.1), (0.5, 0.5, 0.12)], price: 45, colors: _lightMetal, styled: false),
   Family(id: 'zidna_lampa', name: 'Zidna lampa', category: catLight, shape: 'wall_lamp', sizes: [(0.2, 0.18, 0.3)], price: 40, colors: _lightMetal, styled: false),
+  Family(id: 'gr_radijator', name: 'Radijator (pločasti)', category: catHeating, shape: 'radiator', sizes: [(0.6, 0.1, 0.6), (0.8, 0.1, 0.6), (1.0, 0.1, 0.6), (1.2, 0.1, 0.6), (1.6, 0.1, 0.6), (1.0, 0.1, 0.9)], price: 140, colors: _rad, styled: false),
+  Family(id: 'gr_kupaonski', name: 'Kupaonski radijator (ljestve)', category: catHeating, shape: 'towel_radiator', sizes: [(0.5, 0.1, 1.2), (0.6, 0.1, 1.5)], price: 160, colors: _rad, styled: false),
+  Family(id: 'gr_klima', name: 'Klima uređaj, unutarnja jedinica', category: catHeating, shape: 'ac_indoor', sizes: [(0.8, 0.22, 0.29), (0.9, 0.23, 0.3), (1.05, 0.25, 0.32)], price: 650, colors: const [NamedColor('bijela', 0xFFF4F4F2), NamedColor('srebrna', 0xFFB8BCC0), NamedColor('crna', 0xFF2B2B2B)], styled: false),
+  Family(id: 'gr_klima_van', name: 'Klima uređaj, vanjska jedinica', category: catHeating, shape: 'ac_outdoor', sizes: [(0.8, 0.3, 0.55), (0.9, 0.35, 0.7)], price: 0, colors: const [NamedColor('bijela', 0xFFEDEDEA)], zone: _e, styled: false),
+  Family(id: 'gr_dizalica', name: 'Dizalica topline (vanjska jedinica)', category: catHeating, shape: 'heat_pump', sizes: [(1.1, 0.45, 0.85), (1.3, 0.5, 1.4)], price: 6500, colors: const [NamedColor('bijela', 0xFFEDEDEA), NamedColor('antracit', 0xFF3F4347)], zone: _e, styled: false),
+  Family(id: 'gr_bojler', name: 'Bojler (električni)', category: catHeating, shape: 'boiler', sizes: [(0.45, 0.45, 0.75), (0.5, 0.5, 0.95)], price: 220, colors: const [NamedColor('bijela', 0xFFF4F4F2)], styled: false),
+  Family(id: 'gr_pec', name: 'Peć na drva', category: catHeating, shape: 'wood_stove', sizes: [(0.5, 0.45, 0.95), (0.6, 0.5, 1.1)], price: 900, colors: const [NamedColor('crna', 0xFF232323), NamedColor('antracit', 0xFF3F4347), NamedColor('bijela keramika', 0xFFEDE8DE)], styled: false),
   Family(id: 'el_uticnica', name: 'Utičnica', category: catElectric, shape: 'socket', sizes: [(0.08, 0.05, 0.08)], price: 35, colors: _elec, styled: false),
   Family(id: 'el_uticnica2', name: 'Dvostruka utičnica', category: catElectric, shape: 'socket_double', sizes: [(0.15, 0.05, 0.08)], price: 50, colors: _elec, styled: false),
   Family(id: 'el_uticnica_v', name: 'Utičnica iznad radne ploče', category: catElectric, shape: 'socket_high', sizes: [(0.15, 0.05, 0.08)], price: 50, colors: _elec, styled: false),

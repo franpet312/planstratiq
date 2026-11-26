@@ -29,7 +29,7 @@ const surfaceShapes = {'table', 'table_round', 'dresser', 'tv_stand', 'kitchen',
 /// „Sloj” objekta: pod, strop, zid (zidna lampa na ~1,8 m) ili na površini (stolna lampa).
 String collisionLayer(String shape) {
   if (ceilingShapes.contains(shape)) return 'ceiling';
-  if (shape == 'wall_lamp') return 'wall';
+  if (shape == 'wall_lamp' || shape == 'ac_indoor' || shape == 'boiler') return 'wall';
   if (electricWall.containsKey(shape)) return 'electric';
   if (shape == 'table_lamp') return 'top';
   return 'floor';

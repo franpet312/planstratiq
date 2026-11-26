@@ -802,6 +802,74 @@ function buildItem(it, g, loader) {
       b(0.3, 0.05, 0.2, 0, 0.525, -D / 2 + 0.12, 0x222222);
       break;
     }
+    case 'radiator': {
+      // pločasti radijator 15 cm od poda, s rebrima i ventilom
+      const y0 = 0.15, z = -D / 2 + 0.05;
+      b(W, H, 0.05, 0, y0 + H / 2, z, color, { roughness: 0.45 });
+      const n = Math.max(4, Math.floor(W / 0.05));
+      for (let i = 0; i < n; i++) b(0.012, H - 0.04, 0.012, -W / 2 + (i + 0.5) * (W / n), y0 + H / 2, z + 0.029, lighter(color, 0.05), { roughness: 0.45 });
+      b(W - 0.02, 0.025, 0.06, 0, y0 + H - 0.012, z, color, { roughness: 0.45 });
+      cyl(0.015, 0.015, 0.08, W / 2 - 0.04, y0 - 0.04, z, 0xd0d2d4, 10, metal);
+      cyl(0.022, 0.022, 0.05, W / 2 - 0.04, y0 - 0.1, z, 0xf0f0f0, 12);
+      break;
+    }
+    case 'towel_radiator': {
+      const y0 = 0.25, z = -D / 2 + 0.05;
+      for (const sx of [-1, 1]) cyl(0.017, 0.017, H, sx * (W / 2 - 0.02), y0 + H / 2, z, color, 10, { roughness: 0.4 });
+      const n = Math.max(6, Math.round(H / 0.07));
+      for (let i = 0; i < n; i++) {
+        if (i % 6 === 5) continue;
+        const bar = cyl(0.011, 0.011, W - 0.04, 0, y0 + 0.04 + (i * (H - 0.08)) / (n - 1), z, color, 8, { roughness: 0.4 });
+        bar.rotation.z = Math.PI / 2;
+      }
+      break;
+    }
+    case 'ac_indoor': {
+      // unutarnja jedinica klime visoko na zidu (gornji rub 2,35 m)
+      const yt = Math.min(2.35, (it.ceil ?? 2.57) - 0.15), z = -D / 2 + D / 2;
+      const body = b(W, H, D, 0, yt - H / 2, z, color, { roughness: 0.35 });
+      body.castShadow = true;
+      b(W * 0.92, 0.02, 0.02, 0, yt - H + 0.04, z + D / 2 - 0.02, darker(color, 0.4));
+      b(0.05, 0.012, 0.004, W / 2 - 0.08, yt - 0.08, z + D / 2 + 0.002, 0x7fd6ff, { emissive: 0x7fd6ff, emissiveIntensity: 0.6 });
+      break;
+    }
+    case 'ac_outdoor':
+    case 'heat_pump': {
+      b(W, H - 0.06, D, 0, 0.06 + (H - 0.06) / 2, 0, color, { roughness: 0.6 });
+      for (const sx of [-1, 1]) b(0.06, 0.06, D + 0.04, sx * (W / 2 - 0.08), 0.03, 0, 0x555555);
+      const fans = it.shape === 'heat_pump' && H > 1.1 ? 2 : 1;
+      for (let i = 0; i < fans; i++) {
+        const fy = 0.06 + (H - 0.06) * (fans === 1 ? 0.5 : 0.28 + i * 0.44);
+        const r = Math.min(W * 0.3, (H - 0.06) / (fans * 2.3));
+        const g2 = cyl(r, r, 0.02, -W * 0.12, fy, D / 2 + 0.005, 0x2e3236, 28);
+        g2.rotation.x = Math.PI / 2;
+        for (let k = 0; k < 4; k++) {
+          const bar = b(r * 2, 0.01, 0.01, -W * 0.12, fy, D / 2 + 0.02, 0x6a6e72);
+          bar.rotation.z = (k * Math.PI) / 4;
+        }
+      }
+      break;
+    }
+    case 'boiler': {
+      const yc = 1.55, r = Math.min(W, D) / 2;
+      cyl(r, r, H, 0, yc, -D / 2 + r, color, 28, { roughness: 0.35 });
+      sphere(r, 0, yc - H / 2, -D / 2 + r, color, 0.35, { roughness: 0.35 });
+      for (const dx of [-0.05, 0.05]) cyl(0.012, 0.012, 0.3, dx, yc - H / 2 - 0.2, -D / 2 + r, 0xb9b9b9, 8, metal);
+      b(0.08, 0.05, 0.01, 0, yc - H * 0.25, -D / 2 + 2 * r + 0.004, 0x333333);
+      break;
+    }
+    case 'wood_stove': {
+      b(W, H * 0.12, D, 0, H * 0.06, 0, darker(color, 0.2));
+      b(W, H * 0.78, D, 0, H * 0.12 + H * 0.39, 0, color, { roughness: 0.6 });
+      const fire = b(W * 0.6, H * 0.35, 0.01, 0, H * 0.45, D / 2 + 0.006, 0xff8a3d, { emissive: 0xff6a1a, emissiveIntensity: 1.2 });
+      fire.material = fire.material.clone();
+      b(W * 0.66, H * 0.4, 0.012, 0, H * 0.45, D / 2 + 0.002, 0x111111);
+      parts.push({ mat: fire.material, emi: 1.2 });
+      const C = it.ceil ?? 2.57;
+      cyl(0.075, 0.075, C - H * 0.9, 0, H * 0.9 + (C - H * 0.9) / 2, -D * 0.15, 0x2a2a2a, 16, metal);
+      interactive('vatru', 1, true);
+      break;
+    }
     case 'socket':
     case 'socket_double':
     case 'socket_high':
@@ -2026,7 +2094,7 @@ class Engine {
     };
     const surfaces = (p.items || []).filter((q) => SURFACES.has(q.shape));
     for (let it of p.items || []) {
-      if (CEILING.has(it.shape)) it = { ...it, ceil: maxH - FLOOR };
+      if (CEILING.has(it.shape) || it.shape === 'ac_indoor' || it.shape === 'wood_stove') it = { ...it, ceil: maxH - FLOOR };
       if (it.shape === 'table_lamp') {
         // stolna lampa stoji na stolu/komodi ispod sebe
         let elev = 0;
@@ -2053,7 +2121,7 @@ class Engine {
   // sudari u šetnji: namještaj (orijentirani pravokutnik) i ograde balkona
   _itemColliders(it) {
     const sh = it.shape;
-    if (['rug', 'rug_round', 'path', 'deck', 'carport', 'wall_lamp', 'table_lamp'].includes(sh) || STAIRS.has(sh) || CEILING.has(sh) || ELECTRIC.has(sh)) return;
+    if (['rug', 'rug_round', 'path', 'deck', 'carport', 'wall_lamp', 'table_lamp'].includes(sh) || STAIRS.has(sh) || CEILING.has(sh) || ELECTRIC.has(sh) || sh === 'ac_indoor' || sh === 'boiler') return;
     if (sh === 'lamp_arc') {
       // samo baza blokira prolaz (luk je iznad glave)
       const r = it.rotation || 0;

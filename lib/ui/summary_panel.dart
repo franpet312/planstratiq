@@ -3,6 +3,7 @@ import 'package:web/web.dart' as web;
 
 import '../app/theme.dart';
 import '../models/geometry.dart';
+import '../models/heating.dart';
 import '../models/materials.dart';
 import '../models/shopping.dart';
 import '../state/plan_controller.dart';
@@ -27,7 +28,8 @@ class SummaryPanel extends StatelessWidget {
     }
     final items = [for (final l in c.plan.levels) ...l.items];
     final furniture = items.fold<double>(0, (a, i) => a + (i.price ?? 0));
-    final total = st.floorCost + st.paintCost + st.finishCost + furniture;
+    final fhCost = roomClimate(c.plan).where((r) => r.room.floorHeating).fold<double>(0, (a, r) => a + r.area) * floorHeatingPricePerM2;
+    final total = st.floorCost + st.paintCost + st.finishCost + furniture + fhCost;
 
     return ListView(padding: const EdgeInsets.fromLTRB(16, 14, 16, 24), children: [
       // glavna brojka
@@ -81,6 +83,7 @@ class SummaryPanel extends StatelessWidget {
       for (final e in st.finishAreas.entries)
         StatRow('${finishById(e.key).name}, ${fmtM2(e.value)}', fmtEur(e.value * finishById(e.key).pricePerM2)),
       StatRow('Namještaj i oprema, ${items.where((i) => i.price != null).length} kom.', fmtEur(furniture)),
+      if (fhCost > 0) StatRow('Podno grijanje', fmtEur(fhCost)),
       const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Divider()),
       StatRow('Ukupno okvirno', fmtEur(total), strong: true),
       const SizedBox(height: 6),
@@ -89,6 +92,7 @@ class SummaryPanel extends StatelessWidget {
         'za podove i boju, a ne uključuju gradnju, instalacije ni stolariju.',
         style: AppText.ui(size: 11.5, color: Pal.muted, height: 1.4),
       ),
+      ..._climate(),
       ..._electric(),
       ..._shopping(context),
       const SectionTitle('Gradnja'),
@@ -106,6 +110,48 @@ class SummaryPanel extends StatelessWidget {
       OutlinedButton.icon(onPressed: onExportCsv, icon: const Icon(Icons.table_view_outlined, size: 18), label: const Text('Izvezi troškovnik (CSV)')),
     ]);
   }
+  List<Widget> _climate() {
+    final list = roomClimate(c.plan);
+    if (list.isEmpty) return const [];
+    final need = list.fold<double>(0, (a, r) => a + r.heatNeed);
+    final have = list.fold<double>(0, (a, r) => a + r.heat);
+    final fhArea = list.where((r) => r.room.floorHeating).fold<double>(0, (a, r) => a + r.area);
+    final missing = list.where((r) => !r.heatOk).toList();
+    return [
+      const SectionTitle('Grijanje i hlađenje'),
+      DropdownButtonFormField<String>(
+        value: c.plan.insulation,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Izolacija kuće', isDense: true),
+        items: [
+          for (final e in insulationLevels.entries) DropdownMenuItem(value: e.key, child: Text('${e.value.$1} – ${e.value.$2.round()} W/m²')),
+        ],
+        onChanged: (v) {
+          if (v != null) c.setInsulation(v);
+        },
+      ),
+      const SizedBox(height: 8),
+      StatRow('Potrebno grijanje (cijela kuća)', fmtKw(need)),
+      StatRow('Ugrađeno', fmtKw(have), strong: have >= need * 0.95),
+      if (fhArea > 0) StatRow('Podno grijanje, ${fmtM2(fhArea)}', fmtEur(fhArea * floorHeatingPricePerM2)),
+      if (missing.isNotEmpty) ...[
+        const SizedBox(height: 6),
+        for (final r in missing.take(8))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(children: [
+              const Icon(Icons.thermostat, size: 15, color: Color(0xFFD08A1E)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text('${r.room.name}${r.level.isEmpty ? '' : ' (${r.level})'}: nedostaje ${fmtKw(r.heatNeed - r.heat)}',
+                    style: AppText.ui(size: 12.5)),
+              ),
+            ]),
+          ),
+      ],
+    ];
+  }
+
   List<Widget> _electric() {
     const names = {
       'socket': 'Utičnice',

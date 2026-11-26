@@ -7,6 +7,7 @@ import '../app/theme.dart';
 import '../models/catalog_gen.dart';
 import '../models/collision.dart';
 import '../models/geometry.dart';
+import '../models/heating.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
 import '../models/topology.dart';
@@ -394,6 +395,7 @@ class PropertiesPanel extends StatelessWidget {
           onPick: (v) => c.updateRoom(r.id, wallColor: v),
         ),
       ],
+      ..._roomClimate(r),
       const SectionTitle('Kopiranje'),
       Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(
@@ -415,6 +417,29 @@ class PropertiesPanel extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- ništa
+  List<Widget> _roomClimate(Room r) {
+    final rc = roomClimate(c.plan).where((x) => x.room.id == r.id).firstOrNull;
+    return [
+      const SectionTitle('Grijanje i hlađenje'),
+      SwitchListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        value: r.floorHeating,
+        onChanged: (v) => c.updateRoom(r.id, floorHeating: v),
+        title: Text('Podno grijanje', style: AppText.ui(size: 13, weight: FontWeight.w500)),
+        subtitle: Text('oko ${floorHeatingWPerM2.round()} W/m², ≈ ${fmtEur(floorHeatingPricePerM2)}/m²', style: AppText.ui(size: 12, color: Pal.muted)),
+      ),
+      if (rc != null) ...[
+        StatRow('Treba za grijanje', fmtKw(rc.heatNeed)),
+        StatRow('Ugrađeno grijanje', '${fmtKw(rc.heat)}  ${rc.heatOk ? '✓' : '– nedostaje ${fmtKw(rc.heatNeed - rc.heat)}'}'),
+        StatRow('Hlađenje (treba / ima)', '${fmtKw(rc.coolNeed)} / ${fmtKw(rc.cool)}'),
+        const SizedBox(height: 4),
+        Text('Radijatori, klima i peć u ovoj prostoriji zbrajaju se sami (katalog: Grijanje i hlađenje). Okvirno, prema izolaciji kuće.',
+            style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+      ],
+    ];
+  }
+
   List<Widget> _note(Note? n) {
     if (n == null) return [];
     return [

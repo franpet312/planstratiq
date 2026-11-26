@@ -566,7 +566,9 @@ class PlanController extends ChangeNotifier {
     } else if (ceilingShapes.contains(c.shape) || c.shape == 'table_lamp') {
       // stropna i stolna rasvjeta: točno gdje je pušteno, bez prislanjanja uz zid
     } else if (c.zone == CatalogZone.interior && !floorShapes.contains(c.shape)) {
-      final onWall = c.shape == 'wall_lamp' || electricWall.containsKey(c.shape);
+      final onWall = c.shape == 'wall_lamp' ||
+          electricWall.containsKey(c.shape) ||
+          const {'radiator', 'towel_radiator', 'ac_indoor', 'boiler'}.contains(c.shape);
       final w = wallNear(p, tol: onWall ? 1.5 : c.d / 2 + 0.45);
       if (w != null) {
         final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
@@ -840,7 +842,8 @@ class PlanController extends ChangeNotifier {
     });
   }
 
-  void updateRoom(String id, {String? name, String? floor, String? wallFinish, int? wallColor, bool clearWallColor = false, double? finishHeight}) {
+  void updateRoom(String id,
+      {String? name, String? floor, String? wallFinish, int? wallColor, bool clearWallColor = false, double? finishHeight, bool? floorHeating}) {
     final r = plan.roomById(id);
     if (r == null) return;
     mutate(() {
@@ -850,6 +853,7 @@ class PlanController extends ChangeNotifier {
       if (wallColor != null) r.wallColor = wallColor;
       if (clearWallColor) r.wallColor = null;
       if (finishHeight != null) r.finishHeight = finishHeight;
+      if (floorHeating != null) r.floorHeating = floorHeating;
     });
   }
 
@@ -988,6 +992,8 @@ class PlanController extends ChangeNotifier {
   }
 
   void updateSite(void Function(Site s) f) => mutate(() => f(plan.site));
+
+  void setInsulation(String v) => mutate(() => plan.insulation = v);
 
   // --------------------------------------------------------- međuspremnik (Ctrl+C / Ctrl+V)
 

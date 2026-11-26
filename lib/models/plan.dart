@@ -161,6 +161,7 @@ class Room {
     this.wallFinish = 'paint',
     this.wallColor,
     this.finishHeight = 0,
+    this.floorHeating = false,
   });
 
   final String id;
@@ -177,6 +178,9 @@ class Room {
   /// Visina obloge (m); 0 = cijeli zid. Iznad obloge je boja.
   double finishHeight;
 
+  /// Podno grijanje u prostoriji.
+  bool floorHeating;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -185,6 +189,7 @@ class Room {
         if (wallFinish != 'paint') 'wallFinish': wallFinish,
         if (wallColor != null) 'wallColor': wallColor,
         if (finishHeight > 0) 'finishHeight': finishHeight,
+        if (floorHeating) 'floorHeating': true,
       };
 
   factory Room.fromJson(Map<String, dynamic> j) => Room(
@@ -195,6 +200,7 @@ class Room {
         wallFinish: (j['wallFinish'] as String?) ?? 'paint',
         wallColor: j['wallColor'] is int ? j['wallColor'] as int : null,
         finishHeight: (j['finishHeight'] as num?)?.toDouble() ?? 0,
+        floorHeating: j['floorHeating'] == true,
       );
 }
 
@@ -463,6 +469,9 @@ class Plan {
   /// Parcela i okolina kuće.
   Site site = Site();
 
+  /// Toplinska izolacija kuće (za okvirnu potrebnu snagu grijanja): new | good | average | poor.
+  String insulation = 'good';
+
   /// Etaža ispod aktivne (za prozirni prikaz na tlocrtu), ako postoji.
   Level? get levelBelow => active > 0 ? levels[active - 1] : null;
 
@@ -532,6 +541,7 @@ class Plan {
         'roof': roof,
         'roofStyle': {'type': roofType, 'pitch': roofPitch, 'overhang': roofOverhang, 'color': roofColor, 'turn': roofTurn},
         'site': site.toJson(),
+        'insulation': insulation,
         'active': active,
         'levels': [for (final l in levels) l.toJson(includeImage: includeImage)],
       };
@@ -559,6 +569,7 @@ class Plan {
       if (rs['color'] is int) plan.roofColor = rs['color'] as int;
       plan.roofTurn = _b(rs['turn']);
     }
+    if (j['insulation'] is String) plan.insulation = j['insulation'] as String;
     if (j['site'] is Map) plan.site = Site.fromJson(Map<String, dynamic>.from(j['site'] as Map));
     return plan;
   }

@@ -1137,6 +1137,39 @@ class ItemSymbols {
         final sw = math.min(w * 0.8, m(1.45));
         c.drawRect(Rect.fromCenter(center: Offset(0, r.top + m(0.12)), width: sw, height: math.max(2, m(0.05))),
             Paint()..color = Pal.ink);
+      case 'radiator':
+        box(r, 1);
+        final step = math.max(3.0, m(0.05));
+        for (var x = r.left + step; x < r.right - 1; x += step) {
+          ln(Offset(x, r.top), Offset(x, r.bottom), thin);
+        }
+      case 'towel_radiator':
+        box(r, 1);
+        ln(Offset(r.left + 2, r.center.dy), Offset(r.right - 2, r.center.dy), thin);
+      case 'ac_indoor':
+      case 'ac_outdoor':
+      case 'heat_pump':
+        box(r, 2);
+        if (shape != 'ac_indoor') c.drawCircle(Offset(-w * 0.12, 0), math.min(w * 0.3, d * 0.4), line);
+        final tp = TextPainter(
+          text: TextSpan(
+              text: shape == 'heat_pump' ? 'DT' : 'AC',
+              style: AppText.narrow(size: math.max(8, math.min(d * 0.6, 12)), weight: FontWeight.w700, color: const Color(0xFF1F5FA8))),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(c, Offset(shape == 'ac_indoor' ? -tp.width / 2 : w * 0.18 - tp.width / 2, -tp.height / 2));
+      case 'boiler':
+        c.drawCircle(Offset.zero, math.min(w, d) / 2, fillOf(color, 0.5));
+        c.drawCircle(Offset.zero, math.min(w, d) / 2, line);
+        final tb = TextPainter(
+          text: TextSpan(text: 'B', style: AppText.narrow(size: math.max(8, math.min(w, d) * 0.45), weight: FontWeight.w700, color: Pal.inkSoft)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tb.paint(c, Offset(-tb.width / 2, -tb.height / 2));
+      case 'wood_stove':
+        box(r, 2);
+        c.drawCircle(Offset(0, -d * 0.15), math.min(w, d) * 0.16, line);
+        ln(Offset(r.left + w * 0.2, r.bottom - 2), Offset(r.right - w * 0.2, r.bottom - 2), line);
       case 'socket':
       case 'socket_double':
       case 'socket_high':

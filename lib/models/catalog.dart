@@ -86,6 +86,7 @@ const catGarden = 'Vrt i terasa';
 const catYard = 'Dvorište';
 const catLight = 'Rasvjeta';
 const catElectric = 'Električne instalacije';
+const catHeating = 'Grijanje i hlađenje';
 
 const _i = CatalogZone.interior;
 const _e = CatalogZone.exterior;

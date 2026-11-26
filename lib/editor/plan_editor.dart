@@ -789,6 +789,7 @@ class PlanEditorState extends State<PlanEditor> {
           walker: c.walker.value,
           dropGhost: dropGhost,
           site: plan.site.surroundings == 'none' && plan.site.fence == 'none' ? null : c.siteRect(),
+          issues: c.showIssues ? c.issues : const [],
         );
         return DragTarget<CatalogItem>(
           onMove: (d) {

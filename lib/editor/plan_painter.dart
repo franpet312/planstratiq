@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
 import '../models/catalog.dart';
+import '../models/clearance.dart';
 import '../models/collision.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
@@ -39,7 +40,11 @@ class PlanPaintState {
     this.walker,
     this.dropGhost,
     this.site,
+    this.issues = const [],
   });
+
+  /// Upozorenja provjere prolaza (crtaju se iznad namještaja).
+  final List<ClearanceIssue> issues;
 
   /// Parcela (pravokutnik) za prikaz ruba i ulice.
   final Rect? site;
@@ -106,6 +111,7 @@ class PlanPainter extends CustomPainter {
       _selectedWallDimension(canvas);
     }
     _roomLabels(canvas);
+    if (!st.preview && !st.printMode) _issues(canvas);
     if (!st.preview && !st.printMode) {
       _selectionOverlay(canvas);
       _nodes(canvas);
@@ -580,6 +586,41 @@ class PlanPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------- odabir
+  void _issues(Canvas canvas) {
+    for (final i in st.issues) {
+      final col = i.serious ? const Color(0xFFC0392B) : const Color(0xFFD08A1E);
+      if (i.zone != null) {
+        final path = Path()..addPolygon([for (final p in i.zone!) s(p)], true);
+        canvas.drawPath(path, Paint()..color = col.withAlpha(40));
+        canvas.drawPath(
+            path,
+            Paint()
+              ..color = col.withAlpha(160)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.2);
+      }
+      // znak upozorenja
+      final c = s(i.at);
+      final tri = Path()
+        ..moveTo(c.dx, c.dy - 9)
+        ..lineTo(c.dx + 8, c.dy + 6)
+        ..lineTo(c.dx - 8, c.dy + 6)
+        ..close();
+      canvas.drawPath(tri, Paint()..color = col);
+      canvas.drawPath(
+          tri,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2);
+      final tp = TextPainter(
+        text: TextSpan(text: '!', style: AppText.ui(size: 10, weight: FontWeight.w800, color: Colors.white)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, c + Offset(-tp.width / 2, -5));
+    }
+  }
+
   // razmaci odabranog objekta do zidova i namještaja (kote u cm)
   void _gaps(Canvas canvas, PlacedItem it) {
     if (isFloorLike(it.shape) && !balconyShapes.contains(it.shape)) return;

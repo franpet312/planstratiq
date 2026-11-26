@@ -10,6 +10,7 @@ import 'package:flutter/painting.dart' show Offset, Rect;
 import 'package:web/web.dart' as web;
 import '../models/catalog.dart';
 import '../models/catalog_gen.dart';
+import '../models/clearance.dart';
 import '../models/collision.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
@@ -186,6 +187,7 @@ class PlanController extends ChangeNotifier {
   void liveUpdate() {
     revision++;
     _stats = null;
+    _issues = null;
     notifyListeners();
   }
 
@@ -206,6 +208,7 @@ class PlanController extends ChangeNotifier {
   void _changed() {
     revision++;
     _stats = null;
+    _issues = null;
     notifyListeners();
     _dirty = true;
     saveState.value = 'Spremanje…';
@@ -1144,6 +1147,17 @@ class PlanController extends ChangeNotifier {
 
   PlanStats get stats => _stats ??= _computeStats();
 
+  /// Provjera prolaza i otvaranja na aktivnoj etaži.
+  List<ClearanceIssue> get issues => _issues ??= checkClearances(plan);
+  List<ClearanceIssue>? _issues;
+
+  /// Prikaži upozorenja o prolazima na tlocrtu.
+  bool showIssues = true;
+  void setShowIssues(bool v) {
+    showIssues = v;
+    notifyListeners();
+  }
+
   /// Statistika cijele zgrade (sve etaže).
   PlanStats _computeStats() {
     final rooms = <RoomStat>[];
@@ -1297,6 +1311,7 @@ class PlanController extends ChangeNotifier {
     });
     revision++;
     _stats = null;
+    _issues = null;
     notifyListeners();
     _dirty = true;
     _saveTimer?.cancel();

@@ -43,6 +43,7 @@ class SummaryPanel extends StatelessWidget {
           ]),
         ]),
       ),
+      ..._issuesSection(),
       const SectionTitle('Prostorije'),
       if (st.rooms.isEmpty)
         Text('Zatvori zidove u prostoriju pa će se ovdje pojaviti njena površina.', style: AppText.ui(size: 12.5, color: Pal.muted))
@@ -99,6 +100,37 @@ class SummaryPanel extends StatelessWidget {
       OutlinedButton.icon(onPressed: onExportCsv, icon: const Icon(Icons.table_view_outlined, size: 18), label: const Text('Izvezi troškovnik (CSV)')),
     ]);
   }
+  List<Widget> _issuesSection() {
+    final issues = c.issues;
+    return [
+      SectionTitle(issues.isEmpty ? 'Provjera prolaza' : 'Provjera prolaza (${issues.length})'),
+      if (issues.isEmpty)
+        Text('Na ovoj etaži sva vrata, ladice i ormari imaju mjesta za otvaranje, a prolazi su dovoljno široki.',
+            style: AppText.ui(size: 12.5, color: Pal.muted, height: 1.35))
+      else
+        for (final i in issues)
+          InkWell(
+            onTap: i.itemId == null ? null : () => c.select(Selection(SelKind.item, i.itemId!)),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.warning_amber_rounded, size: 17, color: i.serious ? const Color(0xFFC0392B) : const Color(0xFFD08A1E)),
+                const SizedBox(width: 8),
+                Expanded(child: Text(i.message, style: AppText.ui(size: 12.5, height: 1.35))),
+              ]),
+            ),
+          ),
+      SwitchListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        value: c.showIssues,
+        onChanged: c.setShowIssues,
+        title: Text('Prikaži upozorenja na tlocrtu', style: AppText.ui(size: 12.5)),
+      ),
+    ];
+  }
+
 }
 
 /// Troškovnik u CSV obliku (otvara se u Excelu i Google Sheetsu).

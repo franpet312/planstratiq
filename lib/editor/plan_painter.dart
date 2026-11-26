@@ -1098,6 +1098,58 @@ class ItemSymbols {
         final sw = math.min(w * 0.8, m(1.45));
         c.drawRect(Rect.fromCenter(center: Offset(0, r.top + m(0.12)), width: sw, height: math.max(2, m(0.05))),
             Paint()..color = Pal.ink);
+      case 'socket':
+      case 'socket_double':
+      case 'socket_high':
+      case 'switch':
+      case 'tv_socket':
+      case 'lan_socket':
+      case 'light_point':
+        // simboli elektroinstalacija (uvijek čitljive veličine); stražnja strana je uz zid (gore)
+        const el = Color(0xFF1F5FA8);
+        final ep = Paint()
+          ..color = el
+          ..strokeWidth = 1.4
+          ..style = PaintingStyle.stroke;
+        final ef = Paint()..color = el;
+        final rr = math.max(6.0, math.min(w, d) * 0.7);
+        final top = r.top;
+        switch (shape) {
+          case 'light_point':
+            c.drawCircle(Offset.zero, rr, Paint()..color = Colors.white);
+            c.drawCircle(Offset.zero, rr, ep);
+            final k = rr * 0.7;
+            ln(Offset(-k, -k), Offset(k, k), ep);
+            ln(Offset(k, -k), Offset(-k, k), ep);
+          case 'switch':
+            final cc = Offset(0, top + rr);
+            c.drawCircle(cc, rr * 0.55, ef);
+            ln(cc, cc + Offset(rr * 1.2, rr * 1.2), ep);
+            ln(cc + Offset(rr * 1.2, rr * 1.2), cc + Offset(rr * 1.6, rr * 0.8), ep);
+          case 'tv_socket':
+          case 'lan_socket':
+            final box2 = Rect.fromCenter(center: Offset(0, top + rr * 0.8), width: rr * 2.2, height: rr * 1.6);
+            c.drawRect(box2, Paint()..color = Colors.white);
+            c.drawRect(box2, ep);
+            final tp = TextPainter(
+              text: TextSpan(text: shape == 'tv_socket' ? 'TV' : 'LAN', style: AppText.narrow(size: rr * 0.85, weight: FontWeight.w700, color: el)),
+              textDirection: TextDirection.ltr,
+            )..layout();
+            tp.paint(c, box2.center - Offset(tp.width / 2, tp.height / 2));
+          default:
+            // utičnica: polukrug s crtom prema zidu (dvostruka: dvije crte, visoka: puni polukrug)
+            final cc = Offset(0, top);
+            final arc = Rect.fromCircle(center: cc, radius: rr);
+            if (shape == 'socket_high') c.drawArc(arc, 0, math.pi, true, ef);
+            c.drawArc(arc, 0, math.pi, false, ep);
+            ln(Offset(-rr, top), Offset(rr, top), ep);
+            if (shape == 'socket_double') {
+              ln(Offset(-rr * 0.35, top + rr), Offset(-rr * 0.35, top + rr * 1.7), ep);
+              ln(Offset(rr * 0.35, top + rr), Offset(rr * 0.35, top + rr * 1.7), ep);
+            } else {
+              ln(Offset(0, top + rr), Offset(0, top + rr * 1.7), ep);
+            }
+        }
       case 'chandelier':
       case 'chandelier_ring':
       case 'ceiling_light':

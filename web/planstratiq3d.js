@@ -68,7 +68,8 @@ function stairProgress(it, lx, lz, upper) {
   return (D / 2 - lz) / D;
 }
 // rasvjeta: stropna (visi sa stropa), zidna, stolna (stoji na stolu/komodi)
-const CEILING = new Set(['chandelier', 'chandelier_ring', 'pendant', 'pendant_row', 'ceiling_light']);
+const CEILING = new Set(['chandelier', 'chandelier_ring', 'pendant', 'pendant_row', 'ceiling_light', 'light_point']);
+const ELECTRIC = new Set(['socket', 'socket_double', 'socket_high', 'switch', 'tv_socket', 'lan_socket']);
 const SURFACES = new Set(['table', 'table_round', 'dresser', 'tv_stand', 'kitchen', 'island', 'vanity', 'shelf', 'bench']);
 const BALCONY = new Set(['balcony', 'balcony_rail', 'balcony_wall']);
 function inPolygon(x, y, poly) {
@@ -799,6 +800,40 @@ function buildItem(it, g, loader) {
       parts.push({ mat: scr.material, emi: 0.55 });
       interactive('TV', 0, true);
       b(0.3, 0.05, 0.2, 0, 0.525, -D / 2 + 0.12, 0x222222);
+      break;
+    }
+    case 'socket':
+    case 'socket_double':
+    case 'socket_high':
+    case 'switch':
+    case 'tv_socket':
+    case 'lan_socket': {
+      // pločica na zidu (stražnja strana objekta je uz zid)
+      const y = { socket_high: 1.1, switch: 1.1 }[it.shape] ?? 0.3;
+      const n = it.shape === 'socket_double' || it.shape === 'socket_high' ? 2 : 1;
+      const z = -D / 2 + 0.006;
+      for (let i = 0; i < n; i++) {
+        const x = n === 1 ? 0 : (i - 0.5) * 0.075;
+        b(0.07, 0.07, 0.012, x, y, z, color, { roughness: 0.4 });
+        if (it.shape === 'switch') b(0.05, 0.05, 0.006, x, y, z + 0.009, lighter(color, 0.08), { roughness: 0.3 });
+        else if (it.shape === 'tv_socket' || it.shape === 'lan_socket') b(0.016, 0.014, 0.004, x, y, z + 0.008, 0x222222);
+        else {
+          cyl(0.02, 0.02, 0.004, x, y, z + 0.008, darker(color, 0.12), 20).rotation.x = Math.PI / 2;
+          for (const dx of [-0.009, 0.009]) cyl(0.0025, 0.0025, 0.004, x + dx, y, z + 0.01, 0x111111, 6).rotation.x = Math.PI / 2;
+        }
+      }
+      break;
+    }
+    case 'light_point': {
+      const C = it.ceil ?? 2.57;
+      cyl(0.05, 0.05, 0.02, 0, C - 0.01, 0, color, 20);
+      cyl(0.004, 0.004, 0.2, 0, C - 0.11, 0, 0x222222, 6);
+      const bulb = mat(0xfff4e0, { emissive: 0xffd9a0, emissiveIntensity: 1 }).clone();
+      const s = sphere(0.04, 0, C - 0.24, 0, 0xffffff);
+      s.material = bulb;
+      s.castShadow = false;
+      parts.push({ mat: bulb, emi: 1 });
+      interactive('svjetlo', 0, true);
       break;
     }
     case 'chandelier':
@@ -1922,7 +1957,7 @@ class Engine {
   // sudari u šetnji: namještaj (orijentirani pravokutnik) i ograde balkona
   _itemColliders(it) {
     const sh = it.shape;
-    if (['rug', 'rug_round', 'path', 'deck', 'carport', 'wall_lamp', 'table_lamp'].includes(sh) || STAIRS.has(sh) || CEILING.has(sh)) return;
+    if (['rug', 'rug_round', 'path', 'deck', 'carport', 'wall_lamp', 'table_lamp'].includes(sh) || STAIRS.has(sh) || CEILING.has(sh) || ELECTRIC.has(sh)) return;
     if (sh === 'lamp_arc') {
       // samo baza blokira prolaz (luk je iznad glave)
       const r = it.rotation || 0;

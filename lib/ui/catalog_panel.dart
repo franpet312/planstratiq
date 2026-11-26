@@ -47,6 +47,13 @@ const shapeIcons = <String, IconData>{
   'pendant': Icons.emoji_objects_outlined,
   'pendant_row': Icons.emoji_objects_outlined,
   'ceiling_light': Icons.circle_outlined,
+  'socket': Icons.power_outlined,
+  'socket_double': Icons.power_outlined,
+  'socket_high': Icons.power_outlined,
+  'switch': Icons.toggle_on_outlined,
+  'tv_socket': Icons.settings_input_antenna,
+  'lan_socket': Icons.lan_outlined,
+  'light_point': Icons.lightbulb_outline,
   'plant': Icons.local_florist_outlined,
   'rug': Icons.texture,
   'rug_round': Icons.texture,
@@ -132,10 +139,11 @@ const _categoryIcons = <String, IconData>{
   catWork: Icons.desk_outlined,
   catHall: Icons.door_front_door_outlined,
   catLight: Icons.light_outlined,
+  catElectric: Icons.electrical_services_outlined,
   catGarden: Icons.deck_outlined,
   catYard: Icons.yard_outlined,
 };
-const _categoryOrder = [catLiving, catBed, catKitchen, catBath, catWork, catHall, catLight, catGarden, catYard];
+const _categoryOrder = [catLiving, catBed, catKitchen, catBath, catWork, catHall, catLight, catElectric, catGarden, catYard];
 
 enum _Sort { recommended, priceUp, priceDown, name }
 

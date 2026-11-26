@@ -116,6 +116,7 @@ const _stone = <NamedColor>[
   NamedColor('pješčenjak', 0xFFD3BE97),
 ];
 
+const _elec = <NamedColor>[NamedColor('bijela', 0xFFF4F4F2), NamedColor('antracit', 0xFF3F4347), NamedColor('crna', 0xFF1E1E1E)];
 const _lightMetal = <NamedColor>[
   NamedColor('crna', 0xFF2B2B2B),
   NamedColor('zlatna', 0xFFC9A55A),
@@ -210,6 +211,13 @@ const families = <Family>[
   Family(id: 'visilica_niz', name: 'Viseće lampe u nizu (3)', category: catLight, shape: 'pendant_row', sizes: [(1.2, 0.3, 0.9), (1.6, 0.3, 0.9)], price: 150, colors: _lampShade, styled: false),
   Family(id: 'plafonjera', name: 'Plafonjera', category: catLight, shape: 'ceiling_light', sizes: [(0.35, 0.35, 0.1), (0.5, 0.5, 0.12)], price: 45, colors: _lightMetal, styled: false),
   Family(id: 'zidna_lampa', name: 'Zidna lampa', category: catLight, shape: 'wall_lamp', sizes: [(0.2, 0.18, 0.3)], price: 40, colors: _lightMetal, styled: false),
+  Family(id: 'el_uticnica', name: 'Utičnica', category: catElectric, shape: 'socket', sizes: [(0.08, 0.05, 0.08)], price: 35, colors: _elec, styled: false),
+  Family(id: 'el_uticnica2', name: 'Dvostruka utičnica', category: catElectric, shape: 'socket_double', sizes: [(0.15, 0.05, 0.08)], price: 50, colors: _elec, styled: false),
+  Family(id: 'el_uticnica_v', name: 'Utičnica iznad radne ploče', category: catElectric, shape: 'socket_high', sizes: [(0.15, 0.05, 0.08)], price: 50, colors: _elec, styled: false),
+  Family(id: 'el_prekidac', name: 'Prekidač', category: catElectric, shape: 'switch', sizes: [(0.08, 0.05, 0.08)], price: 30, colors: _elec, styled: false),
+  Family(id: 'el_tv', name: 'TV / antenska utičnica', category: catElectric, shape: 'tv_socket', sizes: [(0.08, 0.05, 0.08)], price: 40, colors: _elec, styled: false),
+  Family(id: 'el_lan', name: 'Mrežna utičnica (LAN)', category: catElectric, shape: 'lan_socket', sizes: [(0.08, 0.05, 0.08)], price: 45, colors: _elec, styled: false),
+  Family(id: 'el_svjetlo', name: 'Rasvjetno mjesto (strop)', category: catElectric, shape: 'light_point', sizes: [(0.12, 0.12, 0.04)], price: 40, colors: _elec, styled: false),
   Family(id: 'stolna_lampa', name: 'Stolna lampa', category: catLight, shape: 'table_lamp', sizes: [(0.3, 0.3, 0.5), (0.4, 0.4, 0.62)], price: 35, colors: _shade, styled: false),
   Family(id: 'kamin', name: 'Kamin', category: catLiving, shape: 'fireplace', sizes: [(1.0, 0.45, 1.0), (1.2, 0.5, 1.1), (1.6, 0.5, 1.1)], price: 1500, colors: _stone, styled: false),
   Family(id: 'biljka', name: 'Sobna biljka', category: catLiving, shape: 'plant', sizes: [(0.4, 0.4, 0.8), (0.5, 0.5, 1.2), (0.7, 0.7, 1.7)], price: 40, colors: _green, styled: false),

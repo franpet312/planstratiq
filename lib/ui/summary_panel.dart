@@ -89,6 +89,7 @@ class SummaryPanel extends StatelessWidget {
         'za podove i boju, a ne uključuju gradnju, instalacije ni stolariju.',
         style: AppText.ui(size: 11.5, color: Pal.muted, height: 1.4),
       ),
+      ..._electric(),
       ..._shopping(context),
       const SectionTitle('Gradnja'),
       StatRow('Ukupna duljina zidova', '${fmtM(st.wallLength)} m'),
@@ -105,6 +106,40 @@ class SummaryPanel extends StatelessWidget {
       OutlinedButton.icon(onPressed: onExportCsv, icon: const Icon(Icons.table_view_outlined, size: 18), label: const Text('Izvezi troškovnik (CSV)')),
     ]);
   }
+  List<Widget> _electric() {
+    const names = {
+      'socket': 'Utičnice',
+      'socket_double': 'Dvostruke utičnice',
+      'socket_high': 'Utičnice iznad radne ploče',
+      'switch': 'Prekidači',
+      'tv_socket': 'TV / antenske utičnice',
+      'lan_socket': 'Mrežne utičnice (LAN)',
+      'light_point': 'Rasvjetna mjesta',
+    };
+    final counts = <String, int>{};
+    var cost = 0.0;
+    var lights = 0;
+    for (final l in c.plan.levels) {
+      for (final it in l.items) {
+        if (names.containsKey(it.shape)) {
+          counts[it.shape] = (counts[it.shape] ?? 0) + 1;
+          cost += it.price ?? 0;
+        } else if (const {'chandelier', 'chandelier_ring', 'pendant', 'pendant_row', 'ceiling_light', 'wall_lamp'}.contains(it.shape)) {
+          lights++;
+        }
+      }
+    }
+    if (counts.isEmpty) return const [];
+    return [
+      const SectionTitle('Električne instalacije'),
+      for (final k in names.keys)
+        if (counts[k] != null) StatRow(names[k]!, '${counts[k]} kom.'),
+      if (lights > 0) StatRow('Stropna i zidna rasvjeta (iz kataloga)', '$lights kom.'),
+      const SizedBox(height: 4),
+      StatRow('Okvirno (točke s ugradnjom)', fmtEur(cost), strong: true),
+    ];
+  }
+
   List<Widget> _shopping(BuildContext context) {
     final list = shoppingList(c.plan);
     if (list.isEmpty) return const [];

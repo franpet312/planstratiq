@@ -565,7 +565,8 @@ class PlanController extends ChangeNotifier {
     } else if (ceilingShapes.contains(c.shape) || c.shape == 'table_lamp') {
       // stropna i stolna rasvjeta: točno gdje je pušteno, bez prislanjanja uz zid
     } else if (c.zone == CatalogZone.interior && !floorShapes.contains(c.shape)) {
-      final w = wallNear(p, tol: c.shape == 'wall_lamp' ? 1.5 : c.d / 2 + 0.45);
+      final onWall = c.shape == 'wall_lamp' || electricWall.containsKey(c.shape);
+      final w = wallNear(p, tol: onWall ? 1.5 : c.d / 2 + 0.45);
       if (w != null) {
         final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
         final q = closestOnSegment(p, a, b);
@@ -574,7 +575,8 @@ class PlanController extends ChangeNotifier {
           final n = away / away.distance;
           // stražnja strana objekta (lokalno -y) okrenuta je prema zidu (-n)
           rot = roundTo(math.atan2(-n.dx, n.dy), math.pi / 12);
-          pos = q + n * (w.thickness / 2 + c.d / 2 + (c.shape == 'wall_lamp' ? 0.002 : 0.01));
+          pos = q + n * (w.thickness / 2 + c.d / 2 + (onWall ? 0.002 : 0.01));
+          if (onWall) rot = math.atan2(-n.dx, n.dy); // točno uz zid, bez zaokruživanja kuta
         }
       }
     }

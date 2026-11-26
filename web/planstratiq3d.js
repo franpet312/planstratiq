@@ -403,6 +403,64 @@ function mat(color, opts = {}) {
 const lighter = (c, f = 0.25) => new THREE.Color(rgb(c)).lerp(new THREE.Color(0xffffff), f).getHex();
 const darker = (c, f = 0.35) => new THREE.Color(rgb(c)).lerp(new THREE.Color(0x000000), f).getHex();
 
+// ------------------------------------------------------------------ rezanje kosim krovom (potkrovlje)
+// Zidovi potkrovlja idu visoko i režu se u shaderu po stvarnoj plohi krova: najviša od krovnih ploha
+// svih krila (L, T, U kuće), tako da svaki dio zida završi točno ispod krila nad sobom.
+const ROOF_MAX = 16;
+const roofU = {
+  uRA: { value: Array.from({ length: ROOF_MAX }, () => new THREE.Vector4()) },
+  uRB: { value: Array.from({ length: ROOF_MAX }, () => new THREE.Vector4()) },
+  uRP: { value: Array.from({ length: ROOF_MAX * 4 }, () => new THREE.Vector4()) },
+  uRN: { value: 0 },
+};
+const ROOF_GLSL = `
+uniform vec4 uRA[${ROOF_MAX}];
+uniform vec4 uRB[${ROOF_MAX}];
+uniform vec4 uRP[${ROOF_MAX * 4}];
+uniform int uRN;
+uniform float uRoofOff;
+uniform float uRoofMode;
+varying vec3 vPsqW;
+float psqRoofH(vec2 p) {
+  float best = -1e5;
+  for (int i = 0; i < ${ROOF_MAX}; i++) {
+    if (i >= uRN) break;
+    vec4 a = uRA[i];
+    vec4 b = uRB[i];
+    float u = b.x * p.x + b.y * p.y;
+    float v = -b.y * p.x + b.x * p.y;
+    if (u < a.x - 0.001 || u > a.y + 0.001 || v < a.z - 0.001 || v > a.w + 0.001) continue;
+    float h = 1e5;
+    for (int k = 0; k < 4; k++) {
+      if (float(k) >= b.w) break;
+      vec4 q = uRP[i * 4 + k];
+      h = min(h, q.x * u + q.y * v + q.z);
+    }
+    best = max(best, b.z + h);
+  }
+  return best;
+}
+`;
+// mode 0: odreži sve iznad krova (zidovi); mode 1: odreži sve ispod najviše krovne plohe
+// (dijelovi krila koji su ušli u susjedno krilo L/T kuće ne smiju se vidjeti iznutra)
+function roofCut(m, off, mode = 0) {
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, roofU);
+    sh.uniforms.uRoofOff = { value: off };
+    sh.uniforms.uRoofMode = { value: mode };
+    sh.vertexShader = 'varying vec3 vPsqW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vPsqW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = ROOF_GLSL + sh.fragmentShader.replace('void main() {', 'void main() {\n  { float rh = psqRoofH(vPsqW.xz); if (rh > -1e4 && (uRoofMode < 0.5 ? vPsqW.y > rh + uRoofOff : vPsqW.y < rh + uRoofOff - 0.002)) discard; }');
+  };
+  m.customProgramCacheKey = () => 'psqroof';
+  m.userData = { ...m.userData, roofOff: off };
+  return m;
+}
+const roofDepthMats = new Map();
+function roofDepth(off) {
+  if (!roofDepthMats.has(off)) roofDepthMats.set(off, roofCut(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide }), off));
+  return roofDepthMats.get(off);
+}
+
 // ------------------------------------------------------------------ namještaj
 // mali pomak po objektu (0–6 mm) da se tepisi koji se preklapaju ne „bore” (z-fighting)
 function jitter(id) {
@@ -1647,7 +1705,7 @@ class Engine {
     const hits = ray.intersectObjects(this.world.children, true);
     for (const h of hits) {
       const o = h.object;
-      if (!o.visible || o.isPoints || o.isLine) continue;
+      if (!o.visible || o.isPoints || o.isLine || this._cutAway(h)) continue;
       let vis = true;
       for (let q = o.parent; q; q = q.parent) if (!q.visible) { vis = false; break; }
       if (!vis) continue;
@@ -2030,6 +2088,7 @@ class Engine {
     this.roofClip = [];
     this._tgt = this.world;
     if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, { ...(p.roofStyle || {}), attic: p.roofLevel.attic });
+    this._roofUniforms();
     // ostale etaže (samo za prikaz, bez odabira i sudara)
     for (const L of p.others || []) {
       const g = new THREE.Group();
@@ -2098,6 +2157,7 @@ class Engine {
     };
     const surfaces = (p.items || []).filter((q) => SURFACES.has(q.shape));
     for (let it of p.items || []) {
+      if (it.shape === 'roof_window') { this._roofWindow(it, p); continue; }
       if (CEILING.has(it.shape) || it.shape === 'ac_indoor' || it.shape === 'wood_stove') it = { ...it, ceil: maxH - FLOOR };
       if (it.shape === 'table_lamp') {
         // stolna lampa stoji na stolu/komodi ispod sebe
@@ -2120,6 +2180,69 @@ class Engine {
       if (g.userData.inter) this._register(it.id, [g], g.userData.inter, g.userData.parts || []);
       if (!this._passive) this._itemColliders(it);
     }
+  }
+
+  // krovni prozor: okvir i staklo u ravnini krova iznad mjesta prozora (prati nagib plohe)
+  _roofWindow(it, p) {
+    const R = this._roofPlaneAt(it.x, it.y);
+    const base = p.elevation || 0;
+    const g = new THREE.Group();
+    if (!this._passive) {
+      g.userData = { kind: 'item', id: it.id, data: it };
+      this.itemGroups.set(it.id, g);
+    }
+    const w = it.w || 0.78, d = it.d || 1.18;
+    if (!R || Math.hypot(R.A, R.B) < 1e-3) {
+      // nema kosog krova iznad: samo oznaka na stropu
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), mat(0xdfe9ef, { emissive: 0xdfe9ef, emissiveIntensity: 0.3 }));
+      g.position.set(it.x, (p.wallHeight || 2.6) - 0.01, it.y);
+      g.rotation.y = -(it.rotation || 0);
+      g.add(m);
+      this._tgt.add(g);
+      return;
+    }
+    const n = new THREE.Vector3(-R.A, 1, -R.B).normalize();
+    const xAx = new THREE.Vector3(-R.B, 0, R.A).normalize(); // vodoravno, okomito na pad
+    const zAx = new THREE.Vector3().crossVectors(xAx, n).normalize(); // uz pad
+    g.matrixAutoUpdate = true;
+    g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAx, n, zAx));
+    g.position.set(it.x, R.y - base, it.y);
+    const frameMat = mat(it.color ?? 0xff5a5f63, { roughness: 0.5, metalness: 0.3 });
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0x6f8fa6, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.55, envMapIntensity: 1.5 });
+    const fr = 0.07;
+    const bar = (bw, bd, x, z, y = 0.05, h = 0.1) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(bw, h, bd), frameMat);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      g.add(m);
+    };
+    // vanjski okvir (malo iznad pokrova) i opšav
+    bar(w, fr, 0, -d / 2 + fr / 2);
+    bar(w, fr, 0, d / 2 - fr / 2);
+    bar(fr, d - 2 * fr, -w / 2 + fr / 2, 0);
+    bar(fr, d - 2 * fr, w / 2 - fr / 2, 0);
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(w - 2 * fr, 0.012, d - 2 * fr), glass);
+    gl.position.y = 0.07;
+    g.add(gl);
+    // unutra: svijetla špaleta kroz debljinu krova i „nebo” na kosom stropu
+    if (this._attic) {
+      const lining = mat(0xf7f5f0, { roughness: 0.9, double: true });
+      const depth = 0.2;
+      for (const [bw, bd, x, z] of [[w, 0.02, 0, -d / 2], [w, 0.02, 0, d / 2], [0.02, d, -w / 2, 0], [0.02, d, w / 2, 0]]) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(bw, depth, bd), lining);
+        m.position.set(x, -depth / 2 - 0.005, z);
+        g.add(m);
+      }
+      const sky = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.04, d - 0.04), mat(0xcfe3f2, { emissive: 0xcfe3f2, emissiveIntensity: this.night ? 0.05 : 0.9, double: true }));
+      sky.rotation.x = -Math.PI / 2;
+      sky.position.y = -depth - 0.006;
+      g.add(sky);
+      // ručka na donjem rubu
+      const hd = new THREE.Mesh(new THREE.BoxGeometry(w * 0.4, 0.03, 0.03), frameMat);
+      hd.position.set(0, -depth - 0.03, d / 2 - 0.06);
+      g.add(hd);
+    }
+    this._tgt.add(g);
   }
 
   // sudari u šetnji: namještaj (orijentirani pravokutnik) i ograde balkona
@@ -2170,23 +2293,17 @@ class Engine {
     const ang = Math.atan2(dz, dx);
     const T = w.thickness || 0.2;
     let H = w.height || 2.6;
-    // potkrovlje: vanjski zidovi su koljenski zid, unutarnji idu do kosog stropa (odrezani krovom)
-    let clipPlanes = null;
-    if (this._attic) {
-      if ((w.inside || 0) !== 0) H = this._attic.knee;
-      else {
-        clipPlanes = this._roofClipAt((A.x + B.x) / 2, (A.y + B.y) / 2, this._attic.y);
-        if (clipPlanes) H = Math.max(H, 8);
-      }
-    }
+    // potkrovlje: svi zidovi idu do krova i režu se njegovom plohom – unutarnji do kosog stropa
+    // (20 cm ispod pokrova), vanjski do pokrova (zabat je tako pravi zid, s prozorima do vrha)
+    let roofOff = null;
+    if (this._attic && (this.roofClip || []).some((R) => R.type !== 'flat')) {
+      roofOff = (w.inside || 0) !== 0 ? -0.01 : -0.2;
+      H = Math.max(H, this._roofTopOver(A, B) - this._attic.y + 0.05);
+    } else if (this._attic && (w.inside || 0) !== 0) H = this._attic.knee;
     const clipCache = new Map();
     const cl = (m) => {
-      if (!clipPlanes || !m) return m;
-      if (!clipCache.has(m)) {
-        const c = m.clone();
-        c.clippingPlanes = clipPlanes;
-        clipCache.set(m, c);
-      }
+      if (roofOff == null || !m) return m;
+      if (!clipCache.has(m)) clipCache.set(m, roofCut(m.clone(), roofOff));
       return clipCache.get(m);
     };
     const ea = ends.ea, eb = ends.eb;
@@ -2416,6 +2533,7 @@ class Engine {
     }
     box(cur, L + eb, 0, H);
     solids.push([solidStart, L + eb]);
+    if (roofOff != null) g.traverse((o) => { if (o.isMesh && o.material?.userData?.roofOff != null) o.customDepthMaterial = roofDepth(roofOff); });
     this._tgt.add(g);
     if (this._passive) return;
     this.wallGroups.set(w.id, g);
@@ -2850,8 +2968,8 @@ class Engine {
     const ov = clamp(style.overhang ?? 0.5, 0, 1.5);
     const color = style.color ? rgb(style.color) : 0xa5533a;
     const WT = 0.15; // pola debljine vanjskog zida (obris je po osi zida)
-    const roofMat = mat(color, { tex: 'roof', roughness: 0.85 });
-    const innerMat = mat(0xf7f5f0, { roughness: 0.95, side: 'back' });
+    const roofMat = roofCut(mat(color, { tex: 'roof', roughness: 0.85 }).clone(), 0, 1);
+    const innerMat = roofCut(mat(0xf7f5f0, { roughness: 0.95, side: 'back' }).clone(), -0.2, 1);
     const fasciaMat = mat(darker(color, 0.35), { roughness: 0.8 });
     const wallMat = mat(0xece7df, { tex: 'plaster', roughness: 0.95, double: true });
 
@@ -2957,6 +3075,17 @@ class Engine {
         }
       };
       const fascia = [];
+      // je li rub ove plohe ispod krova drugog krila (unutar L/T spoja)
+      const underOther = (u, v, pl) => {
+        const h = H(pl, u, v);
+        for (const R of all) {
+          if (R.poly || u < R.ext.x0 - 1e-6 || u > R.ext.x1 + 1e-6 || v < R.ext.y0 - 1e-6 || v > R.ext.y1 + 1e-6) continue;
+          let m = Infinity;
+          for (const q of R.planes) m = Math.min(m, H(q, u, v));
+          if (m > h + 0.01) return true;
+        }
+        return false;
+      };
       for (const R of all) {
         for (let i = 0; i < R.planes.length; i++) {
           let pts = R.poly ? R.poly.map((q) => [q.x, q.y]) : [[R.ext.x0, R.ext.y0], [R.ext.x1, R.ext.y0], [R.ext.x1, R.ext.y1], [R.ext.x0, R.ext.y1]];
@@ -2973,7 +3102,23 @@ class Engine {
             const a = pts[k], b = pts[(k + 1) % pts.length];
             const onEdge = (q) => R.poly ? true : Math.abs(q[0] - R.ext.x0) < 1e-6 || Math.abs(q[0] - R.ext.x1) < 1e-6 || Math.abs(q[1] - R.ext.y0) < 1e-6 || Math.abs(q[1] - R.ext.y1) < 1e-6;
             const sameSide = R.poly ? true : (Math.abs(a[0] - b[0]) < 1e-6 && (Math.abs(a[0] - R.ext.x0) < 1e-6 || Math.abs(a[0] - R.ext.x1) < 1e-6)) || (Math.abs(a[1] - b[1]) < 1e-6 && (Math.abs(a[1] - R.ext.y0) < 1e-6 || Math.abs(a[1] - R.ext.y1) < 1e-6));
-            if (onEdge(a) && onEdge(b) && sameSide) fascia.push([a, b, pi]);
+            if (onEdge(a) && onEdge(b) && sameSide) {
+              // daska samo na dijelovima koji nisu ispod drugog krila
+              const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+              const n = Math.max(1, Math.ceil(len / 0.1));
+              let start = null;
+              for (let q = 0; q <= n; q++) {
+                const f0 = q / n, f1 = Math.min(1, (q + 1) / n);
+                const fm = (f0 + f1) / 2;
+                const ok = q < n && !underOther(a[0] + (b[0] - a[0]) * fm, a[1] + (b[1] - a[1]) * fm, pi);
+                if (ok && start == null) start = f0;
+                if (!ok && start != null) {
+                  const P = (f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+                  fascia.push([P(start), P(f0), pi]);
+                  start = null;
+                }
+              }
+            }
           }
         }
       }
@@ -3051,7 +3196,7 @@ class Engine {
         cover.rotation.y = -ang;
         cover.receiveShadow = true;
         g.add(cover);
-      } else {
+      } else if (!style.attic) {
         // zabati: zid od vrha zida do krova uz svaki brid obrisa (vanjsko lice zida)
         const face = this._offsetPoly(lp, WT);
         for (let i = 0; i < face.length; i++) {
@@ -3083,6 +3228,75 @@ class Engine {
       this.world.add(g);
       this.roofs.push(g);
     }
+  }
+
+  // krovne plohe u uniforme shadera za rezanje
+  _roofUniforms() {
+    let n = 0;
+    for (const R of this.roofClip || []) {
+      if (R.type === 'flat') continue;
+      for (const q of R.all) {
+        if (n >= ROOF_MAX) break;
+        roofU.uRA.value[n].set(q.ext.x0, q.ext.x1, q.ext.y0, q.ext.y1);
+        roofU.uRB.value[n].set(R.ca, R.sa, R.base, Math.min(4, q.planes.length));
+        for (let k = 0; k < 4; k++) {
+          const pl = q.planes[k];
+          if (pl) roofU.uRP.value[n * 4 + k].set(pl.a, pl.b, pl.c, 0);
+        }
+        n++;
+      }
+    }
+    roofU.uRN.value = n;
+  }
+
+  // visina pokrova (svjetska y) iznad točke; -Infinity ako tu nema kosog krova
+  _roofTop(x, z) {
+    let best = -Infinity;
+    for (const R of this.roofClip || []) {
+      if (R.type === 'flat') continue;
+      const u = R.ca * x + R.sa * z, v = -R.sa * x + R.ca * z;
+      for (const q of R.all) {
+        if (u < q.ext.x0 - 1e-3 || u > q.ext.x1 + 1e-3 || v < q.ext.y0 - 1e-3 || v > q.ext.y1 + 1e-3) continue;
+        let h = Infinity;
+        for (const pl of q.planes) h = Math.min(h, pl.a * u + pl.b * v + pl.c);
+        best = Math.max(best, R.base + h);
+      }
+    }
+    return best;
+  }
+
+  // ploha krova koja vlada točkom: { y, A, B } za y = A·x + B·z + C (svjetske koordinate)
+  _roofPlaneAt(x, z) {
+    let best = null;
+    for (const R of this.roofClip || []) {
+      if (R.type === 'flat') continue;
+      const u = R.ca * x + R.sa * z, v = -R.sa * x + R.ca * z;
+      for (const q of R.all) {
+        if (u < q.ext.x0 - 1e-3 || u > q.ext.x1 + 1e-3 || v < q.ext.y0 - 1e-3 || v > q.ext.y1 + 1e-3) continue;
+        let h = Infinity, pl = null;
+        for (const c of q.planes) { const hc = c.a * u + c.b * v + c.c; if (hc < h) { h = hc; pl = c; } }
+        if (pl && (!best || R.base + h > best.y)) best = { y: R.base + h, A: pl.a * R.ca - pl.b * R.sa, B: pl.a * R.sa + pl.b * R.ca };
+      }
+    }
+    return best;
+  }
+
+  // najviša točka krova iznad zida (uzorci duž zida)
+  _roofTopOver(A, B) {
+    let m = -Infinity;
+    for (let k = 0; k <= 20; k++) {
+      const f = k / 20;
+      m = Math.max(m, this._roofTop(A.x + (B.x - A.x) * f, A.y + (B.y - A.y) * f));
+    }
+    return Number.isFinite(m) ? m : 0;
+  }
+
+  // je li točka pogotka u odrezanom (nevidljivom) dijelu zida potkrovlja
+  _cutAway(h) {
+    const off = h.object.material?.userData?.roofOff ?? (Array.isArray(h.object.material) ? h.object.material[0]?.userData?.roofOff : undefined);
+    if (off == null) return false;
+    const r = this._roofTop(h.point.x, h.point.z);
+    return r > -1e4 && h.point.y > r + off;
   }
 
   // ravnine krova iznad točke (x, z) kao ravnine rezanja: zadrži ono ispod kosog stropa
@@ -3208,7 +3422,7 @@ class Engine {
     this.raycaster.setFromCamera(this._ndc(e), this.camera);
     const hits = this.raycaster.intersectObjects(this.world.children, true);
     for (const h of hits) {
-      if (!h.object.visible) continue;
+      if (!h.object.visible || this._cutAway(h)) continue;
       let o = h.object;
       while (o && !o.userData?.kind) o = o.parent;
       if (o && o.userData.kind) return { kind: o.userData.kind, id: o.userData.id, obj: o, point: h.point };
@@ -3426,6 +3640,7 @@ class Engine {
     ray.far = Infinity;
     for (const h of hits) {
       let o = h.object;
+      if (this._cutAway(h)) continue;
       if (!o.visible && !o.userData.inter) continue;
       let vis = true;
       for (let q = o; q; q = q.parent) if (q !== o && !q.visible) { vis = false; break; }

@@ -83,6 +83,35 @@ List<ClearanceIssue> checkClearances(Plan plan, {double? Function(Offset)? ceili
       }
     }
   }
+  // 0b) potkrovlje: vrh prozora ili vrata iznad kosog stropa (otvor bi izašao kroz krov)
+  if (ceilingAt != null) {
+    for (final o in plan.openings) {
+      final w = plan.wallById(o.wallId);
+      if (w == null) continue;
+      final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+      final len = (b - a).distance;
+      if (len < 0.01) continue;
+      final dir = (b - a) / len;
+      final mid = a + dir * (o.t * len);
+      double? low;
+      Offset? at;
+      for (final f in [-0.5, -0.25, 0.0, 0.25, 0.5]) {
+        final p = mid + dir * (o.width * f);
+        final h = ceilingAt(p);
+        if (h != null && (low == null || h < low)) {
+          low = h;
+          at = p;
+        }
+      }
+      final top = o.sill + o.height;
+      if (low != null && top > low + 0.02) {
+        issues.add(ClearanceIssue(
+            '${o.type == OpeningType.window ? 'Prozor' : 'Vrata'} sežu do ${(top * 100).round()} cm, a kosi strop je tu na ${(low * 100).round()} cm. '
+            'Smanji visinu ili parapet, pomakni otvor prema sredini zabata ili stavi krovni prozor.',
+            at!));
+      }
+    }
+  }
   final items = [
     for (final it in plan.items)
       if (_blocking.contains(it.shape) && collisionLayer(it.shape) == 'floor') (it, itemObb(it)!)

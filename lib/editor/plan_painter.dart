@@ -1265,6 +1265,24 @@ class ItemSymbols {
               ln(Offset(0, top + rr), Offset(0, top + rr * 1.7), ep);
             }
         }
+      case 'roof_window':
+        // krovni prozor: isprekidani pravokutnik (iznad ravnine presjeka) s dijagonalom
+        final rwR = Rect.fromCenter(center: Offset.zero, width: w, height: d);
+        c.drawRect(rwR, fillOf(const Color(0xFFCFE3F2), 0.45));
+        final rwDash = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Pal.ink;
+        final rwEdges = [(rwR.topLeft, rwR.topRight), (rwR.topRight, rwR.bottomRight), (rwR.bottomRight, rwR.bottomLeft), (rwR.bottomLeft, rwR.topLeft)];
+        for (final (a, b) in rwEdges) {
+          final len = (b - a).distance;
+          final rwN = math.max(2, (len / 6).floor());
+          for (var i = 0; i < rwN; i += 2) {
+            c.drawLine(Offset.lerp(a, b, i / rwN)!, Offset.lerp(a, b, math.min(1.0, (i + 1) / rwN))!, rwDash);
+          }
+        }
+        ln(rwR.topLeft, rwR.bottomRight, thin);
+        ln(rwR.topRight, rwR.bottomLeft, thin);
       case 'chandelier':
       case 'chandelier_ring':
       case 'ceiling_light':

@@ -491,7 +491,7 @@ class PlanController extends ChangeNotifier {
     if (len < 0.62) return null;
     final o = Opening.preset(wallId, type, t);
     if (len < o.width + 0.1) o.width = math.max(0.5, len - 0.12);
-    o.height = math.min(o.height, w.height - o.sill - 0.05);
+    o.height = math.min(o.height, wallTop(w) - o.sill - 0.05);
     o.t = clampOpeningT(len, o.width, t);
     plan.openings.add(o);
     selection = Selection(SelKind.opening, o.id);
@@ -564,6 +564,15 @@ class PlanController extends ChangeNotifier {
         final (q, n) = _outsideOf(w, p);
         rot = math.atan2(-n.dx, n.dy);
         pos = q + n * (w.thickness / 2 + c.d / 2);
+      }
+    } else if (c.shape == 'roof_window') {
+      // krovni prozor: dulja stranica uz pad krova
+      final h0 = ceilingAt(p);
+      if (h0 != null) {
+        const e = 0.1;
+        final gx = (ceilingAt(p + const Offset(e, 0)) ?? h0) - (ceilingAt(p - const Offset(e, 0)) ?? h0);
+        final gy = (ceilingAt(p + const Offset(0, e)) ?? h0) - (ceilingAt(p - const Offset(0, e)) ?? h0);
+        if (gx.abs() + gy.abs() > 1e-4) rot = math.atan2(-gx, gy);
       }
     } else if (ceilingShapes.contains(c.shape) || c.shape == 'table_lamp') {
       // stropna i stolna rasvjeta: točno gdje je pušteno, bez prislanjanja uz zid
@@ -1181,13 +1190,13 @@ class PlanController extends ChangeNotifier {
         o
           ..type = type
           ..width = math.min(p.width, len - 0.12)
-          ..height = math.min(p.height, w.height - p.sill - 0.05)
+          ..height = math.min(p.height, wallTop(w) - p.sill - 0.05)
           ..sill = p.sill
           ..style = '';
       }
       if (width != null) o.width = width.clamp(0.3, math.max(0.3, len - 0.1));
-      if (height != null) o.height = height.clamp(0.2, w.height);
-      if (sill != null) o.sill = sill.clamp(0.0, math.max(0.0, w.height - o.height));
+      if (height != null) o.height = height.clamp(0.2, math.max(0.2, wallTop(w)));
+      if (sill != null) o.sill = sill.clamp(0.0, math.max(0.0, wallTop(w) - o.height));
       if (offsetFromStart != null) o.t = offsetFromStart / len;
       if (flip != null) o.flip = flip;
       if (swingOut != null) o.swingOut = swingOut;
@@ -1608,6 +1617,18 @@ class PlanController extends ChangeNotifier {
       _roofRev = revision;
     }
     return _roof;
+  }
+
+  /// Najviša visina do koje zid seže: u potkrovlju zid ide do krova (zabat), inače visina zida.
+  double wallTop(Wall w) {
+    if (!isAttic) return w.height;
+    final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+    var m = w.height;
+    for (var k = 0; k <= 20; k++) {
+      final h = ceilingAt(Offset.lerp(a, b, k / 20)!);
+      if (h != null) m = math.max(m, h);
+    }
+    return m;
   }
 
   /// Svijetla visina kosog stropa u točki aktivne etaže (samo u potkrovlju), inače null.

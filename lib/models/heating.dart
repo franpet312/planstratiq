@@ -1,6 +1,7 @@
 
 import 'geometry.dart';
 import 'plan.dart';
+import 'topology.dart';
 
 /// Grijanje i hlađenje: okvirna potrebna snaga po prostoriji i snaga postavljenih uređaja.
 /// Specifično toplinsko opterećenje (W/m²) ovisi o izolaciji kuće; brojke su okvirne (za razgovor s

@@ -742,7 +742,7 @@ function buildItem(it, g, loader) {
         g.add(basin);
         cyl(0.012, 0.012, 0.2, 0, base + 0.1, -D / 2 + 0.06, 0xcccccc, 10, metal);
         b(Math.min(W, 0.8) - 0.1, 0.7, 0.02, 0, base + 0.75, -D / 2 + 0.01, 0xdde8ea, { roughness: 0.05, metalness: 0.8 });
-      } else if (W >= 1.7) {
+      } else if (W >= 1.7 && it.legs !== 'plain') {
         b(0.6, 0.012, D * 0.62, -W * 0.18, base + 0.002, 0, 0xb5b7b8, metal);
         cyl(0.012, 0.012, 0.3, -W * 0.18, base + 0.15, -D / 2 + 0.08, 0xcccccc, 10, metal);
         b(0.6, 0.008, 0.52, W * 0.22, base + 0.004, 0, 0x111111, { roughness: 0.2 });
@@ -751,7 +751,7 @@ function buildItem(it, g, loader) {
         b(W, 0.72, 0.35, 0, H - 0.36, -D / 2 + 0.175);
         for (let i = 1; i < n; i++) b(0.006, 0.68, 0.005, -W / 2 + (i * W) / n, H - 0.36, -D / 2 + 0.353, darker(color, 0.25));
         b(W, 0.6, 0.01, 0, base + 0.31, -D / 2 + 0.005, 0xe6e2da, { tex: 'tile' });
-        if (W >= 1.7) b(0.6, 0.12, 0.35, W * 0.22, H - 0.78, -D / 2 + 0.175, 0x9a9a9a, metal);
+        if (W >= 1.7 && it.legs !== 'plain') b(0.6, 0.12, 0.35, W * 0.22, H - 0.78, -D / 2 + 0.175, 0x9a9a9a, metal);
       }
       break;
     }

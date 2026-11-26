@@ -395,6 +395,7 @@ class PropertiesPanel extends StatelessWidget {
           onPick: (v) => c.updateRoom(r.id, wallColor: v),
         ),
       ],
+      ..._kitchen(context, r),
       ..._roomClimate(r),
       const SectionTitle('Kopiranje'),
       Wrap(spacing: 8, runSpacing: 8, children: [
@@ -417,6 +418,29 @@ class PropertiesPanel extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- ništa
+  List<Widget> _kitchen(BuildContext context, Room r) {
+    void go(String layout, {bool island = false}) {
+      final msg = c.addKitchen(r.id, layout, island: island);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(msg)));
+    }
+
+    return [
+      const SectionTitle('Kuhinja'),
+      Text('Kuhinja uz zidove ove prostorije: donji i gornji elementi, radna ploča, sudoper, ploča za kuhanje i hladnjak. '
+          'Ispod prozora idu samo donji elementi, a vrata se zaobilaze.',
+          style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+      const SizedBox(height: 8),
+      Wrap(spacing: 6, runSpacing: 6, children: [
+        OutlinedButton(onPressed: () => go('I'), child: const Text('Uz jedan zid')),
+        OutlinedButton(onPressed: () => go('L'), child: const Text('L')),
+        OutlinedButton(onPressed: () => go('U'), child: const Text('U')),
+        OutlinedButton(onPressed: () => go('L', island: true), child: const Text('L + otok')),
+      ]),
+    ];
+  }
+
   List<Widget> _roomClimate(Room r) {
     final rc = roomClimate(c.plan).where((x) => x.room.id == r.id).firstOrNull;
     return [

@@ -15,6 +15,7 @@ import '../models/collision.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
+import '../models/room_walls.dart';
 import '../models/topology.dart';
 
 enum Tool { select, wall, room, door, window, balcony, passage, measure, calibrate, place, note }
@@ -639,6 +640,122 @@ class PlanController extends ChangeNotifier {
   }
 
   void setNodePos(String id, Offset p) => plan.nodes[id]?.pos = p;
+
+  // --------------------------------------------------------- kuhinja kao sklop
+
+  /// Postavi kuhinju uz zidove prostorije: 'I' (jedan zid), 'L' (dva), 'U' (tri), uz otok po želji.
+  /// Gornji elementi se ne stavljaju ispod prozora; hladnjak ide na kraj glavnog niza.
+  /// Vraća poruku za korisnika.
+  String addKitchen(String roomId, String layout, {bool island = false, int color = 0xFFEDEBE6, bool replace = true}) {
+    final r = plan.roomById(roomId);
+    if (r == null) return 'Prostorija nije pronađena.';
+    final sides = roomSides(plan, r).where((s) => s.length > 0.8).toList();
+    if (sides.isEmpty) return 'Prostorija nema dovoljno dugih zidova za kuhinju.';
+    // glavni zid: najdulji slobodni dio
+    sides.sort((x, y) {
+      final fx = x.longestFree(), fy = y.longestFree();
+      return (fy.$2 - fy.$1).compareTo(fx.$2 - fx.$1);
+    });
+    final main = sides.first;
+    final all = roomSides(plan, r);
+    final mi = all.indexOf(main);
+    RoomSide? nb(int k) => all.length > 2 ? all[(mi + k + all.length) % all.length] : null;
+    final runs = <(RoomSide, double, double, bool)>[]; // stranica, od, do, glavni
+    const depth = 0.6;
+    final mf = main.longestFree();
+    var m0 = mf.$1, m1 = mf.$2;
+    final prev = nb(-1), next = nb(1);
+    final useNext = layout == 'L' || layout == 'U';
+    final usePrev = layout == 'U';
+    runs.add((main, m0, m1, true));
+    if (useNext && next != null && m1 > main.length - 0.05) {
+      final f = next.longestFree();
+      if (f.$1 < 0.05) runs.add((next, depth, f.$2, false));
+    }
+    if (usePrev && prev != null && m0 < 0.05) {
+      final f = prev.longestFree();
+      if (f.$2 > prev.length - 0.05) runs.add((prev, f.$1, prev.length - depth, false));
+    }
+    final poly = plan.roomPolygon(r);
+    var placed = 0;
+    mutate(() {
+      if (replace) {
+        plan.items.removeWhere((it) => const {'kitchen', 'tall', 'fridge', 'island'}.contains(it.shape) && pointInPolygon(it.pos, poly));
+      }
+      PlacedItem add(String name, String shape, RoomSide s, double t0, double t1, double d, double h, {String? legs, double? price}) {
+        final w = t1 - t0;
+        final c = s.at((t0 + t1) / 2, d / 2 + 0.002);
+        final rot = math.atan2(-s.inward.dx, s.inward.dy);
+        final it = PlacedItem(
+          id: newId('i'),
+          catalogId: 'g:kuhinja',
+          name: name,
+          shape: shape,
+          pos: c,
+          rotation: rot,
+          w: roundTo(w, 0.005),
+          d: d,
+          h: h,
+          color: color,
+          price: price,
+          legs: legs,
+        );
+        plan.items.add(it);
+        placed++;
+        return it;
+      }
+
+      for (final (s, a0, a1, isMain) in runs) {
+        var t0 = a0, t1 = a1;
+        if (t1 - t0 < 0.3) continue;
+        if (isMain && t1 - t0 >= 1.8) {
+          // hladnjak na početak glavnog niza (kut sa slovom L je na njegovom kraju)
+          add('Hladnjak', 'fridge', s, t0, t0 + 0.6, 0.65, 2.0, price: 600);
+          t0 += 0.6;
+        }
+        // dijelovi niza: ispod prozora samo donji elementi
+        final cuts = <double>{t0, t1};
+        for (final (w0, w1, _) in s.windows) {
+          if (w1 > t0 && w0 < t1) {
+            cuts.add(math.max(t0, w0));
+            cuts.add(math.min(t1, w1));
+          }
+        }
+        final xs = cuts.toList()..sort();
+        var sinkDone = !isMain;
+        for (var i = 0; i + 1 < xs.length; i++) {
+          final s0 = xs[i], s1 = xs[i + 1];
+          if (s1 - s0 < 0.25) continue;
+          final mid = (s0 + s1) / 2;
+          final underWindow = s.windows.any((wd) => mid > wd.$1 && mid < wd.$2);
+          // sudoper i ploča za kuhanje samo u jednom (najduljem) dijelu glavnog niza
+          final withAppliances = !sinkDone && s1 - s0 >= 1.7;
+          if (withAppliances) sinkDone = true;
+          final h = underWindow ? 0.9 : 2.2;
+          add(underWindow ? 'Kuhinja, donji elementi' : 'Kuhinja, donji i gornji elementi', 'kitchen', s, s0, s1, depth, h,
+              legs: withAppliances ? null : 'plain', price: (s1 - s0) * (h > 1 ? 950 : 520));
+        }
+      }
+      if (island) {
+        // otok u sredini prostorije, okrenut kao glavni niz, 1,1 m od glavnog niza
+        final across = main.inward;
+        final c = main.at((m0 + m1) / 2, depth + 1.1 + 0.45);
+        final w = math.min(2.4, (m1 - m0) * 0.7);
+        if (pointInPolygon(c, poly) && w >= 1.2) {
+          final rot = math.atan2(-across.dx, across.dy);
+          plan.items.add(PlacedItem(
+              id: newId('i'), catalogId: 'g:otok', name: 'Kuhinjski otok', shape: 'island', pos: c, rotation: rot + math.pi,
+              w: roundTo(w, 0.05), d: 0.9, h: 0.92, color: color, price: w * 700));
+          placed++;
+        }
+      }
+      selection = Selection(SelKind.room, roomId);
+    });
+    if (placed == 0) return 'Nema dovoljno slobodnog zida za kuhinju (vrata su na putu).';
+    final names = {'I': 'u jednom redu', 'L': 'u obliku slova L', 'U': 'u obliku slova U'};
+    return 'Kuhinja ${names[layout]} je postavljena (${runs.length} ${runs.length == 1 ? 'zid' : 'zida'}).'
+        '${layout != 'I' && runs.length < (layout == 'U' ? 3 : 2) ? ' Susjedni zid nije slobodan u kutu pa je kuhinja kraća.' : ''}';
+  }
 
   // --------------------------------------------------------- bilješke
   Note addNote(Offset p, String text) {

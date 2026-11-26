@@ -33,7 +33,8 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 **Namještaj i okućnica**
 - **Stvarni proizvodi trgovina**: ~680 proizvoda IKEA, JYSK i Emmezeta (naziv, mjere, cijena, poveznica na proizvod), filtar po trgovini; boje istog proizvoda grupirane su u jedan model. Kod dijela IKEA proizvoda dubina ili visina su procijenjene (oznaka „mjere okvirne”). Podaci: `web/retail/products.csv`.
 - Katalog s **~24.600 varijanti u 464 modela**: ~90 vrsta namještaja i opreme × 8 stilova (skandinavski, moderni, klasični, industrijski, rustikalni, minimalistički, boho, retro) × veličine × boje × izvedbe nogu. Realne mjere, okvirne cijene, 3D sličice.
-- Pretraga, filtri po prostoriji i stilu, poredak po cijeni; detalj modela s odabirom veličine, boje i nogu.
+- **Izbornik kataloga**: početna stranica s trgovinama (IKEA, JYSK, Emmezeta, Planstratiq katalog i uvezene trgovine – broj proizvoda i brzi ulaz u kategorije), prostorijama i nedavno korištenim. U popisu se kombiniraju trgovina i kategorija (s brojem proizvoda), pretraga traži unutar odabrane trgovine, a detalj proizvoda nudi „Slično u drugim trgovinama” po cijeni.
+- Filtri po stilu, poredak po cijeni; detalj modela s odabirom veličine, boje i nogu.
 - **Uvoz kataloga trgovine** (CSV ili JSON): naziv, mjere, cijena, boja, link na proizvod i GLB 3D model. Vrsta namještaja se prepoznaje iz naziva. Predložak CSV-a preuzima se iz kataloga.
 - Povuci objekt na tlocrt ili u 3D; uz zid se sam okrene leđima prema zidu.
 - Rotacija ručicom (korak 15°), strelice za pomak 1 cm, dupliciranje, promjena mjera i boje.

@@ -35,6 +35,7 @@ class PropertiesPanel extends StatelessWidget {
       SelKind.opening => _opening(c.plan.openingById(s.id)),
       SelKind.item => _item(c.plan.itemById(s.id)),
       SelKind.room => _room(context, c.plan.roomById(s.id)),
+      SelKind.note => _note(c.plan.noteById(s.id)),
       SelKind.none => _none(context),
     };
     return ListView(padding: const EdgeInsets.fromLTRB(16, 6, 16, 20), children: children);
@@ -414,6 +415,22 @@ class PropertiesPanel extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- ništa
+  List<Widget> _note(Note? n) {
+    if (n == null) return [];
+    return [
+      _header('Bilješka', Icons.sticky_note_2_outlined, subtitle: 'Vidi se na tlocrtu i u PDF-u'),
+      const SizedBox(height: 10),
+      _NoteEditor(key: ValueKey(n.id), c: c, note: n),
+      const SizedBox(height: 10),
+      Swatches(
+        colors: const [0xFFFFE58A, 0xFFFFC9A8, 0xFFC8E6C9, 0xFFBBDEFB, 0xFFE1BEE7],
+        names: const ['Žuta', 'Narančasta', 'Zelena', 'Plava', 'Ljubičasta'],
+        value: n.color,
+        onPick: (v) => c.updateNote(n.id, color: v),
+      ),
+    ];
+  }
+
   List<Widget> _site() {
     final st = c.plan.site;
     final r = c.siteRect();
@@ -711,4 +728,62 @@ class _TexturePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TexturePainter old) => old.kind != kind;
+}
+
+
+class _NoteEditor extends StatefulWidget {
+  const _NoteEditor({super.key, required this.c, required this.note});
+  final PlanController c;
+  final Note note;
+
+  @override
+  State<_NoteEditor> createState() => _NoteEditorState();
+}
+
+class _NoteEditorState extends State<_NoteEditor> {
+  late final ctl = TextEditingController(text: widget.note.text);
+  final focus = FocusNode();
+  String? _before;
+
+  @override
+  void initState() {
+    super.initState();
+    focus.addListener(() {
+      if (focus.hasFocus) {
+        _before = widget.note.text;
+      } else {
+        _commit();
+      }
+    });
+  }
+
+  void _commit() {
+    final t = ctl.text.trim();
+    if (_before != null && t != _before) {
+      widget.note.text = _before!; // da poništavanje vrati prijašnji tekst
+      widget.c.updateNote(widget.note.id, text: t);
+    }
+    _before = null;
+  }
+
+  @override
+  void dispose() {
+    if (focus.hasFocus) _commit();
+    ctl.dispose();
+    focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: ctl,
+        focusNode: focus,
+        minLines: 2,
+        maxLines: 6,
+        decoration: const InputDecoration(labelText: 'Tekst bilješke'),
+        onChanged: (v) {
+          widget.note.text = v;
+          widget.c.liveUpdate();
+        },
+      );
 }

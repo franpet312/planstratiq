@@ -112,6 +112,7 @@ class PlanPainter extends CustomPainter {
     }
     _roomLabels(canvas);
     if (!st.preview && !st.printMode) _issues(canvas);
+    if (!st.preview) _notes(canvas);
     if (!st.preview && !st.printMode) {
       _selectionOverlay(canvas);
       _nodes(canvas);
@@ -649,6 +650,44 @@ class PlanPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------- odabir
+  static const _noteMaxW = 190.0;
+
+  static TextPainter _noteText(Note n) => TextPainter(
+        text: TextSpan(text: n.text, style: AppText.ui(size: 11.5, weight: FontWeight.w500, color: const Color(0xFF3B3320), height: 1.25)),
+        textDirection: TextDirection.ltr,
+        maxLines: 5,
+        ellipsis: '…',
+      )..layout(maxWidth: _noteMaxW);
+
+  /// Pravokutnik bilješke na zaslonu (bilješka je uvijek iste veličine, neovisno o zoomu).
+  static Rect noteRect(Note n, double scale, Offset pan) {
+    final tp = _noteText(n);
+    final p = n.pos * scale + pan;
+    return Rect.fromLTWH(p.dx + 6, p.dy - tp.height - 16, tp.width + 16, tp.height + 12);
+  }
+
+  void _notes(Canvas canvas) {
+    for (final n in plan.notes) {
+      final r = noteRect(n, scale, st.pan);
+      final p = s(n.pos);
+      final sel = st.selection == Selection(SelKind.note, n.id);
+      canvas.drawLine(p, Offset(r.left + 6, r.bottom), Paint()
+        ..color = const Color(0xFF8A7A3A)
+        ..strokeWidth = 1);
+      canvas.drawCircle(p, 3.5, Paint()..color = const Color(0xFFB8402E));
+      final rr = RRect.fromRectAndRadius(r, const Radius.circular(5));
+      canvas.drawRRect(rr.shift(const Offset(1, 2)), Paint()..color = const Color(0x22000000));
+      canvas.drawRRect(rr, Paint()..color = Color(n.color));
+      canvas.drawRRect(
+          rr,
+          Paint()
+            ..color = sel ? Pal.accent : const Color(0x55000000)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = sel ? 2 : 0.8);
+      _noteText(n).paint(canvas, r.topLeft + const Offset(8, 6));
+    }
+  }
+
   void _issues(Canvas canvas) {
     for (final i in st.issues) {
       final col = i.serious ? const Color(0xFFC0392B) : const Color(0xFFD08A1E);

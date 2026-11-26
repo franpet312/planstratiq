@@ -328,12 +328,14 @@ class Level {
     List<Opening>? openings,
     List<Room>? rooms,
     List<PlacedItem>? items,
+    List<Note>? notes,
     this.image,
   })  : nodes = nodes ?? {},
         walls = walls ?? [],
         openings = openings ?? [],
         rooms = rooms ?? [],
-        items = items ?? [];
+        items = items ?? [],
+        notes = notes ?? [];
 
   final String id;
   String name;
@@ -348,6 +350,7 @@ class Level {
   final List<Opening> openings;
   final List<Room> rooms;
   final List<PlacedItem> items;
+  final List<Note> notes;
   PlanImage? image;
 
   bool get isEmpty => walls.isEmpty && items.isEmpty;
@@ -362,6 +365,7 @@ class Level {
         'openings': openings.map((o) => o.toJson()).toList(),
         'rooms': rooms.map((r) => r.toJson()).toList(),
         'items': items.map((i) => i.toJson()).toList(),
+        if (notes.isNotEmpty) 'notes': notes.map((n) => n.toJson()).toList(),
         if (includeImage && image != null) 'image': image!.toJson(),
       };
 
@@ -377,6 +381,7 @@ class Level {
       openings: _list(j['openings'], Opening.fromJson),
       rooms: _list(j['rooms'], Room.fromJson),
       items: _list(j['items'], PlacedItem.fromJson),
+      notes: _list(j['notes'], Note.fromJson),
       image: j['image'] is Map ? PlanImage.fromJson(Map<String, dynamic>.from(j['image'] as Map)) : null,
     );
   }
@@ -428,6 +433,8 @@ class Plan {
   List<Opening> get openings => level.openings;
   List<Room> get rooms => level.rooms;
   List<PlacedItem> get items => level.items;
+  List<Note> get notes => level.notes;
+  Note? noteById(String id) => notes.where((n) => n.id == id).firstOrNull;
   PlanImage? get image => level.image;
   set image(PlanImage? v) => level.image = v;
 
@@ -629,3 +636,22 @@ List<(String, String)> openingStyles(OpeningType t) => switch (t) {
       OpeningType.balcony => const [('', 'Krilna'), ('sliding', 'Klizna stijena')],
       OpeningType.passage => const [],
     };
+
+
+/// Bilješka na tlocrtu (npr. „polica po mjeri”, „pitati majstora za odvod”).
+class Note {
+  Note({required this.id, required this.pos, required this.text, this.color = 0xFFFFE58A});
+  final String id;
+  Offset pos;
+  String text;
+  int color;
+
+  Map<String, dynamic> toJson() => {'id': id, 'x': pos.dx, 'y': pos.dy, 'text': text, 'color': color};
+
+  factory Note.fromJson(Map<String, dynamic> j) => Note(
+        id: (j['id'] as String?) ?? newId('n'),
+        pos: Offset(_d(j['x'], 0), _d(j['y'], 0)),
+        text: (j['text'] as String?) ?? '',
+        color: _i(j['color'], 0xFFFFE58A),
+      );
+}

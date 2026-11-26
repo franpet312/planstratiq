@@ -699,6 +699,7 @@ class _ToolDock extends StatelessWidget {
         t(Tool.passage, Icons.space_bar, 'Prolaz bez vrata: klikni na zid'),
         const Padding(padding: EdgeInsets.symmetric(vertical: 3), child: SizedBox(width: 24, child: Divider())),
         t(Tool.measure, Icons.straighten, 'Mjerenje udaljenosti  M'),
+        t(Tool.note, Icons.sticky_note_2_outlined, 'Bilješka na tlocrtu  N'),
         if (c.plan.image != null) t(Tool.calibrate, Icons.photo_size_select_small, 'Mjerilo nacrta'),
       ]),
     );
@@ -721,6 +722,7 @@ class _ToolHint extends StatelessWidget {
       Tool.passage => 'Klikni na zid gdje želiš prolaz bez vrata.',
       Tool.measure => 'Klikni dvije točke da izmjeriš udaljenost. Treći klik počinje novo mjerenje.',
       Tool.calibrate => 'Klikni dvije točke na nacrtu čiju stvarnu udaljenost znaš, npr. početak i kraj kotiranog zida.',
+      Tool.note => 'Klikni na tlocrt gdje želiš bilješku i upiši tekst. Bilješku poslije možeš povući.',
       Tool.place => 'Klikni gdje želiš postaviti: ${c.placing?.name ?? ''}. Uz zid se sam okrene. Shift+klik postavlja više komada.',
     };
     if (text == null) return const SizedBox.shrink();

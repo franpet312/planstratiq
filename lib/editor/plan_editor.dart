@@ -12,7 +12,7 @@ import '../state/plan_controller.dart';
 import 'plan_painter.dart';
 import '../viewer/engine_bridge.dart';
 
-enum _DragKind { pan, node, wall, room, item, rotate, resize, opening, image }
+enum _DragKind { pan, node, wall, room, item, rotate, resize, opening, image, note }
 
 class _Drag {
   _Drag(this.kind,
@@ -234,6 +234,11 @@ class PlanEditorState extends State<PlanEditor> {
 
   Selection _hitTest(Offset w, {bool includeRooms = true}) {
     final tol = 7 / scale;
+    // bilješke su na vrhu
+    final sp = w * scale + pan;
+    for (final n in plan.notes.reversed) {
+      if (PlanPainter.noteRect(n, scale, pan).inflate(3).contains(sp)) return Selection(SelKind.note, n.id);
+    }
     for (final it in plan.items.reversed) {
       if (floorShapes.contains(it.shape)) continue;
       final local = rotate(w - it.pos, -it.rotation);
@@ -318,6 +323,8 @@ class PlanEditorState extends State<PlanEditor> {
         }
       case Tool.calibrate:
         _calibClick(w);
+      case Tool.note:
+        _noteAt(w);
       case Tool.place:
         final item = c.placing;
         if (item != null) {
@@ -326,6 +333,31 @@ class PlanEditorState extends State<PlanEditor> {
         }
     }
     setState(() {});
+  }
+
+  Future<void> _noteAt(Offset w) async {
+    final ctl = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nova bilješka'),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          maxLines: 4,
+          minLines: 2,
+          decoration: const InputDecoration(hintText: 'npr. Polica po mjeri, pitati majstora za odvod…'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Odustani')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: const Text('Dodaj bilješku')),
+        ],
+      ),
+    );
+    ctl.dispose();
+    if (text == null || text.isEmpty) return;
+    c.addNote(w, text);
+    if (!HardwareKeyboard.instance.isShiftPressed) c.setTool(Tool.select);
   }
 
   void _wallClick(Offset p) {
@@ -418,6 +450,9 @@ class PlanEditorState extends State<PlanEditor> {
       case SelKind.opening:
         c.beginChange();
         drag = _Drag(_DragKind.opening, startWorld: w, startScreen: e.localPosition, id: hit.id);
+      case SelKind.note:
+        c.beginChange();
+        drag = _Drag(_DragKind.note, startWorld: w, startScreen: e.localPosition, id: hit.id, startPos: plan.noteById(hit.id)!.pos);
     }
   }
 
@@ -451,6 +486,9 @@ class PlanEditorState extends State<PlanEditor> {
           c.liveUpdate();
         case _DragKind.item:
           c.setItemPos(d.id, d.startPos + _grid(delta, 0.01));
+          c.liveUpdate();
+        case _DragKind.note:
+          plan.noteById(d.id)?.pos = d.startPos + delta;
           c.liveUpdate();
         case _DragKind.rotate:
           final it = plan.itemById(d.id);
@@ -709,6 +747,7 @@ class PlanEditorState extends State<PlanEditor> {
         LogicalKeyboardKey.keyD => Tool.door,
         LogicalKeyboardKey.keyP => Tool.window,
         LogicalKeyboardKey.keyM => Tool.measure,
+        LogicalKeyboardKey.keyN => Tool.note,
         _ => null,
       };
       if (t != null) {

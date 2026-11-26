@@ -17,7 +17,7 @@ import '../models/materials.dart';
 import '../models/plan.dart';
 import '../models/topology.dart';
 
-enum Tool { select, wall, room, door, window, balcony, passage, measure, calibrate, place }
+enum Tool { select, wall, room, door, window, balcony, passage, measure, calibrate, place, note }
 
 extension ToolX on Tool {
   OpeningType? get openingType => switch (this) {
@@ -29,7 +29,7 @@ extension ToolX on Tool {
       };
 }
 
-enum SelKind { none, wall, node, opening, item, room }
+enum SelKind { none, wall, node, opening, item, room, note }
 
 class Selection {
   const Selection(this.kind, this.id);
@@ -247,6 +247,7 @@ class PlanController extends ChangeNotifier {
       SelKind.wall => plan.wallById(id) != null,
       SelKind.node => plan.nodes.containsKey(id),
       SelKind.opening => plan.openingById(id) != null,
+      SelKind.note => plan.noteById(id) != null,
       SelKind.item => plan.itemById(id) != null,
       SelKind.room => plan.roomById(id) != null,
     };
@@ -636,6 +637,25 @@ class PlanController extends ChangeNotifier {
   }
 
   void setNodePos(String id, Offset p) => plan.nodes[id]?.pos = p;
+
+  // --------------------------------------------------------- bilješke
+  Note addNote(Offset p, String text) {
+    final n = Note(id: newId('n'), pos: p, text: text);
+    mutate(() {
+      plan.notes.add(n);
+      selection = Selection(SelKind.note, n.id);
+    });
+    return n;
+  }
+
+  void updateNote(String id, {String? text, int? color}) {
+    final n = plan.noteById(id);
+    if (n == null) return;
+    mutate(() {
+      if (text != null) n.text = text;
+      if (color != null) n.color = color;
+    });
+  }
   /// Pomakni objekt; uz uključeno sudaranje klizi uz zidove i druge objekte.
   void setItemPos(String id, Offset p) {
     final it = plan.itemById(id);
@@ -886,6 +906,8 @@ class PlanController extends ChangeNotifier {
           plan.items.removeWhere((i) => i.id == s.id);
         case SelKind.room:
           _deleteRoomWalls(s.id);
+        case SelKind.note:
+          plan.notes.removeWhere((n) => n.id == s.id);
         case SelKind.none:
           break;
       }

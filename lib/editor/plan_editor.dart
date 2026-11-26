@@ -829,6 +829,8 @@ class PlanEditorState extends State<PlanEditor> {
           dropGhost: dropGhost,
           site: plan.site.surroundings == 'none' && plan.site.fence == 'none' ? null : c.siteRect(),
           issues: c.showIssues ? c.issues : const [],
+          ceilingAt: c.isAttic ? c.ceilingAt : null,
+          usableArea: c.isAttic ? c.usableArea : null,
         );
         return DragTarget<CatalogItem>(
           onMove: (d) {

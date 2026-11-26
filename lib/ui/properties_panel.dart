@@ -395,6 +395,13 @@ class PropertiesPanel extends StatelessWidget {
           onPick: (v) => c.updateRoom(r.id, wallColor: v),
         ),
       ],
+      if (c.usableArea(r) != null) ...[
+        const SectionTitle('Potkrovlje'),
+        StatRow('Korisna površina', fmtM2(c.usableArea(r)!), strong: true),
+        Text('Ispod kosog stropa: dio viši od 2 m računa se cijeli, od 1 do 2 m pola, a niži od 1 m ne računa se. '
+            'Na tlocrtu je niski dio šrafiran (tamnije: ispod 1 m).',
+            style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+      ],
       ..._furnish(context, r),
       ..._kitchen(context, r),
       ..._roomClimate(r),

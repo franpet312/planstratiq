@@ -41,7 +41,15 @@ class PlanPaintState {
     this.dropGhost,
     this.site,
     this.issues = const [],
+    this.ceilingAt,
+    this.usableArea,
   });
+
+  /// Potkrovlje: svijetla visina kosog stropa u točki (null = nije potkrovlje).
+  final double? Function(Offset)? ceilingAt;
+
+  /// Potkrovlje: korisna površina prostorije.
+  final double? Function(Room)? usableArea;
 
   /// Upozorenja provjere prolaza (crtaju se iznad namještaja).
   final List<ClearanceIssue> issues;
@@ -102,6 +110,7 @@ class PlanPainter extends CustomPainter {
       _ghostBelow(canvas);
     }
     _rooms(canvas);
+    _ceilingZones(canvas);
     _items(canvas, floor: true);
     _items(canvas, floor: false);
     _walls(canvas);
@@ -323,6 +332,36 @@ class PlanPainter extends CustomPainter {
     canvas.restore();
   }
 
+  // potkrovlje: šrafura gdje je strop niži od 1 m (tamnije) i od 2 m (svjetlije) + crta na 2 m
+  void _ceilingZones(Canvas canvas) {
+    final f = st.ceilingAt;
+    if (f == null || st.preview) return;
+    final low = Paint()..color = const Color(0x33604A2E);
+    final mid = Paint()..color = const Color(0x16604A2E);
+    final step = math.max(0.1, 6 / scale);
+    for (final r in plan.rooms) {
+      final poly = plan.roomPolygon(r);
+      if (poly.length < 3) continue;
+      var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity;
+      for (final p in poly) {
+        minX = math.min(minX, p.dx);
+        maxX = math.max(maxX, p.dx);
+        minY = math.min(minY, p.dy);
+        maxY = math.max(maxY, p.dy);
+      }
+      canvas.save();
+      canvas.clipPath(Path()..addPolygon([for (final p in poly) s(p)], true));
+      for (var x = minX; x < maxX; x += step) {
+        for (var y = minY; y < maxY; y += step) {
+          final h = f(Offset(x + step / 2, y + step / 2));
+          if (h == null || h >= 2.0) continue;
+          canvas.drawRect(Rect.fromPoints(s(Offset(x, y)), s(Offset(x + step, y + step))), h < 1.0 ? low : mid);
+        }
+      }
+      canvas.restore();
+    }
+  }
+
   void _roomLabels(Canvas canvas) {
     for (final r in plan.rooms) {
       final poly = plan.roomPolygon(r);
@@ -342,6 +381,10 @@ class PlanPainter extends CustomPainter {
       _text(canvas, r.name, at - Offset(0, fs * 0.75), AppText.ui(size: fs, weight: FontWeight.w600, color: color),
           halo: true, maxWidth: math.sqrt(pxArea) * 1.4);
       _text(canvas, 'P = ${fmtM2(area)}', at + Offset(0, fs * 0.55), AppText.narrow(size: fs - 1, color: color), halo: true);
+      final ua = st.usableArea?.call(r);
+      if (ua != null) {
+        _text(canvas, 'korisno ${fmtM2(ua)}', at + Offset(0, fs * 1.75), AppText.narrow(size: fs - 2, color: const Color(0xFF7A5A2E)), halo: true);
+      }
       if (big) {
         _text(canvas, floorById(r.floor).name, at + const Offset(0, 22), AppText.narrow(size: 10, color: Pal.muted), halo: true);
       }

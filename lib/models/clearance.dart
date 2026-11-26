@@ -56,8 +56,33 @@ String _name(PlacedItem it) {
   return n.isEmpty ? 'Objekt' : n;
 }
 
-List<ClearanceIssue> checkClearances(Plan plan) {
+List<ClearanceIssue> checkClearances(Plan plan, {double? Function(Offset)? ceilingAt}) {
   final issues = <ClearanceIssue>[];
+  // 0) potkrovlje: objekt viši od kosog stropa iznad sebe
+  if (ceilingAt != null) {
+    for (final it in plan.items) {
+      final layer = collisionLayer(it.shape);
+      if (layer != 'floor' || isFloorLike(it.shape) || it.h < 0.3) continue;
+      final ob = itemObb(it);
+      if (ob == null) continue;
+      double? low;
+      Offset? at;
+      for (final p in [..._corners(ob), ob.c]) {
+        final h = ceilingAt(p);
+        if (h != null && (low == null || h < low)) {
+          low = h;
+          at = p;
+        }
+      }
+      if (low != null && it.h > low + 0.01) {
+        issues.add(ClearanceIssue(
+            '${_name(it)} je viši od kosog stropa: strop je tu ${(low * 100).round()} cm, a objekt ${(it.h * 100).round()} cm. Pomakni ga prema sljemenu ili odaberi niži.',
+            at!,
+            zone: _corners(ob),
+            itemId: it.id));
+      }
+    }
+  }
   final items = [
     for (final it in plan.items)
       if (_blocking.contains(it.shape) && collisionLayer(it.shape) == 'floor') (it, itemObb(it)!)

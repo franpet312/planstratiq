@@ -15,6 +15,7 @@ import '../models/collision.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
 import '../models/plan.dart';
+import '../models/roof.dart';
 import '../models/room_walls.dart';
 import '../models/topology.dart';
 
@@ -701,6 +702,22 @@ class PlanController extends ChangeNotifier {
           legs: legs,
         );
         plan.items.add(it);
+        // potkrovlje: ispod niskog kosog stropa samo donji elementi, a hladnjak ne stane
+        if (isAttic) {
+          final ch = ceilingOver(it) ?? 9;
+          if (shape == 'kitchen' && it.h > 0.9 && ch < it.h) {
+            it
+              ..h = 0.9
+              ..name = 'Kuhinja, donji elementi'
+              ..price = w * 520;
+          } else if (shape == 'fridge' && ch < it.h) {
+            it.h = ch >= 1.5 ? 1.45 : it.h;
+            if (ch < 1.5) {
+              plan.items.remove(it);
+              return it;
+            }
+          }
+        }
         placed++;
         return it;
       }
@@ -827,6 +844,10 @@ class PlanController extends ChangeNotifier {
         if (!isFloorLike(it.shape) && !cs.every((p) => pointInPolygon(p, poly) || _polyDist(p, poly) < 0.02)) return false;
         if (!isFloorLike(it.shape) && collisionLayer(it.shape) == 'floor' && doorZones.any((z) => separation(ob, z, eps: 0.01) != null)) return false;
         if (itemOverlaps(plan, it)) return false;
+        if (isAttic && !isFloorLike(it.shape) && collisionLayer(it.shape) == 'floor') {
+          final h = ceilingOver(it);
+          if (h != null && it.h > h) return false; // ispod kosog stropa ne stane
+        }
         return true;
       }
 
@@ -1569,7 +1590,80 @@ class PlanController extends ChangeNotifier {
   PlanStats get stats => _stats ??= _computeStats();
 
   /// Provjera prolaza i otvaranja na aktivnoj etaži.
-  List<ClearanceIssue> get issues => _issues ??= checkClearances(plan);
+  List<ClearanceIssue> get issues => _issues ??= checkClearances(plan, ceilingAt: isAttic ? ceilingAt : null);
+
+  // --------------------------------------------------------- potkrovlje
+  RoofShape? _roof;
+  int _roofRev = -1;
+
+  /// Je li aktivna etaža potkrovlje pod krovom.
+  bool get isAttic => plan.roof && plan.level.attic && plan.active == plan.levels.length - 1;
+
+  /// Krov nad najvišom etažom (isti kao u 3D-u).
+  RoofShape? get roofShape {
+    if (!plan.roof) return null;
+    if (_roof == null || _roofRev != revision) {
+      final (outs, _) = levelSceneData(plan.levels.length - 1);
+      _roof = RoofShape.build(outs, type: plan.roofType, pitch: plan.roofPitch, overhang: plan.roofOverhang, turn: plan.roofTurn);
+      _roofRev = revision;
+    }
+    return _roof;
+  }
+
+  /// Svijetla visina kosog stropa u točki aktivne etaže (samo u potkrovlju), inače null.
+  double? ceilingAt(Offset p) {
+    if (!isAttic) return null;
+    final r = roofShape;
+    return r == null ? null : atticCeilingAt(r, plan.level, p);
+  }
+
+  /// Korisna površina prostorije u potkrovlju: visina ≥ 2 m računa se 100 %, 1–2 m 50 %, ispod 1 m ne računa se.
+  /// Vraća null ako etaža nije potkrovlje.
+  double? usableArea(Room r) {
+    if (!isAttic) return null;
+    final poly = plan.roomPolygon(r);
+    if (poly.length < 3) return null;
+    var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity;
+    for (final p in poly) {
+      minX = math.min(minX, p.dx);
+      maxX = math.max(maxX, p.dx);
+      minY = math.min(minY, p.dy);
+      maxY = math.max(maxY, p.dy);
+    }
+    const step = 0.1;
+    var sum = 0.0, all = 0.0;
+    for (var x = minX + step / 2; x < maxX; x += step) {
+      for (var y = minY + step / 2; y < maxY; y += step) {
+        final p = Offset(x, y);
+        if (!pointInPolygon(p, poly)) continue;
+        all += 1;
+        final h = ceilingAt(p) ?? 9;
+        sum += h >= 2.0 ? 1 : (h >= 1.0 ? 0.5 : 0);
+      }
+    }
+    if (all == 0) return 0;
+    // ćelije se mjere po osi zida – svedi na neto površinu prostorije
+    return roomNetArea(plan, r) * sum / all;
+  }
+
+  /// Najmanja visina stropa iznad tlocrta objekta (kutovi i sredina).
+  double? ceilingOver(PlacedItem it) {
+    if (!isAttic) return null;
+    final ob = itemObb(it);
+    if (ob == null) return null;
+    double? m;
+    for (final p in [
+      ob.c,
+      ob.c - ob.ux * ob.hw - ob.uz * ob.hd,
+      ob.c + ob.ux * ob.hw - ob.uz * ob.hd,
+      ob.c + ob.ux * ob.hw + ob.uz * ob.hd,
+      ob.c - ob.ux * ob.hw + ob.uz * ob.hd,
+    ]) {
+      final h = ceilingAt(p);
+      if (h != null) m = m == null ? h : math.min(m, h);
+    }
+    return m;
+  }
   List<ClearanceIssue>? _issues;
 
   /// Prikaži upozorenja o prolazima na tlocrtu.

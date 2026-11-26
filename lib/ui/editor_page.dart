@@ -407,6 +407,9 @@ class _EditorPageState extends State<EditorPage> {
         } else if (v == 'up') {
           c.addLevel(above: true);
           _snack('Dodan je ${c.plan.level.name}. Vanjski zidovi preuzeti su s etaže ispod – prilagodi ih po potrebi.');
+        } else if (v == 'attic') {
+          c.addAttic();
+          _snack('Dodano je potkrovlje: vanjski zidovi su koljenski zid (1,2 m), a strop je kosi, ispod krova. Nagib i oblik krova mijenjaš u desnom panelu.');
         } else if (v == 'down') {
           c.addLevel(above: false);
           _snack('Dodan je ${c.plan.level.name}.');
@@ -428,6 +431,8 @@ class _EditorPageState extends State<EditorPage> {
           ),
         const PopupMenuDivider(),
         const PopupMenuItem(value: 'up', child: ListTile(dense: true, leading: Icon(Icons.add), title: Text('Dodaj kat iznad'))),
+        if (!levels.last.attic)
+          const PopupMenuItem(value: 'attic', child: ListTile(dense: true, leading: Icon(Icons.roofing), title: Text('Dodaj potkrovlje'))),
         const PopupMenuItem(value: 'down', child: ListTile(dense: true, leading: Icon(Icons.vertical_align_bottom), title: Text('Dodaj podrum'))),
         const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('Uredi etaže…'))),
       ],
@@ -487,15 +492,35 @@ class _EditorPageState extends State<EditorPage> {
                       const SizedBox(width: 10),
                       Expanded(
                         flex: 3,
-                        child: NumField(
-                          label: 'Visina',
-                          value: levels[i].height,
-                          onSubmit: (v) {
-                            c.setLevelHeight(i, v);
-                            setD(() {});
-                          },
-                        ),
+                        child: levels[i].attic
+                            ? NumField(
+                                label: 'Koljenski zid',
+                                value: levels[i].kneeWall,
+                                onSubmit: (v) {
+                                  c.setAttic(i, kneeWall: v);
+                                  setD(() {});
+                                },
+                              )
+                            : NumField(
+                                label: 'Visina',
+                                value: levels[i].height,
+                                onSubmit: (v) {
+                                  c.setLevelHeight(i, v);
+                                  setD(() {});
+                                },
+                              ),
                       ),
+                      if (i == levels.length - 1)
+                        Tooltip(
+                          message: 'Potkrovlje (kosi strop ispod krova)',
+                          child: Checkbox(
+                            value: levels[i].attic,
+                            onChanged: (v) {
+                              c.setAttic(i, attic: v ?? false);
+                              setD(() {});
+                            },
+                          ),
+                        ),
                       IconButton(
                         tooltip: 'Obriši etažu',
                         onPressed: levels.length <= 1

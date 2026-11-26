@@ -329,6 +329,8 @@ class Level {
     this.name = 'Prizemlje',
     this.elevation = 0,
     this.height = 2.6,
+    this.attic = false,
+    this.kneeWall = 1.2,
     Map<String, PlanNode>? nodes,
     List<Wall>? walls,
     List<Opening>? openings,
@@ -351,6 +353,12 @@ class Level {
 
   /// Zadana visina zidova (svijetla visina etaže).
   double height;
+
+  /// Potkrovlje: krov počinje na vrhu koljenskog zida, strop je kosi (ispod krova).
+  bool attic;
+
+  /// Visina koljenskog (nadozida) u potkrovlju (m).
+  double kneeWall;
   final Map<String, PlanNode> nodes;
   final List<Wall> walls;
   final List<Opening> openings;
@@ -366,6 +374,8 @@ class Level {
         'name': name,
         'elevation': elevation,
         'wallHeight': height,
+        if (attic) 'attic': true,
+        if (attic) 'kneeWall': kneeWall,
         'nodes': nodes.values.map((n) => n.toJson()).toList(),
         'walls': walls.map((w) => w.toJson()).toList(),
         'openings': openings.map((o) => o.toJson()).toList(),
@@ -382,6 +392,8 @@ class Level {
       name: (j['name'] as String?) ?? 'Prizemlje',
       elevation: _d(j['elevation'], 0),
       height: _d(j['wallHeight'], 2.6),
+      attic: j['attic'] == true,
+      kneeWall: _d(j['kneeWall'], 1.2),
       nodes: {for (final n in nodes) n.id: n},
       walls: _list(j['walls'], Wall.fromJson),
       openings: _list(j['openings'], Opening.fromJson),

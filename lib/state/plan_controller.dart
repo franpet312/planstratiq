@@ -1746,6 +1746,27 @@ class PlanController extends ChangeNotifier {
   }
 
   /// Dodaj etažu iznad najviše ili ispod najniže. [copyShell]: preuzmi vanjske zidove susjedne etaže.
+  /// Dodaj potkrovlje: novu najvišu etažu s obodnim zidovima kao koljenskim zidom i krovom iznad.
+  void addAttic({double kneeWall = 1.2}) {
+    addLevel(above: true);
+    mutate(() {
+      final l = plan.levels.last;
+      l.attic = true;
+      l.kneeWall = kneeWall;
+      l.name = 'Potkrovlje';
+      plan.roof = true;
+      if (plan.roofType == 'flat' || plan.roofType == 'shed') plan.roofType = 'gable';
+      if (plan.roofPitch < 30) plan.roofPitch = 40;
+    });
+  }
+
+  void setAttic(int i, {bool? attic, double? kneeWall}) => mutate(() {
+        final l = plan.levels[i];
+        if (attic != null) l.attic = attic;
+        if (kneeWall != null) l.kneeWall = kneeWall.clamp(0.3, 2.5).toDouble();
+        if (l.attic) plan.roof = true;
+      });
+
   void addLevel({required bool above, bool copyShell = true}) {
     mutate(() {
       final ref = above ? plan.levels.last : plan.levels.first;

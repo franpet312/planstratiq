@@ -22,6 +22,8 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - **Izvedbe otvora**: vrata krilna, dvokrilna, klizna (po zidu, s vodilicom), klizna u zid i harmonika; prozori krilni, klizni i fiksni; balkonska vrata krilna ili klizna stijena – s pravim simbolima na tlocrtu i otvaranjem u 3D-u.
 - Alat za mjerenje, mjerilo, zoom, pinch-zoom na dodir.
 - **Bilješke** (alat N): tekst na žutom (ili drugom) papiriću na tlocrtu, povlači se, uređuje u svojstvima i ispisuje u PDF-u.
+- **Opremi prostoriju** (u svojstvima prostorije): spavaća, dnevni boravak, blagovaonica, dječja, radna soba, kupaonica ili predsoblje – namještaj se sam slaže uz zidove, mimo vrata i prozora, bez sudaranja, u odabranom stilu.
+- **Kuhinja kao sklop**: kuhinja uz jedan zid, L, U ili L s otokom – donji i gornji elementi, radna ploča, sudoper, ploča za kuhanje i hladnjak; ispod prozora samo donji elementi, vrata se zaobilaze.
 - Učitavanje slike nacrta kao podloge i kalibracija mjerila (dvije točke + stvarna udaljenost).
 - **Automatsko prepoznavanje nacrta**: iz slike se prepoznaju zidovi (s debljinom), vrata i prozori i ucrtaju u tlocrt; mjerilo se procijeni iz širine vrata ili upiše ukupna širina zgrade s kote. Radi u pregledniku (`web/psqdetect.js`), najbolje za nacrte s vodoravnim i okomitim, ispunjenim ili šrafiranim zidovima.
 - **PDF nacrti i nagnuti skenovi**: nacrt se može učitati i kao PDF (prva stranica se iscrta u visokoj rezoluciji), a nagnut sken ili fotografija automatski se izravna (do ±6°).
@@ -30,6 +32,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Podrum, prizemlje i katovi: svaka etaža ima svoje zidove, prostorije i namještaj; kota poda računa se sama (svijetla visina + 25 cm ploče).
 - Novi kat preuzima vanjske zidove etaže ispod; na tlocrtu se etaža ispod vidi prozirno (plavo), a kutovi joj služe za hvatanje.
 - Stubište (ravno, L s podestom ili zavojito) postavljeno u prizemlju automatski probija otvor u ploči kata u obliku stubišta; u 3D šetnji (prvo i treće lice) stubama se hoda gore-dolje između etaža.
+- **Potkrovlje** („Dodaj potkrovlje” u izborniku etaža): obodni zidovi su koljenski zid (zadano 1,2 m), krov počinje na njegovom vrhu, a strop je kosi – bijela obloga ispod krova. Unutarnji pregradni zidovi idu do kosog stropa i sami se odrežu po krovu (zabatni oblik).
 - U 3D-u izvana prikazuju se etaže do odabrane (presjek), ili sve etaže s krovom na najvišoj.
 
 **Namještaj i okućnica**

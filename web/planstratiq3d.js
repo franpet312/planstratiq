@@ -389,7 +389,7 @@ function mat(color, opts = {}) {
       map: map || null,
       roughness: opts.roughness ?? 0.85,
       metalness: opts.metalness ?? 0,
-      side: opts.double ? THREE.DoubleSide : THREE.FrontSide,
+      side: opts.double ? THREE.DoubleSide : opts.side === 'back' ? THREE.BackSide : THREE.FrontSide,
       emissive: opts.emissive ? rgb(opts.emissive) : 0x000000,
       emissiveIntensity: opts.emissiveIntensity ?? 0,
       transparent: !!opts.opacity,
@@ -1405,6 +1405,7 @@ class Engine {
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 0.95;
+    r.localClippingEnabled = true; // zidovi potkrovlja odrezani kosim krovom
     Object.assign(r.domElement.style, { display: 'block', width: '100%', height: '100%', outline: 'none', touchAction: 'none' });
 
     const scene = (this.scene = new THREE.Scene());
@@ -2026,6 +2027,9 @@ class Engine {
     lampBudget = 12;
     const p = this.plan;
     if (!p) return;
+    this.roofClip = [];
+    this._tgt = this.world;
+    if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, { ...(p.roofStyle || {}), attic: p.roofLevel.attic });
     // ostale etaže (samo za prikaz, bez odabira i sudara)
     for (const L of p.others || []) {
       const g = new THREE.Group();
@@ -2045,7 +2049,6 @@ class Engine {
     this._buildLevel(p);
     this._tgt = this.world;
     this._passive = false;
-    if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, p.roofStyle || {});
     this._buildSite(p.site, p.projectId);
     this._applyVisibility();
     this._updateSelectionHelper();
@@ -2053,6 +2056,7 @@ class Engine {
 
   _buildLevel(p) {
     const nodes = p.nodes || {};
+    this._attic = p.attic ? { knee: p.kneeWall || 1.2, y: p.elevation || 0 } : null;
     // smjerovi zidova iz svakog čvora
     const dirs = {};
     for (const w of p.walls || []) {
@@ -2164,7 +2168,27 @@ class Engine {
     const L = Math.hypot(dx, dz);
     if (L < 0.01) return;
     const ang = Math.atan2(dz, dx);
-    const T = w.thickness || 0.2, H = w.height || 2.6;
+    const T = w.thickness || 0.2;
+    let H = w.height || 2.6;
+    // potkrovlje: vanjski zidovi su koljenski zid, unutarnji idu do kosog stropa (odrezani krovom)
+    let clipPlanes = null;
+    if (this._attic) {
+      if ((w.inside || 0) !== 0) H = this._attic.knee;
+      else {
+        clipPlanes = this._roofClipAt((A.x + B.x) / 2, (A.y + B.y) / 2, this._attic.y);
+        if (clipPlanes) H = Math.max(H, 8);
+      }
+    }
+    const clipCache = new Map();
+    const cl = (m) => {
+      if (!clipPlanes || !m) return m;
+      if (!clipCache.has(m)) {
+        const c = m.clone();
+        c.clippingPlanes = clipPlanes;
+        clipCache.set(m, c);
+      }
+      return clipCache.get(m);
+    };
     const ea = ends.ea, eb = ends.eb;
     const g = new THREE.Group();
     g.position.set(A.x, 0, A.y);
@@ -2202,7 +2226,7 @@ class Engine {
           const a = cuts[i], b = cuts[i + 1];
           const geo = new THREE.BoxGeometry(x1 - x0, b - a, depth);
           scaleBoxUV(geo, x1 - x0, b - a, depth, x0, a);
-          const m = new THREE.Mesh(geo, facesAt((a + b) / 2));
+          const m = new THREE.Mesh(geo, facesAt((a + b) / 2).map(cl));
           m.position.set((x0 + x1) / 2, (a + b) / 2, z);
           m.castShadow = true;
           m.receiveShadow = true;
@@ -2212,7 +2236,7 @@ class Engine {
         }
         return last;
       }
-      const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, depth), material);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, depth), Array.isArray(material) ? material.map(cl) : cl(material));
       m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z);
       m.castShadow = true;
       m.receiveShadow = true;
@@ -2467,7 +2491,7 @@ class Engine {
       if (pts.length < 3) continue;
       mk(pts, mat(r.floorColor, { tex: r.floorTexture, roughness: r.floorTexture === 'wood' ? 0.82 : 0.86, env: 0.3, double: true }), 0.03,
         { userData: { kind: 'room', id: r.id }, holes: p.holes });
-      if (!this._passive) mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true, holes: p.ceilHoles });
+      if (!this._passive && !p.attic) mk(pts, mat(0xfbfaf8, { double: true, roughness: 1 }), maxH, { ceiling: true, holes: p.ceilHoles });
     }
   }
 
@@ -2826,7 +2850,8 @@ class Engine {
     const ov = clamp(style.overhang ?? 0.5, 0, 1.5);
     const color = style.color ? rgb(style.color) : 0xa5533a;
     const WT = 0.15; // pola debljine vanjskog zida (obris je po osi zida)
-    const roofMat = mat(color, { tex: 'roof', roughness: 0.85, double: true });
+    const roofMat = mat(color, { tex: 'roof', roughness: 0.85 });
+    const innerMat = mat(0xf7f5f0, { roughness: 0.95, side: 'back' });
     const fasciaMat = mat(darker(color, 0.35), { roughness: 0.8 });
     const wallMat = mat(0xece7df, { tex: 'plaster', roughness: 0.95, double: true });
 
@@ -2906,6 +2931,7 @@ class Engine {
         all = [{ r: null, ext: { x0: ux0 - WT - ov, x1: ux1 + WT + ov, y0: vy0 - WT - ov, y1: vy1 + WT + ov }, planes: [pl], poly: this._offsetPoly(lp, WT + ov) }];
       }
 
+      this.roofClip.push({ ca, sa, base: maxH, all, type });
       const g = new THREE.Group();
       g.position.y = maxH;
       const pos = [], uvs = [];
@@ -2917,7 +2943,11 @@ class Engine {
         const nrm = Math.hypot(pl.a, pl.b) || 1;
         const du = -pl.a / nrm, dv = -pl.b / nrm; // smjer pada (za teksturu)
         for (const [i0, i1, i2] of tri) {
-          for (const k of [i0, i1, i2]) {
+          // trokut mora gledati prema gore (vanjska ploha krova); inače zamijeni redoslijed
+          const P = (k) => { const [u, v] = pts[k]; const w = toW(u, v); return new THREE.Vector3(w.x, H(pl, u, v), w.z); };
+          const p0 = P(i0), p1 = P(i1), p2 = P(i2);
+          const up = p1.clone().sub(p0).cross(p2.clone().sub(p0)).y >= 0;
+          for (const k of up ? [i0, i1, i2] : [i0, i2, i1]) {
             const [u, v] = pts[k];
             const w = toW(u, v);
             pos.push(w.x, H(pl, u, v), w.z);
@@ -2956,6 +2986,11 @@ class Engine {
         m.castShadow = true;
         m.receiveShadow = true;
         g.add(m);
+        // donja strana: kosi strop (gips) 20 cm ispod pokrova
+        const inner = new THREE.Mesh(geo, innerMat);
+        inner.position.y = -0.2;
+        inner.receiveShadow = true;
+        g.add(inner);
         // čeone daske
         for (const [a, b, pl] of fascia) {
           const wa = toW(a[0], a[1]), wb = toW(b[0], b[1]);
@@ -3048,6 +3083,23 @@ class Engine {
       this.world.add(g);
       this.roofs.push(g);
     }
+  }
+
+  // ravnine krova iznad točke (x, z) kao ravnine rezanja: zadrži ono ispod kosog stropa
+  _roofClipAt(x, z) {
+    for (const R of this.roofClip || []) {
+      const u = R.ca * x + R.sa * z, v = -R.sa * x + R.ca * z;
+      let rect = null;
+      for (const q of R.all) {
+        if (q.poly || (u >= q.ext.x0 - 1e-3 && u <= q.ext.x1 + 1e-3 && v >= q.ext.y0 - 1e-3 && v <= q.ext.y1 + 1e-3)) { rect = q; break; }
+      }
+      if (!rect || R.type === 'flat') continue;
+      return rect.planes.map((pl) => {
+        const A = pl.a * R.ca - pl.b * R.sa, B = pl.a * R.sa + pl.b * R.ca, C = R.base + pl.c - 0.2;
+        return new THREE.Plane(new THREE.Vector3(A, -1, B), C).normalize();
+      });
+    }
+    return null;
   }
 
   // pomak pravokutnog poligona prema van za d (lokalne koordinate)

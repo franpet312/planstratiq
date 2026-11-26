@@ -395,6 +395,7 @@ class PropertiesPanel extends StatelessWidget {
           onPick: (v) => c.updateRoom(r.id, wallColor: v),
         ),
       ],
+      ..._furnish(context, r),
       ..._kitchen(context, r),
       ..._roomClimate(r),
       const SectionTitle('Kopiranje'),
@@ -418,6 +419,50 @@ class PropertiesPanel extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- ništa
+  List<Widget> _furnish(BuildContext context, Room r) {
+    final guess = PlanController.guessRoomType(r.name);
+    const types = [
+      ('bedroom', 'Spavaća soba'),
+      ('living', 'Dnevni boravak'),
+      ('dining', 'Blagovaonica'),
+      ('kids', 'Dječja soba'),
+      ('office', 'Radna soba'),
+      ('bath', 'Kupaonica'),
+      ('hall', 'Predsoblje'),
+    ];
+    void go(String type) {
+      final msg = c.furnishRoom(r.id, type, styleId: _furnishStyle);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+    }
+
+    return [
+      const SectionTitle('Opremi prostoriju'),
+      Text('Postavi namještaj sam – uz zidove, mimo vrata i prozora, bez sudaranja. Postojeći namještaj u prostoriji se zamjenjuje (Ctrl+Z vraća).',
+          style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+      const SizedBox(height: 8),
+      FilledButton.icon(
+        onPressed: () => go(guess),
+        icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+        label: Text('Opremi kao: ${types.firstWhere((t) => t.$1 == guess).$2}'),
+      ),
+      const SizedBox(height: 6),
+      Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final (id, label) in types)
+          if (id != guess) ActionChip(label: Text(label), visualDensity: VisualDensity.compact, onPressed: () => go(id)),
+      ]),
+      const SizedBox(height: 6),
+      DropdownButtonFormField<String>(
+        value: _furnishStyle,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Stil namještaja', isDense: true),
+        items: [for (final st in styles) DropdownMenuItem(value: st.id, child: Text('${st.name} (${st.series})'))],
+        onChanged: (v) => _furnishStyle = v ?? 'skandi',
+      ),
+    ];
+  }
+
   List<Widget> _kitchen(BuildContext context, Room r) {
     void go(String layout, {bool island = false}) {
       final msg = c.addKitchen(r.id, layout, island: island);
@@ -836,3 +881,6 @@ class _NoteEditorState extends State<_NoteEditor> {
         },
       );
 }
+
+/// Zadnji odabrani stil za automatsko opremanje (pamti se dok je aplikacija otvorena).
+String _furnishStyle = 'skandi';

@@ -757,6 +757,273 @@ class PlanController extends ChangeNotifier {
         '${layout != 'I' && runs.length < (layout == 'U' ? 3 : 2) ? ' Susjedni zid nije slobodan u kutu pa je kuhinja kraća.' : ''}';
   }
 
+  // --------------------------------------------------------- automatsko opremanje
+
+  /// Vrsta prostorije prema nazivu (za prijedlog opremanja).
+  static String guessRoomType(String name) {
+    final n = name.toLowerCase();
+    if (RegExp('spava|soba za spav').hasMatch(n)) return 'bedroom';
+    if (RegExp('dje|dijet|klinc').hasMatch(n)) return 'kids';
+    if (RegExp('dnevn|boravak|salon').hasMatch(n)) return 'living';
+    if (RegExp('blagov|jedaon').hasMatch(n)) return 'dining';
+    if (RegExp('kupaon|wc|toalet').hasMatch(n)) return 'bath';
+    if (RegExp('ured|radn|studi').hasMatch(n)) return 'office';
+    if (RegExp('hodnik|predsob|ulaz').hasMatch(n)) return 'hall';
+    return 'living';
+  }
+
+  CatalogItem _pick(String familyId, int size, String styleId) {
+    final models = catalogModels.where((m) => m.family.id == familyId).toList();
+    final m = models.where((m) => m.style?.id == styleId).firstOrNull ?? models.first;
+    final per = m.variants.length ~/ m.family.sizes.length;
+    return m.variants[size.clamp(0, m.family.sizes.length - 1) * per];
+  }
+
+  /// Opremi prostoriju namještajem prema vrsti: bedroom | living | dining | bath | office | kids | hall.
+  /// Namještaj se slaže uz zidove, zaobilazi vrata i prozore (visoki komadi) i ne sudara se.
+  String furnishRoom(String roomId, String type, {String styleId = 'skandi', bool replace = true}) {
+    final r = plan.roomById(roomId);
+    if (r == null) return 'Prostorija nije pronađena.';
+    final poly = plan.roomPolygon(r);
+    final sides = roomSides(plan, r).where((s) => s.length > 0.5).toList();
+    if (sides.isEmpty) return 'Prostorija nema zidova.';
+    final placed = <String>[], missed = <String>[];
+    // zone ispred vrata (svih otvora na zidovima ove prostorije)
+    final doorZones = <Obb>[];
+    for (final s in sides) {
+      for (final (d0, d1) in s.doors) {
+        final w = d1 - d0;
+        doorZones.add(Obb.axes(s.at((d0 + d1) / 2, math.min(w, 0.9) / 2), w / 2, math.min(w, 0.9) / 2, s.dir, s.inward));
+      }
+    }
+    final area = roomNetArea(plan, r);
+    var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity;
+    for (final p in poly) {
+      minX = math.min(minX, p.dx);
+      maxX = math.max(maxX, p.dx);
+      minY = math.min(minY, p.dy);
+      maxY = math.max(maxY, p.dy);
+    }
+    final shortSide = math.min(maxX - minX, maxY - minY);
+
+    mutate(() {
+      if (replace) {
+        const keep = {
+          'kitchen', 'tall', 'fridge', 'island', 'stove', 'dishwasher', 'stairs', 'stairs_l', 'stairs_spiral', 'radiator', 'towel_radiator',
+          'ac_indoor', 'boiler', 'wood_stove', 'socket', 'socket_double', 'socket_high', 'switch', 'tv_socket', 'lan_socket', 'light_point'
+        };
+        plan.items.removeWhere((it) => !keep.contains(it.shape) && pointInPolygon(it.pos, poly));
+      }
+
+      bool fits(PlacedItem it, {bool tall = false}) {
+        final ob = itemObb(it);
+        if (ob == null) return true;
+        final cs = [
+          ob.c - ob.ux * ob.hw - ob.uz * ob.hd,
+          ob.c + ob.ux * ob.hw - ob.uz * ob.hd,
+          ob.c + ob.ux * ob.hw + ob.uz * ob.hd,
+          ob.c - ob.ux * ob.hw + ob.uz * ob.hd,
+        ];
+        if (!isFloorLike(it.shape) && !cs.every((p) => pointInPolygon(p, poly) || _polyDist(p, poly) < 0.02)) return false;
+        if (!isFloorLike(it.shape) && collisionLayer(it.shape) == 'floor' && doorZones.any((z) => separation(ob, z, eps: 0.01) != null)) return false;
+        if (itemOverlaps(plan, it)) return false;
+        return true;
+      }
+
+      PlacedItem? tryAt(CatalogItem ci, Offset pos, double rot, {bool tall = false}) {
+        final it = placeItem(ci, pos, rotation: rot);
+        if (fits(it, tall: tall)) return it;
+        plan.items.remove(it);
+        return null;
+      }
+
+      // uz zid: 'center' (sredina zida) ili 'corner' (uz kut)
+      PlacedItem? onWall(CatalogItem ci, {String mode = 'center', List<RoomSide>? order, bool avoidWindows = false, String? label}) {
+        final list = order ?? ([...sides]..sort((a, b) => b.length.compareTo(a.length)));
+        for (final s in list) {
+          if (s.length < ci.w + 0.05) continue;
+          final rot = math.atan2(-s.inward.dx, s.inward.dy);
+          final ts = <double>[];
+          final lo = ci.w / 2 + 0.02, hi = s.length - ci.w / 2 - 0.02;
+          if (mode == 'center') {
+            final mid = s.length / 2;
+            for (var k = 0.0; k <= s.length / 2; k += 0.1) {
+              ts.add(mid - k);
+              ts.add(mid + k);
+            }
+          } else {
+            for (var k = 0.0; lo + k <= hi; k += 0.1) {
+              ts.add(lo + k);
+              ts.add(hi - k);
+            }
+          }
+          for (final t in ts) {
+            if (t < lo - 1e-6 || t > hi + 1e-6) continue;
+            if (avoidWindows && s.windows.any((w) => t + ci.w / 2 > w.$1 && t - ci.w / 2 < w.$2)) continue;
+            final it = tryAt(ci, s.at(t, ci.d / 2 + 0.01), rot);
+            if (it != null) {
+              placed.add(label ?? ci.name);
+              return it;
+            }
+          }
+        }
+        missed.add(label ?? ci.name);
+        return null;
+      }
+
+      PlacedItem? free(CatalogItem ci, Offset pos, double rot, String label) {
+        final it = tryAt(ci, pos, rot);
+        if (it != null) {
+          placed.add(label);
+        } else {
+          missed.add(label);
+        }
+        return it;
+      }
+
+      Offset ux(PlacedItem it) => Offset(math.cos(it.rotation), math.sin(it.rotation));
+      Offset uz(PlacedItem it) => Offset(-math.sin(it.rotation), math.cos(it.rotation));
+      final center = labelPoint(poly);
+      final longest = [...sides]..sort((a, b) => b.length.compareTo(a.length));
+
+      switch (type) {
+        case 'bedroom':
+        case 'kids':
+          final kids = type == 'kids';
+          final bedC = kids || area < 9 ? _pick('krevet', kids ? 0 : 1, styleId) : _pick('bracni', shortSide >= 3.2 ? 1 : 0, styleId);
+          final bed = onWall(bedC, label: kids ? 'krevet' : 'bračni krevet');
+          if (bed != null) {
+            final ns = _pick('nocni', 1, styleId);
+            for (final sgn in kids ? const [1.0] : const [-1.0, 1.0]) {
+              final p = bed.pos + ux(bed) * (sgn * (bed.w / 2 + ns.w / 2 + 0.03)) - uz(bed) * (bed.d / 2 - ns.d / 2);
+              free(ns, p, bed.rotation, 'noćni ormarić');
+            }
+            final rug = _pick('tepih', kids ? 0 : 1, styleId);
+            final rp = bed.pos + uz(bed) * (bed.d * 0.25);
+            placeItem(rug, rp, rotation: bed.rotation + math.pi / 2);
+            placed.add('tepih');
+          }
+          final wardrobe = _pick(area > 14 ? 'ormar4' : (area > 10 ? 'ormar3' : 'ormar2'), 0, styleId);
+          if (onWall(wardrobe, mode: 'corner', avoidWindows: true, label: 'ormar') == null && wardrobe.w > 1.0) {
+            missed.removeLast();
+            onWall(_pick('ormar2', 0, styleId), mode: 'corner', avoidWindows: true, label: 'ormar');
+          }
+          if (kids) {
+            final desk = onWall(_pick('radni_stol', 1, styleId), mode: 'center', label: 'radni stol');
+            if (desk != null) free(_pick('uredska', 0, styleId), desk.pos + uz(desk) * (desk.d / 2 + 0.2), desk.rotation + math.pi, 'stolica');
+            onWall(_pick('igracke', 1, styleId), mode: 'corner', label: 'polica za igračke');
+          } else if (area > 12) {
+            onWall(_pick('komoda', 1, styleId), mode: 'corner', label: 'komoda');
+          }
+          free(_pick('plafonjera', 1, styleId), center, 0, 'stropno svjetlo');
+        case 'living':
+          final sofa = onWall(_pick(area > 22 ? 'kutna' : 'trosjed', area > 22 ? 0 : 1, styleId), label: area > 22 ? 'kutna garnitura' : 'trosjed');
+          if (sofa != null) {
+            final fwd = uz(sofa);
+            // TV na suprotnom zidu
+            final opp = sides.where((s) => dot(s.inward, fwd) < -0.9).toList()
+              ..sort((a, b) => dot(a.a - sofa.pos, fwd).compareTo(dot(b.a - sofa.pos, fwd)));
+            final tv = _pick('tv_set', 0, styleId);
+            if (opp.isNotEmpty) {
+              final s = opp.first;
+              final t = dot(sofa.pos - s.a, s.dir).clamp(tv.w / 2 + 0.05, math.max(tv.w / 2 + 0.05, s.length - tv.w / 2 - 0.05)).toDouble();
+              final it = tryAt(tv, s.at(t, tv.d / 2 + 0.01), math.atan2(-s.inward.dx, s.inward.dy));
+              if (it != null) {
+                placed.add('TV komoda s televizorom');
+              } else {
+                onWall(tv, order: opp, label: 'TV komoda s televizorom');
+              }
+            } else {
+              missed.add('TV');
+            }
+            final table = _pick('klub', 1, styleId);
+            final tp = sofa.pos + fwd * (sofa.d / 2 + 0.45 + table.d / 2);
+            free(table, tp, sofa.rotation, 'klub stolić');
+            final rug = _pick('tepih', area > 20 ? 2 : 1, styleId);
+            final rr = placeItem(rug, sofa.pos + fwd * (sofa.d / 2 + 0.6), rotation: sofa.rotation + math.pi / 2);
+            if (!fits(rr)) plan.items.remove(rr);
+            free(_pick('lampa', 1, styleId), sofa.pos + ux(sofa) * (sofa.w / 2 + 0.3) - fwd * (sofa.d / 2 - 0.3), 0, 'podna lampa');
+            free(_pick('fotelja', 0, styleId), tp + ux(sofa) * (-(table.w / 2 + 0.75)), sofa.rotation + math.pi / 2, 'fotelja');
+            free(_pick('luster_prsten', 1, styleId), tp, 0, 'luster');
+          }
+          onWall(_pick('polica', 1, styleId), mode: 'corner', avoidWindows: true, label: 'polica za knjige');
+          for (final s in longest) {
+            final corner = s.at(0.35, 0.35);
+            final it = tryAt(_pick('biljka', 1, styleId), corner, 0);
+            if (it != null) {
+              placed.add('biljka');
+              break;
+            }
+          }
+        case 'dining':
+          final rot = longest.isEmpty ? 0.0 : math.atan2(longest.first.dir.dy, longest.first.dir.dx);
+          PlacedItem? table;
+          for (var size = 5; size >= 0 && table == null; size--) {
+            final ci = _pick('stol', size, styleId);
+            final it = placeItem(ci, center, rotation: rot);
+            final big = PlacedItem.fromJson({...it.toJson(), 'w': it.w + 1.5, 'd': it.d + 1.5});
+            plan.items.remove(it);
+            plan.items.add(big);
+            final ok = fits(big);
+            plan.items.remove(big);
+            if (ok) {
+              table = placeItem(ci, center, rotation: rot);
+              placed.add('stol');
+            }
+          }
+          if (table == null) {
+            missed.add('stol');
+          } else {
+            final chair = _pick('stolica', 0, styleId);
+            final n = math.max(1, (table.w / 0.62).floor());
+            for (final sgn in const [-1.0, 1.0]) {
+              for (var i = 0; i < n; i++) {
+                final x = -table.w / 2 + table.w * (i + 0.5) / n;
+                final p = table.pos + ux(table) * x + uz(table) * (sgn * (table.d / 2 + 0.12));
+                final c = tryAt(chair, p, table.rotation + (sgn > 0 ? math.pi : 0));
+                if (c != null) placed.add('stolica');
+              }
+            }
+            free(_pick('visilica_niz', table.w >= 1.6 ? 1 : 0, styleId), table.pos, table.rotation, 'viseće lampe');
+          }
+          onWall(_pick('komoda_niska', 1, styleId), mode: 'center', label: 'komoda');
+        case 'bath':
+          final long = longest.isNotEmpty ? longest.first.length : 0.0;
+          if (long >= 1.75 && area >= 4.2) {
+            onWall(_pick('kada', 1, styleId), mode: 'corner', label: 'kada');
+          } else {
+            onWall(_pick('tus', 1, styleId), mode: 'corner', label: 'tuš kabina');
+          }
+          onWall(_pick('umivaonik', area > 6 ? 2 : 1, styleId), mode: 'center', label: 'umivaonik s ormarićem');
+          onWall(_pick('wc', 0, styleId), mode: 'corner', label: 'WC školjka');
+          if (area > 5) onWall(_pick('perilica', 0, styleId), mode: 'corner', label: 'perilica rublja');
+          onWall(_pick('gr_kupaonski', 0, styleId), mode: 'center', label: 'kupaonski radijator');
+        case 'office':
+          final withWindow = sides.where((s) => s.windows.isNotEmpty).toList();
+          final desk = onWall(_pick('radni_stol', 2, styleId), order: [...withWindow, ...longest], label: 'radni stol');
+          if (desk != null) free(_pick('uredska', 0, styleId), desk.pos + uz(desk) * (desk.d / 2 + 0.25), desk.rotation + math.pi, 'uredska stolica');
+          onWall(_pick('polica', 2, styleId), mode: 'corner', avoidWindows: true, label: 'polica za knjige');
+          onWall(_pick('fotelja', 0, styleId), mode: 'corner', label: 'fotelja');
+          free(_pick('plafonjera', 1, styleId), center, 0, 'stropno svjetlo');
+        case 'hall':
+          onWall(_pick('garderober', 1, styleId), mode: 'corner', avoidWindows: true, label: 'garderober');
+          onWall(_pick('cipelarnik', 1, styleId), mode: 'center', label: 'ormarić za cipele');
+          onWall(_pick('klupa_hodnik', 0, styleId), mode: 'center', label: 'klupa');
+      }
+      selection = Selection(SelKind.room, roomId);
+    });
+    String list(List<String> l) {
+      final counts = <String, int>{};
+      for (final x in l) {
+        counts[x] = (counts[x] ?? 0) + 1;
+      }
+      return counts.entries.map((e) => e.value > 1 ? '${e.key} ×${e.value}' : e.key).join(', ');
+    }
+
+    if (placed.isEmpty) return 'Ništa nije stalo – prostorija je premala ili su vrata na putu.';
+    return 'Postavljeno: ${list(placed)}.${missed.isEmpty ? '' : ' Nije stalo: ${list(missed)}.'}';
+  }
+
   // --------------------------------------------------------- bilješke
   Note addNote(Offset p, String text) {
     final n = Note(id: newId('n'), pos: p, text: text);
@@ -1564,4 +1831,12 @@ class PlanController extends ChangeNotifier {
       selection = Selection.none;
     });
   }
+}
+
+double _polyDist(Offset p, List<Offset> poly) {
+  var best = double.infinity;
+  for (var i = 0; i < poly.length; i++) {
+    best = math.min(best, distToSegment(p, poly[i], poly[(i + 1) % poly.length]));
+  }
+  return best;
 }

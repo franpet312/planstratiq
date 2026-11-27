@@ -307,6 +307,43 @@ const textures = {
     }
     noise(g, n, 3000, 0.12, r);
   }, 1.0),
+  stoneWall: () => canvasTex('stoneWall', 512, (g, n) => {
+    // kamena obloga: nepravilni redovi lomljenog kamena
+    const r = rnd(83);
+    g.fillStyle = '#8e877b';
+    g.fillRect(0, 0, n, n);
+    let y = 0;
+    while (y < n) {
+      const rh = 34 + r() * 30;
+      let x = -r() * 40;
+      while (x < n) {
+        const w = 50 + r() * 70;
+        const l = 52 + r() * 18, h = 30 + r() * 14, sat = 8 + r() * 12;
+        g.fillStyle = `hsl(${h},${sat}%,${l}%)`;
+        g.beginPath();
+        const j = () => (r() - 0.5) * 6;
+        g.moveTo(x + 3 + j(), y + 3 + j());
+        g.lineTo(x + w - 3 + j(), y + 3 + j());
+        g.lineTo(x + w - 3 + j(), y + rh - 3 + j());
+        g.lineTo(x + 3 + j(), y + rh - 3 + j());
+        g.closePath();
+        g.fill();
+        x += w;
+      }
+      y += rh;
+    }
+    noise(g, n, 9000, 0.16, r);
+  }, 1.6),
+  slats: () => canvasTex('slats', 64, (g, n) => {
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, n, n);
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = 'rgba(0,0,0,0.22)';
+      g.fillRect(0, (i * n) / 4, n, 2);
+      g.fillStyle = 'rgba(255,255,255,0.6)';
+      g.fillRect(0, (i * n) / 4 + 2, n, 1);
+    }
+  }, 0.16),
   wallpaper: () => canvasTex('wallpaper', 256, (g, n) => {
     g.fillStyle = '#f4f1ea';
     g.fillRect(0, 0, n, n);
@@ -454,6 +491,17 @@ function roofCut(m, off, mode = 0) {
   m.customProgramCacheKey = () => 'psqroof';
   m.userData = { ...m.userData, roofOff: off };
   return m;
+}
+// materijal fasade: žbuka (u boji), kamen, opeka, drvo
+function facadeMat(kind, color, double = false) {
+  const c = color ?? null;
+  switch (kind) {
+    case 'stone': return mat(c ?? 0xffffffff, { tex: 'stoneWall', roughness: 0.92, double });
+    case 'brick': return mat(c ?? 0xffffffff, { tex: 'brick', roughness: 0.9, double });
+    case 'wood': return mat(c ?? 0xffc9a27a, { tex: 'woodPanel', roughness: 0.8, double });
+    case 'concrete': return mat(c ?? 0xffffffff, { tex: 'concrete', roughness: 0.9, double });
+    default: return mat(c ?? 0xece7df, { tex: 'plaster', roughness: 0.95, double });
+  }
 }
 const roofDepthMats = new Map();
 function roofDepth(off) {
@@ -2147,6 +2195,7 @@ class Engine {
   _buildLevel(p) {
     const nodes = p.nodes || {};
     this._attic = p.attic ? { knee: p.kneeWall || 1.2, y: p.elevation || 0 } : null;
+    this._facade = p.facade || null;
     // smjerovi zidova iz svakog čvora
     const dirs = {};
     for (const w of p.walls || []) {
@@ -2358,8 +2407,17 @@ class Engine {
       const lo = mat(si.color ?? 0xffffffff, { tex: si.tex, roughness: tiled ? 0.35 : 0.8 });
       return si.h > 0 && si.h < H - 0.01 ? { lo, hi, h: si.h } : { lo, hi: lo, h: 0 };
     };
-    const P = sideMats(sides.p, side === -1 ? facade : paint);
-    const N = sideMats(sides.n, side === 1 ? facade : paint);
+    // fasada: donja zona (cokl/kamen u prizemlju) i gornja obloga po etaži
+    const F = this._facade;
+    const extMats = () => {
+      if (!F) return { lo: facade, hi: facade, h: 0 };
+      const lo = facadeMat(F.lo, F.loColor), hi = facadeMat(F.hi, F.hiColor);
+      if (F.h >= H - 0.01) return { lo, hi: lo, h: 0 };
+      if (F.h > 0) return { lo, hi, h: F.h };
+      return { lo: hi, hi, h: 0 };
+    };
+    const P = side === -1 && !sides.p ? extMats() : sideMats(sides.p, side === -1 ? facade : paint);
+    const N = side === 1 && !sides.n ? extMats() : sideMats(sides.n, side === 1 ? facade : paint);
     const faces = [paint, paint, top, paint, P.hi, N.hi];
     const bands = [...new Set([P.h, N.h].filter((h) => h > 0))].sort((a, b) => a - b);
     const facesAt = (yMid) => [paint, paint, top, paint, P.h && yMid < P.h ? P.lo : P.hi, N.h && yMid < N.h ? N.lo : N.hi];
@@ -2398,6 +2456,7 @@ class Engine {
     let cur = -ea;
     let solidStart = -ea;
     const frameMat = mat(0xf7f7f5, { roughness: 0.5 });
+    const sillMat = mat(0xd9d4ca, { roughness: 0.6 });
     const glassMat = mat(0, { glass: true });
     const sideN0 = side === 0 ? 1 : side;
     for (const o of ops) {
@@ -2412,7 +2471,11 @@ class Engine {
       if (o.type === 'window' || o.type === 'balcony') {
         if (o.sill > 0) {
           box(s, e, 0, o.sill - 0.04);
-          box(s, e, o.sill - 0.04, o.sill, frameMat, T + 0.05); // klupčica
+          box(s, e, o.sill - 0.04, o.sill, frameMat, T * 0.55, sideN0 * T * 0.225); // unutarnja klupčica
+          if (side !== 0) {
+            // vanjska klupčica (kamen/lim) s prepustom i okapnicom
+            box(s - 0.03, e + 0.03, o.sill - 0.05, o.sill - 0.01, sillMat, T * 0.5 + 0.05, -sideN0 * (T * 0.25 + 0.025));
+          }
         }
         // fiksni okvir
         const fd = 0.08;
@@ -2467,6 +2530,7 @@ class Engine {
           }
           I = this._register(o.id, sashes, { noun, def: 0 }, partsW);
         }
+        if (side !== 0 && o.shade) this._shade(o, g, s, e, o.sill, topY, T, sideN0);
       } else {
         box(s, s + 0.04, 0, topY, frameMat, T + 0.02);
         box(e - 0.04, e, 0, topY, frameMat, T + 0.02);
@@ -3002,7 +3066,7 @@ class Engine {
     const roofMat = roofCut(mat(color, { tex: 'roof', roughness: 0.85 }).clone(), 0, 1);
     const innerMat = roofCut(mat(0xf7f5f0, { roughness: 0.95, side: 'back' }).clone(), -0.2, 1);
     const fasciaMat = mat(darker(color, 0.35), { roughness: 0.8 });
-    const wallMat = mat(0xece7df, { tex: 'plaster', roughness: 0.95, double: true });
+    const wallMat = style.gable ? facadeMat(style.gable.kind, style.gable.color, true) : mat(0xece7df, { tex: 'plaster', roughness: 0.95, double: true });
 
     for (const o of p.outlines || []) {
       if (o.length < 3) continue;
@@ -3634,7 +3698,7 @@ class Engine {
     const I = { id, noun: info.noun, light: !!info.light, t: st, target: st, parts: [] };
     for (const p of parts) {
       if (p.o) {
-        const key = p.prop === 'ry' ? ['rotation', 'y'] : p.prop === 'rx' ? ['rotation', 'x'] : p.prop === 'pz' ? ['position', 'z'] : ['position', 'x'];
+        const key = p.prop === 'ry' ? ['rotation', 'y'] : p.prop === 'rx' ? ['rotation', 'x'] : p.prop === 'pz' ? ['position', 'z'] : p.prop === 'sy' ? ['scale', 'y'] : p.prop === 'py' ? ['position', 'y'] : ['position', 'x'];
         I.parts.push({ ...p, key, base: p.o[key[0]][key[1]] });
       } else I.parts.push(p);
     }
@@ -3642,6 +3706,66 @@ class Engine {
     this._applyInter(I);
     if (!this._passive) this.inters.push(I);
     return I;
+  }
+
+  // škure (dva krila na fasadi) ili roleta (u vanjskoj špaleti); otvaraju se kao prozor
+  _shade(o, g, s, e, sill, topY, T, sideN0) {
+    const W = e - s, h = topY - sill;
+    const col = o.shadeColor != null ? o.shadeColor : o.shade === 'roleta' ? 0xffd8d8d2 : 0xff4f6b4a;
+    const m = mat(col, { roughness: 0.6 });
+    const ext = -sideN0;
+    if (o.shade === 'roleta') {
+      // vodilice
+      for (const x of [s + 0.012, e - 0.012]) {
+        const v = new THREE.Mesh(new THREE.BoxGeometry(0.024, h, 0.04), mat(0xb9b9b4, { roughness: 0.5, metalness: 0.3 }));
+        v.position.set(x, sill + h / 2, ext * (T / 2 - 0.03));
+        g.add(v);
+      }
+      const pv = new THREE.Group();
+      pv.position.set((s + e) / 2, topY, ext * (T / 2 - 0.03));
+      const geo = new THREE.BoxGeometry(W - 0.03, h, 0.012);
+      geo.translate(0, -h / 2, 0);
+      const uv = geo.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (W / 0.16), uv.getY(i) * (h / 0.16));
+      const c = new THREE.Mesh(geo, mat(col, { tex: 'slats', roughness: 0.6 }));
+      c.castShadow = true;
+      pv.add(c);
+      pv.scale.y = 1;
+      g.add(pv);
+      this._register(o.id + ':shade', [pv], { noun: 'roletu', def: 1 }, [{ o: pv, prop: 'sy', delta: -0.97 }]);
+      return;
+    }
+    // škure: dva krila s lamelama, šarke na rubovima otvora, na vanjskom licu zida
+    const z = ext * (T / 2 + 0.022);
+    const leaves = [], parts = [];
+    for (const dir of [1, -1]) {
+      const pv = new THREE.Group();
+      pv.position.set(dir > 0 ? s : e, sill, z);
+      const lw = W / 2;
+      const x0 = dir > 0 ? 0 : -lw;
+      const add = (w, hh, x, y, d = 0.03) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), m);
+        b.position.set(x, y, 0);
+        b.castShadow = true;
+        pv.add(b);
+      };
+      add(0.05, h, x0 + 0.025, h / 2);
+      add(0.05, h, x0 + lw - 0.025, h / 2);
+      add(lw - 0.1, 0.06, x0 + lw / 2, 0.03);
+      add(lw - 0.1, 0.06, x0 + lw / 2, h - 0.03);
+      const n = Math.max(4, Math.round((h - 0.12) / 0.06));
+      for (let i = 0; i < n; i++) {
+        const sl = new THREE.Mesh(new THREE.BoxGeometry(lw - 0.1, 0.05, 0.008), m);
+        sl.position.set(x0 + lw / 2, 0.06 + (i + 0.5) * ((h - 0.12) / n), 0);
+        sl.rotation.x = 0.6;
+        pv.add(sl);
+      }
+      g.add(pv);
+      leaves.push(pv);
+      parts.push({ o: pv, prop: 'ry', delta: (dir > 0 ? 1 : -1) * ext * -Math.PI * 0.96 });
+    }
+    // zatvorene škure: krila u ravnini otvora; otvorene (zadano): uz fasadu
+    this._register(o.id + ':shade', leaves, { noun: 'škure', def: 1 }, parts);
   }
 
   _applyInter(I) {

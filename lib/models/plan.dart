@@ -94,6 +94,8 @@ class Opening {
     this.flip = false,
     this.swingOut = false,
     this.style = '',
+    this.shade = '',
+    this.shadeColor,
   });
 
   factory Opening.preset(String wallId, OpeningType type, double t) {
@@ -124,6 +126,10 @@ class Opening {
   /// balkonska vrata casement|sliding. Prazno = uobičajena izvedba.
   String style;
 
+  /// Zaštita od sunca (prozori, balkonska vrata): '' | 'skure' | 'roleta'.
+  String shade;
+  int? shadeColor;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'wallId': wallId,
@@ -135,6 +141,8 @@ class Opening {
         'flip': flip,
         'swingOut': swingOut,
         if (style.isNotEmpty) 'style': style,
+        if (shade.isNotEmpty) 'shade': shade,
+        if (shadeColor != null) 'shadeColor': shadeColor,
       };
 
   factory Opening.fromJson(Map<String, dynamic> j) => Opening(
@@ -148,6 +156,8 @@ class Opening {
         flip: _b(j['flip']),
         swingOut: _b(j['swingOut']),
         style: (j['style'] as String?) ?? '',
+        shade: (j['shade'] as String?) ?? '',
+        shadeColor: (j['shadeColor'] as num?)?.toInt(),
       );
 }
 
@@ -487,6 +497,14 @@ class Plan {
   /// Toplinska izolacija kuće (za okvirnu potrebnu snagu grijanja): new | good | average | poor.
   String insulation = 'good';
 
+  /// Fasada: osnovna obloga (žbuka u boji, drvo, opeka…), donja zona prizemlja (cokl ili kamen)
+  /// i obloga zabata/potkrovlja.
+  String facadeKind = 'plaster';
+  int facadeColor = 0xFFECE7DF;
+  String baseKind = 'none';
+  double baseHeight = 0.5;
+  String gableKind = 'same';
+
   /// Klimatsko područje (za godišnju potrošnju): continental | coastal.
   String climate = 'continental';
 
@@ -565,6 +583,7 @@ class Plan {
         if (section != null) 'section': section!.toJson(),
         'insulation': insulation,
         'climate': climate,
+        'facade': {'kind': facadeKind, 'color': facadeColor, 'base': baseKind, 'baseH': baseHeight, 'gable': gableKind},
         'heatSource': heatSource,
         'active': active,
         'levels': [for (final l in levels) l.toJson(includeImage: includeImage)],
@@ -595,6 +614,14 @@ class Plan {
     }
     if (j['insulation'] is String) plan.insulation = j['insulation'] as String;
     if (j['climate'] is String) plan.climate = j['climate'] as String;
+    if (j['facade'] is Map) {
+      final f = j['facade'] as Map;
+      plan.facadeKind = (f['kind'] as String?) ?? 'plaster';
+      plan.facadeColor = (f['color'] as num?)?.toInt() ?? 0xFFECE7DF;
+      plan.baseKind = (f['base'] as String?) ?? 'none';
+      plan.baseHeight = _d(f['baseH'], 0.5);
+      plan.gableKind = (f['gable'] as String?) ?? 'same';
+    }
     if (j['heatSource'] is String) plan.heatSource = j['heatSource'] as String;
     if (j['site'] is Map) plan.site = Site.fromJson(Map<String, dynamic>.from(j['site'] as Map));
     if (j['section'] is Map) plan.section = SectionLine.fromJson(Map<String, dynamic>.from(j['section'] as Map));
@@ -668,6 +695,15 @@ class Site {
 
 
 /// Izvedbe otvora po vrsti (id, naziv).
+/// Vrste fasadne obloge.
+const facadeKinds = <String, String>{
+  'plaster': 'Žbuka (u boji)',
+  'stone': 'Kamen',
+  'brick': 'Fasadna opeka',
+  'wood': 'Drvena obloga',
+  'concrete': 'Vidljivi beton',
+};
+
 List<(String, String)> openingStyles(OpeningType t) => switch (t) {
       OpeningType.door => const [('', 'Krilna'), ('double', 'Dvokrilna'), ('sliding', 'Klizna'), ('pocket', 'Klizna u zid'), ('folding', 'Harmonika')],
       OpeningType.window => const [('', 'Krilni'), ('sliding', 'Klizni'), ('fixed', 'Fiksni')],
@@ -676,7 +712,6 @@ List<(String, String)> openingStyles(OpeningType t) => switch (t) {
     };
 
 
-/// Bilješka na tlocrtu (npr. „polica po mjeri”, „pitati majstora za odvod”).
 /// Crta presjeka: od [a] do [b]; pogled je prema lijevoj strani smjera a→b (ili desnoj ako je [flip]).
 class SectionLine {
   SectionLine(this.a, this.b, {this.flip = false});
@@ -697,6 +732,7 @@ class SectionLine {
       SectionLine(Offset(_d(j['ax'], 0), _d(j['ay'], 0)), Offset(_d(j['bx'], 1), _d(j['by'], 0)), flip: j['flip'] == true);
 }
 
+/// Bilješka na tlocrtu (npr. „polica po mjeri”, „pitati majstora za odvod”).
 class Note {
   Note({required this.id, required this.pos, required this.text, this.color = 0xFFFFE58A});
   final String id;

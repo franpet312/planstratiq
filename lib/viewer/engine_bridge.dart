@@ -115,6 +115,7 @@ class Engine3D {
         'overhang': plan.roofOverhang,
         'color': plan.roofColor,
         'turn': plan.roofTurn,
+        if (plan.gableKind != 'same') 'gable': {'kind': plan.gableKind, if (plan.gableKind == 'plaster') 'color': plan.facadeColor},
       },
       'site': _siteJson(c),
       ..._levelJson(c, active),
@@ -174,6 +175,35 @@ class Engine3D {
     return out;
   }
 
+  /// Fasada etaže: donja zona (cokl/kamen) samo u prizemlju, podrum cijeli u donjoj oblozi,
+  /// potkrovlje u oblozi zabata.
+  static Map<String, dynamic> _facadeJson(Plan plan, int li) {
+    final l = plan.levels[li];
+    final isTop = li == plan.levels.length - 1;
+    var hi = plan.facadeKind;
+    int? hiColor = plan.facadeKind == 'plaster' ? plan.facadeColor : null;
+    if (isTop && l.attic && plan.roof && plan.gableKind != 'same') {
+      hi = plan.gableKind;
+      hiColor = hi == 'plaster' ? plan.facadeColor : null;
+    }
+    final base = plan.baseKind;
+    var h = 0.0;
+    if (base != 'none') {
+      if (l.elevation < -0.5) {
+        h = 99;
+      } else if (li == plan.groundIndex) {
+        h = plan.baseHeight;
+      }
+    }
+    final baseColor = base == 'plaster' ? _darken(plan.facadeColor, 0.25) : null;
+    return {'hi': hi, 'hiColor': hiColor, 'lo': base == 'none' ? hi : base, 'loColor': baseColor ?? (base == 'none' ? hiColor : null), 'h': h};
+  }
+
+  static int _darken(int c, double f) {
+    int ch(int v) => (v * (1 - f)).round().clamp(0, 255);
+    return 0xFF000000 | (ch((c >> 16) & 0xFF) << 16) | (ch((c >> 8) & 0xFF) << 8) | ch(c & 0xFF);
+  }
+
   static Map<String, dynamic> _levelJson(PlanController c, int li) {
     final (outlines, sides) = c.levelSceneData(li);
     final plan = c.plan;
@@ -211,6 +241,7 @@ class Engine3D {
         'wallHeight': plan.wallHeight,
         'attic': plan.level.attic && li == plan.levels.length - 1 && plan.roof,
         'kneeWall': plan.level.kneeWall,
+        'facade': _facadeJson(plan, li),
         'nodes': {for (final n in plan.nodes.values) n.id: {'x': n.pos.dx, 'y': n.pos.dy}},
         'walls': [
           for (final w in plan.walls) {...w.toJson(), 'inside': inside[w.id] ?? 0, 'sides': _wallSides(c, w)}

@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +41,16 @@ jobs:
 
       - name: Build
         run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+
+      # kopija gotove aplikacije na grani web-build (za automatske provjere u pregledniku)
+      - name: Kopija builda (grana web-build)
+        if: github.event_name == 'push'
+        run: |
+          cd build/web
+          git init -q -b web-build
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "build ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" web-build
 
       - uses: actions/upload-pages-artifact@v3
         with:

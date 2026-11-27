@@ -1181,7 +1181,9 @@ class PlanController extends ChangeNotifier {
       double? offsetFromStart,
       bool? flip,
       bool? swingOut,
-      String? style}) {
+      String? style,
+      String? shade,
+      int? shadeColor}) {
     final o = plan.openingById(id);
     final w = o == null ? null : plan.wallById(o.wallId);
     if (o == null || w == null) return;
@@ -1202,6 +1204,8 @@ class PlanController extends ChangeNotifier {
       if (offsetFromStart != null) o.t = offsetFromStart / len;
       if (flip != null) o.flip = flip;
       if (swingOut != null) o.swingOut = swingOut;
+      if (shade != null) o.shade = shade;
+      if (shadeColor != null) o.shadeColor = shadeColor;
       if (style != null) {
         o.style = style;
         // dvokrilna vrata su šira

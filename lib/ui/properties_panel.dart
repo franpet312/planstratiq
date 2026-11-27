@@ -207,6 +207,28 @@ class PropertiesPanel extends StatelessWidget {
             ChoiceChip(label: Text(label), selected: o.style == id, onSelected: (_) => c.updateOpening(o.id, style: id)),
         ]),
       ],
+      if (o.type == OpeningType.window || o.type == OpeningType.balcony) ...[
+        const SectionTitle('Zaštita od sunca'),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final (id, label) in const [('', 'Bez'), ('skure', 'Škure (grilje)'), ('roleta', 'Roleta')])
+            ChoiceChip(label: Text(label), selected: o.shade == id, onSelected: (_) => c.updateOpening(o.id, shade: id)),
+        ]),
+        if (o.shade.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Swatches(
+            colors: o.shade == 'skure'
+                ? const [0xFF4F6B4A, 0xFF7A4B2F, 0xFF3E5A7A, 0xFF8C8F8A, 0xFFEDEAE2, 0xFF2E2E2E]
+                : const [0xFFD8D8D2, 0xFFEDEAE2, 0xFF8C8F8A, 0xFF5D564E, 0xFF3F4347],
+            names: o.shade == 'skure'
+                ? const ['Zelene', 'Smeđe', 'Plave', 'Sive', 'Bijele', 'Crne']
+                : const ['Svijetlo siva', 'Bijela', 'Siva', 'Smeđa', 'Antracit'],
+            value: o.shadeColor ?? (o.shade == 'skure' ? 0xFF4F6B4A : 0xFFD8D8D2),
+            onPick: (v) => c.updateOpening(o.id, shadeColor: v),
+          ),
+          const SizedBox(height: 4),
+          Text('U 3D-u se otvaraju i zatvaraju kao prozor (E, klik ili dvoklik).', style: AppText.ui(size: 12, color: Pal.muted)),
+        ],
+      ],
       if (o.type == OpeningType.door && (o.style == '' || o.style == 'double' || o.style == 'folding')) ...[
         const SectionTitle('Otvaranje'),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -601,6 +623,45 @@ class PropertiesPanel extends StatelessWidget {
     ];
   }
 
+  List<Widget> _facade() {
+    final p = c.plan;
+    Widget kinds(String value, Map<String, String> opts, void Function(String) on) => Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final e in opts.entries) ChoiceChip(label: Text(e.value), selected: value == e.key, onSelected: (_) => on(e.key)),
+        ]);
+    return [
+      const SectionTitle('Fasada'),
+      kinds(p.facadeKind, facadeKinds, (v) => c.mutate(() => p.facadeKind = v)),
+      if (p.facadeKind == 'plaster') ...[
+        const SizedBox(height: 8),
+        Swatches(
+          colors: const [0xFFECE7DF, 0xFFF4F1EA, 0xFFE6D9C3, 0xFFD9C9A8, 0xFFC9D3CF, 0xFFB9BDB8, 0xFF8E9290, 0xFFDDB9A0],
+          names: const ['Topla bijela', 'Bijela', 'Pijesak', 'Oker', 'Zelenkasta', 'Svijetlo siva', 'Siva', 'Terakota'],
+          value: p.facadeColor,
+          onPick: (v) => c.mutate(() => p.facadeColor = v),
+        ),
+      ],
+      const SizedBox(height: 10),
+      Text('Donji dio prizemlja', style: AppText.ui(size: 12.5, weight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      kinds(p.baseKind, const {'none': 'Isto kao fasada', 'plaster': 'Cokl (tamnija žbuka)', 'stone': 'Kamen', 'brick': 'Opeka', 'concrete': 'Beton'},
+          (v) => c.mutate(() => p.baseKind = v)),
+      if (p.baseKind != 'none') ...[
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final (h, label) in const [(0.3, '30 cm'), (0.5, '50 cm'), (1.0, '1 m'), (99.0, 'Cijelo prizemlje')])
+            ChoiceChip(label: Text(label), selected: (p.baseHeight - h).abs() < 0.01, onSelected: (_) => c.mutate(() => p.baseHeight = h)),
+        ]),
+      ],
+      const SizedBox(height: 10),
+      Text('Zabati i potkrovlje', style: AppText.ui(size: 12.5, weight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      kinds(p.gableKind, const {'same': 'Isto kao fasada', 'wood': 'Drvena obloga', 'stone': 'Kamen', 'brick': 'Opeka', 'plaster': 'Žbuka'},
+          (v) => c.mutate(() => p.gableKind = v)),
+      const SizedBox(height: 6),
+      Text('Škure i rolete biraju se na svakom prozoru (klikni prozor).', style: AppText.ui(size: 12, color: Pal.muted)),
+    ];
+  }
+
   List<Widget> _roof() {
     final p = c.plan;
     Widget slider(String label, String value, double v, double min, double max, int div, void Function(double) set) => Row(children: [
@@ -707,6 +768,7 @@ class PropertiesPanel extends StatelessWidget {
         OutlinedButton(onPressed: () => c.applyToAllWalls(height: c.plan.wallHeight), child: const Text('Na sve')),
       ]),
       ..._roof(),
+      ..._facade(),
       ..._site(),
       if (c.plan.image != null) ...[
         const SectionTitle('Nacrt u pozadini'),

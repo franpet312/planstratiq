@@ -147,7 +147,7 @@ List<ClearanceIssue> checkStairs(Plan plan, {RoofShape? roof}) {
       }
       if (at != null && low < minHeadroom) {
         out.add(ClearanceIssue(
-            'Iznad ${name.toLowerCase()} kosi strop potkrovlja je samo ${(low * 100).round()} cm iznad stepenice (treba bar 200 cm). '
+            '$name: kosi strop potkrovlja je samo ${(low * 100).round()} cm iznad stepenice (treba barem 200 cm). '
             'Okreni stubište da izlazi prema sljemenu ili ga pomakni.',
             at,
             itemId: it.id,

@@ -22,6 +22,8 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - **Izvedbe otvora**: vrata krilna, dvokrilna, klizna (po zidu, s vodilicom), klizna u zid i harmonika; prozori krilni, klizni i fiksni; balkonska vrata krilna ili klizna stijena – s pravim simbolima na tlocrtu i otvaranjem u 3D-u.
 - Alat za mjerenje, mjerilo, zoom, pinch-zoom na dodir.
 - **Bilješke** (alat N): tekst na žutom (ili drugom) papiriću na tlocrtu, povlači se, uređuje u svojstvima i ispisuje u PDF-u.
+- **Detaljne kote** (ravnalo uz zoom, uključeno zadano): unutarnje mjere svake prostorije po licima zidova, lanac kota uz vanjske zidove (zid – otvor – zid) i oznaka svakog otvora širina/visina u cm, kod prozora i parapet (npr. `120/140 p 90`). Ulaze i u PDF.
+- **Presjek kuće** (alat S): klikni dvije točke kroz kuću i otvori se presjek A–A – presječeni zidovi s otvorima, ploče (s otvorom za stubište), stubište, namještaj, krov, teren, kote poda (±0,00, +2,95…), sljeme i svijetle visine. Oznaka A na tlocrtu ga ponovno otvara; smjer pogleda se okreće. Presjek ide i u PDF kao zaseban list u mjerilu.
 - **Opremi prostoriju** (u svojstvima prostorije): spavaća, dnevni boravak, blagovaonica, dječja, radna soba, kupaonica ili predsoblje – namještaj se sam slaže uz zidove, mimo vrata i prozora, bez sudaranja, u odabranom stilu.
 - **Kuhinja kao sklop**: kuhinja uz jedan zid, L, U ili L s otokom – donji i gornji elementi, radna ploča, sudoper, ploča za kuhanje i hladnjak; ispod prozora samo donji elementi, vrata se zaobilaze.
 - Učitavanje slike nacrta kao podloge i kalibracija mjerila (dvije točke + stvarna udaljenost).
@@ -32,11 +34,13 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Podrum, prizemlje i katovi: svaka etaža ima svoje zidove, prostorije i namještaj; kota poda računa se sama (svijetla visina + 25 cm ploče).
 - Novi kat preuzima vanjske zidove etaže ispod; na tlocrtu se etaža ispod vidi prozirno (plavo), a kutovi joj služe za hvatanje.
 - Stubište (ravno, L s podestom ili zavojito) postavljeno u prizemlju automatski probija otvor u ploči kata u obliku stubišta; u 3D šetnji (prvo i treće lice) stubama se hoda gore-dolje između etaža.
+- **Provjera stubišta**: upozorenje kad je kosi strop potkrovlja iznad stuba niži od 2 m, kad na katu iznad otvora stoji namještaj ili prolazi zid, kad stubište ne vodi nikamo i kad je prestrmo ili preblago (pravilo koraka 2h + b, broj i visina stepenica).
 - **Potkrovlje** („Dodaj potkrovlje” u izborniku etaža): obodni zidovi su koljenski zid (zadano 1,2 m), krov počinje na njegovom vrhu, a strop je kosi – bijela obloga ispod krova. Unutarnji pregradni zidovi idu do kosog stropa i sami se odrežu po krovu (zabatni oblik).
   - Svi zidovi potkrovlja idu do krova i režu se po stvarnoj plohi krova (i u L/T kućama gdje se krila spajaju): unutarnji do kosog stropa, vanjski do pokrova – zabat je pravi zid, pa prozor na zabatu smije ići visoko. Dijelovi krovova koji su ušli u susjedno krilo ne vide se iznutra.
   - Upozorenja: objekt viši od kosog stropa iznad sebe i prozor/vrata koji sežu iznad kosog stropa. Automatsko opremanje ne stavlja previsoke objekte, a kuhinja pod niskim stropom dobije niže gornje elemente (i bez visokog hladnjaka).
   - Na tlocrtu je niski dio prostorije šrafiran (svjetlije ispod 2 m, tamnije ispod 1 m), a uz površinu piše korisna površina (≥ 2 m računa se cijela, 1–2 m pola, ispod 1 m ništa); isto u panelu prostorije.
   - Krovni prozor (Predsoblje i ostalo → Krovni prozor): postavi se točno gdje ga pustiš, okrene niz pad krova; u 3D sjedi u ravnini krova, a iznutra se vidi svijetlo okno sa špaletom i ručkom.
+  - Krovna kućica / frčkica (Predsoblje i ostalo): sama se poravna s vanjskim zidom potkrovlja; dvostrešni krović, prozor u pročelju, obrazi do krova, a u krovu je otvor. Ispod nje je strop viši (tlocrt, korisna površina i upozorenja to znaju).
 - U 3D-u izvana prikazuju se etaže do odabrane (presjek), ili sve etaže s krovom na najvišoj.
 
 **Namještaj i okućnica**
@@ -49,6 +53,8 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - Rotacija ručicom (korak 15°), strelice za pomak 1 cm, dupliciranje, promjena mjera i boje.
 - **Električne instalacije** (kategorija u katalogu): utičnice (jednostruke, dvostruke, iznad radne ploče), prekidači, TV i mrežne utičnice, rasvjetna mjesta na stropu – sami se prislone uz zid na pravoj visini, imaju standardne simbole na tlocrtu, vide se u 3D-u, a broj komada i okvirna cijena su u „Pregled i cijene”.
 - **Grijanje i hlađenje** (kategorija u katalogu): pločasti i kupaonski radijatori, klima (unutarnja i vanjska jedinica), dizalica topline, bojler i peć na drva; podno grijanje uključuje se po prostoriji. Za svaku prostoriju računa se okvirna potrebna snaga grijanja (prema izolaciji kuće) i hlađenja te koliko daju postavljeni uređaji – s upozorenjem gdje nedostaje.
+- **Godišnja potrošnja**: za kontinentalnu ili primorsku Hrvatsku – toplina za grijanje i toplu vodu (kWh), okvirni energetski razred (A+ … G), trošak godišnje i mjesečno za odabrano grijanje, usporedba plina, dizalice topline, drva, peleta, lož-ulja i struje, trošak klime ljeti i CO₂. Procjena, ne certifikat.
+- **Vodovod i odvodnja** (kategorija u katalogu): vertikala odvoda (instalacijski kanal), podni slivnik, vodomjer s razdjelnikom, revizijsko okno. Na tlocrtu se crta trasa od svakog WC-a, tuša, kade, umivaonika, sudopera i perilica do najbliže vertikale (Ø110 / Ø50, s duljinom); upozorenje kad je WC dalje od 1 m ili kad je odvod predug za pad od 2 %. Okvirna cijena cijevi i priključaka u „Pregled i cijene”.
 - **Razmaci**: odabranom namještaju na tlocrtu se vide udaljenosti (cm) do zidova i drugog namještaja na sve četiri strane; u svojstvima se upiše željeni razmak i objekt se pomakne točno toliko.
 - **Provjera prolaza i otvaranja**: upozorenje (crveno područje i znak na tlocrtu, popis u „Pregled i cijene”) kad namještaj stoji ispred vrata, kad se ladice, ormari, hladnjak, perilice ili pećnica ne mogu otvoriti, kad krevet nema 60 cm ni s jedne strane te za prolaze uže od 60 cm.
 - **Rasvjeta** (kategorija „Rasvjeta”): klasični luster s kristalima, LED prsten, viseće lampe (pojedinačne i niz od tri iznad stola), plafonjera, zidna, stolna, podna i lučna podna lampa. Sve svijetle u 3D-u i pale se/gase (E, klik, dvoklik). Stropna rasvjeta visi s pravog stropa etaže, zidna se sama prisloni uz zid, a stolna lampa stoji na stolu ili komodi ispod sebe.
@@ -68,11 +74,16 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 **Zidovi prostorija**
 - Svaka prostorija ima svoju boju zidova i oblogu: pločice (bijele, metro, sive 30×60, zelene), drvena obloga, cigla, dekorativni beton ili tapeta – do 1,2 / 1,5 / 2,1 m ili cijeli zid, iznad obloge boja. Obloge ulaze u troškovnik.
 
+**Fasada i prozori**
+- Fasada: žbuka u boji, kamen, fasadna opeka, drvena obloga ili vidljivi beton; donji dio prizemlja posebno (cokl, kamen, opeka, beton – 30 cm, 50 cm, 1 m ili cijelo prizemlje); zabati i potkrovlje u drvu, kamenu, opeci ili žbuci.
+- Škure (grilje) i rolete na svakom prozoru i balkonskim vratima, u boji po izboru – u 3D-u se otvaraju i zatvaraju (E, klik, dvoklik). Prozori imaju vanjsku klupčicu s prepustom.
+
 **Parcela i okolina**
 - Kuća stoji na parceli (automatski oko kuće ili zadane širine i dubine) s ograđenim travnjakom: drvena, metalna, žičana ograda, živica ili zid, s ulazom i prilazom do ulaznih vrata.
 - Ispred je ulica s pločnicima, rubnjacima, uličnom rasvjetom i drvoredom.
 - Okolina po izboru: **susjedstvo** (susjedne kuće sa svojim vrtovima), **selo** (polja, rijetke kuće, puno drveća) ili **grad** (stambene zgrade); u daljini brežuljci.
 - Na tlocrtu se vidi rub parcele, ulica i površina parcele.
+- **Teren s nagibom** (0–25 %, pada prema ulici, od ulice, lijevo ili desno): okolina, ulica, ograda i susjedi prate nagib, kuća stoji na ravnoj zaravni 1,5 m oko zidova s potpornim zidom prema višem i zidom zaravni prema nižem terenu; nagib se vidi i u presjeku.
 
 **Noć**
 - Doba dana ide od 0 do 24 h: noću je nebo tamno sa zvijezdama i mjesecom, svijetle lampe i lusteri, prozori kuće, susjeda i ulična rasvjeta.

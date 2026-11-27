@@ -159,7 +159,7 @@ SectionGeometry buildSection(Plan plan, SectionLine sec, RoofShape? roof, {doubl
     }
     // namještaj kroz koji prolazi crta
     for (final it in lvl.items) {
-      if (electricShapes.contains(it.shape) || const {'rug', 'rug_round', 'path', 'floor_drain'}.contains(it.shape)) continue;
+      if (electricShapes.contains(it.shape) || const {'rug', 'rug_round', 'path', 'floor_drain', 'dormer', 'roof_window'}.contains(it.shape)) continue;
       final b = itemObb(it);
       if (b == null) continue;
       final corners = [
@@ -171,6 +171,8 @@ SectionGeometry buildSection(Plan plan, SectionLine sec, RoofShape? roof, {doubl
       final iv = _inside(o, u, corners);
       if (iv.isEmpty) continue;
       final (s0, s1) = iv.first;
+      lo = math.min(lo, s0);
+      hi = math.max(hi, s1);
       if (stairShapes.contains(it.shape)) {
         // profil stubišta: stepenice po napretku uz stubište
         final up = levelAbove(plan, lvl);

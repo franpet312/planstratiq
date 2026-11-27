@@ -16,7 +16,7 @@ Future<void> showSectionDialog(BuildContext context, PlanController c) => showDi
             builder: (ctx, _) {
               final sec = c.plan.section;
               if (sec == null) return const SizedBox(height: 80, child: Center(child: Text('Presjek je obrisan.')));
-              final g = buildSection(c.plan, sec, c.roofShape);
+              final g = buildSection(c.plan, sec, c.roofShape, terrainAt: c.terrainAt);
               return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),

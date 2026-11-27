@@ -590,6 +590,16 @@ class PropertiesPanel extends StatelessWidget {
       chips([('S', 'Dolje (jug)'), ('N', 'Gore (sjever)'), ('E', 'Desno (istok)'), ('W', 'Lijevo (zapad)')], st.street,
           (v) => c.updateSite((s) => s.street = v)),
       const SizedBox(height: 10),
+      slider('Nagib terena', '${st.slope.round()} %', st.slope, 0, 25, (x) => st.slope = x.roundToDouble()),
+      if (st.slope > 0) ...[
+        chips([('street', 'Pada prema ulici'), ('back', 'Pada od ulice'), ('left', 'Pada ulijevo'), ('right', 'Pada udesno')], st.slopeDir,
+            (v) => c.updateSite((s) => s.slopeDir = v)),
+        const SizedBox(height: 4),
+        Text('Kuća stoji na ravnoj zaravni (±0) 1,5 m oko zidova; prema višem terenu je potporni zid, prema nižem zid zaravni. '
+            'Lijevo/desno gledano s ulice.',
+            style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+      ],
+      const SizedBox(height: 10),
       Text('Ograda', style: AppText.ui(size: 12, color: Pal.muted)),
       const SizedBox(height: 6),
       chips([('wood', 'Drvena'), ('metal', 'Metalna'), ('panel', 'Žičana'), ('hedge', 'Živica'), ('wall', 'Zid'), ('none', 'Bez')], st.fence,

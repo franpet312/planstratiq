@@ -156,6 +156,11 @@ class Engine3D {
       'fenceH': s.fenceHeight,
       'env': s.surroundings,
       'driveway': s.driveway,
+      if (s.slope > 0) ...{
+        'slope': s.slope / 100,
+        'down': [c.slopeDown().dx, c.slopeDown().dy],
+        'pad': [c.terrainPad()!.left, c.terrainPad()!.top, c.terrainPad()!.right, c.terrainPad()!.bottom],
+      },
       if (door != null) 'door': [door.dx, door.dy],
     };
   }

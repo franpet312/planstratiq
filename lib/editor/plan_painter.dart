@@ -395,7 +395,7 @@ class PlanPainter extends CustomPainter {
       _text(canvas, 'P = ${fmtM2(area)}', at + Offset(0, fs * 0.55), AppText.narrow(size: fs - 1, color: color), halo: true);
       final ua = st.usableArea?.call(r);
       if (ua != null) {
-        _text(canvas, 'korisno ${fmtM2(ua)}', at + Offset(0, fs * 1.75), AppText.narrow(size: fs - 2, color: const Color(0xFF7A5A2E)), halo: true);
+        _text(canvas, 'korisno ${fmtM2(ua)}', at + Offset(0, big ? 35 : fs * 1.75), AppText.narrow(size: big ? 10.5 : fs - 2, color: const Color(0xFF7A5A2E)), halo: true);
       }
       if (big) {
         _text(canvas, floorById(r.floor).name, at + const Offset(0, 22), AppText.narrow(size: 10, color: Pal.muted), halo: true);
@@ -1482,6 +1482,25 @@ class ItemSymbols {
               ln(Offset(0, top + rr), Offset(0, top + rr * 1.7), ep);
             }
         }
+      case 'dormer':
+        // krovna kućica: obris (isprekidano, iznad presjeka), sljeme i zabat sprijeda (dolje = prednja strana)
+        final dr = Rect.fromCenter(center: Offset.zero, width: w, height: d);
+        c.drawRect(dr, fillOf(const Color(0xFFE9E1D4), 0.35));
+        final dd = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Pal.ink;
+        for (final (a, b) in [(dr.topLeft, dr.bottomLeft), (dr.topRight, dr.bottomRight), (dr.topLeft, dr.topRight)]) {
+          final len = (b - a).distance;
+          final nn = math.max(2, (len / 6).floor());
+          for (var i = 0; i < nn; i += 2) {
+            c.drawLine(Offset.lerp(a, b, i / nn)!, Offset.lerp(a, b, math.min(1.0, (i + 1) / nn))!, dd);
+          }
+        }
+        c.drawLine(dr.bottomLeft, dr.bottomRight, line);
+        ln(Offset(0, dr.top), Offset(0, dr.bottom), thin);
+        ln(dr.bottomLeft, Offset(0, dr.bottom - math.min(w / 2, d / 3)), thin);
+        ln(dr.bottomRight, Offset(0, dr.bottom - math.min(w / 2, d / 3)), thin);
       case 'roof_window':
         // krovni prozor: isprekidani pravokutnik (iznad ravnine presjeka) s dijagonalom
         final rwR = Rect.fromCenter(center: Offset.zero, width: w, height: d);

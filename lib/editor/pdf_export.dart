@@ -399,7 +399,7 @@ class _Pdf {
   // ---------------------------------------------------------------- presjek
   void sectionPage() {
     final sec = c.plan.section!;
-    final g = buildSection(c.plan, sec, c.roofShape);
+    final g = buildSection(c.plan, sec, c.roofShape, terrainAt: c.terrainAt);
     final sw = g.sMax - g.sMin, zh = g.zMax - g.zMin;
     final size = landscape;
     final aw = size.$1 - 15 - 10 - 12 - 24, ah = size.$2 - 20 - 18 - 12 - 12;

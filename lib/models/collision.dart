@@ -17,7 +17,7 @@ const balconyShapes = {'balcony', 'balcony_rail', 'balcony_wall'};
 bool isFloorLike(String shape) => floorShapes.contains(shape);
 
 /// Rasvjeta koja visi sa stropa – ne sudara se s namještajem na podu.
-const ceilingShapes = {'chandelier', 'chandelier_ring', 'pendant', 'pendant_row', 'ceiling_light', 'light_point', 'roof_window'};
+const ceilingShapes = {'chandelier', 'chandelier_ring', 'pendant', 'pendant_row', 'ceiling_light', 'light_point', 'roof_window', 'dormer'};
 
 /// Električne instalacije na zidu (utičnice, prekidači…) i njihova visina od poda (m).
 const electricWall = {'socket': 0.3, 'socket_double': 0.3, 'socket_high': 1.1, 'switch': 1.1, 'tv_socket': 0.3, 'lan_socket': 0.3};

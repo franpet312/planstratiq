@@ -567,6 +567,19 @@ class PlanController extends ChangeNotifier {
         rot = math.atan2(-n.dx, n.dy);
         pos = q + n * (w.thickness / 2 + c.d / 2);
       }
+    } else if (c.shape == 'dormer') {
+      // krovna kućica: prednja strana u ravnini vanjskog zida, dubina do mjesta gdje krov dosegne njezinu strehu
+      final w = wallNear(p, tol: 4);
+      if (w != null && isAttic) {
+        final (q, n) = _outsideOf(w, p);
+        final front = q + n * (w.thickness / 2);
+        rot = math.atan2(-n.dx, n.dy);
+        final depth = _dormerDepth(front, n, c.h);
+        pos = front - n * (depth / 2);
+        final it = placeItem(c, Offset(roundTo(pos.dx, 0.01), roundTo(pos.dy, 0.01)), rotation: rot);
+        it.d = roundTo(depth, 0.01);
+        return it;
+      }
     } else if (c.shape == 'roof_window') {
       // krovni prozor: dulja stranica uz pad krova
       final h0 = ceilingAt(p);
@@ -1357,6 +1370,27 @@ class PlanController extends ChangeNotifier {
     return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
+  /// Zaravan oko kuće (ravna, na ±0) kad je teren na nagibu.
+  Rect? terrainPad() => houseBounds()?.inflate(1.5);
+
+  /// Smjer pada terena (jedinični vektor u tlocrtu).
+  Offset slopeDown() {
+    final s = plan.site;
+    final n = switch (s.street) { 'N' => const Offset(0, -1), 'E' => const Offset(1, 0), 'W' => const Offset(-1, 0), _ => const Offset(0, 1) };
+    final t = Offset(-n.dy, n.dx);
+    return switch (s.slopeDir) { 'back' => -n, 'left' => t, 'right' => -t, _ => n };
+  }
+
+  /// Visina terena u točki (m iznad ±0): na zaravni 0, izvan nje nagnuta ravnina.
+  double terrainAt(Offset p) {
+    final k = plan.site.slope / 100;
+    if (k <= 0) return 0;
+    final pad = terrainPad();
+    if (pad == null || pad.contains(p)) return 0;
+    final d = slopeDown();
+    return -k * ((p.dx - pad.center.dx) * d.dx + (p.dy - pad.center.dy) * d.dy);
+  }
+
   /// Parcela: zadana širina/dubina ili automatski oko kuće (ulica ispred, vrt iza).
   Rect? siteRect() {
     final h = houseBounds();
@@ -1640,10 +1674,36 @@ class PlanController extends ChangeNotifier {
   }
 
   /// Svijetla visina kosog stropa u točki aktivne etaže (samo u potkrovlju), inače null.
+  /// Ispod krovne kućice strop je na visini njezine strehe.
   double? ceilingAt(Offset p) {
     if (!isAttic) return null;
     final r = roofShape;
-    return r == null ? null : atticCeilingAt(r, plan.level, p);
+    if (r == null) return null;
+    var h = atticCeilingAt(r, plan.level, p);
+    for (final it in plan.items) {
+      if (it.shape != 'dormer') continue;
+      final f = Offset(-math.sin(it.rotation), math.cos(it.rotation));
+      final front = it.pos + f * (it.d / 2);
+      final rel = p - front;
+      final lf = rel.dx * f.dx + rel.dy * f.dy;
+      final lat = -rel.dx * f.dy + rel.dy * f.dx;
+      if (lat.abs() < it.w / 2 - 0.14 && lf <= 0 && lf >= -it.d) {
+        final dh = it.h - 0.2;
+        h = h == null ? dh : math.max(h, dh);
+      }
+    }
+    return h;
+  }
+
+  /// Dubina krovne kućice: od prednje strane prema sljemenu dok krov ne dosegne visinu njezine strehe.
+  double _dormerDepth(Offset front, Offset out, double eave) {
+    final r = roofShape;
+    if (r == null) return 2.0;
+    for (var t = 0.1; t < 8; t += 0.05) {
+      final hh = r.heightAt(front - out * t);
+      if (hh != null && plan.level.kneeWall + hh >= eave) return t;
+    }
+    return 2.0;
   }
 
   /// Korisna površina prostorije u potkrovlju: visina ≥ 2 m računa se 100 %, 1–2 m 50 %, ispod 1 m ne računa se.

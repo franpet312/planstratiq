@@ -449,6 +449,10 @@ const roofU = {
   uRB: { value: Array.from({ length: ROOF_MAX }, () => new THREE.Vector4()) },
   uRP: { value: Array.from({ length: ROOF_MAX * 4 }, () => new THREE.Vector4()) },
   uRN: { value: 0 },
+  // krovne kućice: rupa u krovu (središte x,z, pola širine, dubina od prednje strane prema sljemenu)
+  uDA: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },
+  uDB: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },
+  uDN: { value: 0 },
 };
 const ROOF_GLSL = `
 uniform vec4 uRA[${ROOF_MAX}];
@@ -457,7 +461,22 @@ uniform vec4 uRP[${ROOF_MAX * 4}];
 uniform int uRN;
 uniform float uRoofOff;
 uniform float uRoofMode;
+uniform vec4 uDA[8];
+uniform vec4 uDB[8];
+uniform int uDN;
 varying vec3 vPsqW;
+bool psqInDormer(vec2 p) {
+  for (int i = 0; i < 8; i++) {
+    if (i >= uDN) break;
+    vec4 a = uDA[i];
+    vec4 b = uDB[i];
+    vec2 d = p - a.xy;
+    float lf = d.x * b.x + d.y * b.y;
+    float lat = -d.x * b.y + d.y * b.x;
+    if (abs(lat) < a.z && lf < b.z && lf > -a.w) return true;
+  }
+  return false;
+}
 float psqRoofH(vec2 p) {
   float best = -1e5;
   for (int i = 0; i < ${ROOF_MAX}; i++) {
@@ -486,7 +505,7 @@ function roofCut(m, off, mode = 0) {
     sh.uniforms.uRoofOff = { value: off };
     sh.uniforms.uRoofMode = { value: mode };
     sh.vertexShader = 'varying vec3 vPsqW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vPsqW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = ROOF_GLSL + sh.fragmentShader.replace('void main() {', 'void main() {\n  { float rh = psqRoofH(vPsqW.xz); if (rh > -1e4 && (uRoofMode < 0.5 ? vPsqW.y > rh + uRoofOff : vPsqW.y < rh + uRoofOff - 0.002)) discard; }');
+    sh.fragmentShader = ROOF_GLSL + sh.fragmentShader.replace('void main() {', 'void main() {\n  { float rh = psqRoofH(vPsqW.xz); if (rh > -1e4 && (uRoofMode < 0.5 ? vPsqW.y > rh + uRoofOff : vPsqW.y < rh + uRoofOff - 0.002)) discard; if (uRoofMode > 0.5 && uRoofMode < 1.5 && psqInDormer(vPsqW.xz)) discard; }');
   };
   m.customProgramCacheKey = () => 'psqroof';
   m.userData = { ...m.userData, roofOff: off };
@@ -502,6 +521,19 @@ function facadeMat(kind, color, double = false) {
     case 'concrete': return mat(c ?? 0xffffffff, { tex: 'concrete', roughness: 0.9, double });
     default: return mat(c ?? 0xece7df, { tex: 'plaster', roughness: 0.95, double });
   }
+}
+// teren na nagibu: sve izvan zaravni oko kuće leži na nagnutoj ravnini (smicanje po visini),
+// a unutar zaravni se ne crta (zaravan je ravna, na ±0)
+const padU = { uPad: { value: new THREE.Vector4(0, 0, 0, 0) } };
+function padCut(m) {
+  const c = m.clone();
+  c.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, padU);
+    sh.vertexShader = 'varying vec3 vPsqP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vPsqP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = 'uniform vec4 uPad;\nvarying vec3 vPsqP;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\n  if (vPsqP.x > uPad.x && vPsqP.x < uPad.z && vPsqP.z > uPad.y && vPsqP.z < uPad.w) discard;');
+  };
+  c.customProgramCacheKey = () => 'psqpad';
+  return c;
 }
 const roofDepthMats = new Map();
 function roofDepth(off) {
@@ -2168,6 +2200,7 @@ class Engine {
     this._tgt = this.world;
     if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, { ...(p.roofStyle || {}), attic: p.roofLevel.attic });
     this._roofUniforms();
+    this._dormerUniforms([p, ...(p.others || [])]);
     // ostale etaže (samo za prikaz, bez odabira i sudara)
     for (const L of p.others || []) {
       const g = new THREE.Group();
@@ -2238,6 +2271,7 @@ class Engine {
     const surfaces = (p.items || []).filter((q) => SURFACES.has(q.shape));
     for (let it of p.items || []) {
       if (it.shape === 'roof_window') { this._roofWindow(it, p); continue; }
+      if (it.shape === 'dormer') { this._dormer(it, p); continue; }
       if (CEILING.has(it.shape) || it.shape === 'ac_indoor' || it.shape === 'wood_stove' || it.shape === 'drain_stack') it = { ...it, ceil: maxH - FLOOR };
       if (it.shape === 'table_lamp') {
         // stolna lampa stoji na stolu/komodi ispod sebe
@@ -2260,6 +2294,146 @@ class Engine {
       if (g.userData.inter) this._register(it.id, [g], g.userData.inter, g.userData.parts || []);
       if (!this._passive) this._itemColliders(it);
     }
+  }
+
+  // krovna kućica: lokalni okvir (x širina, z prema van), prednja strana na item.pos + z·d/2;
+  // dubina do mjesta gdje glavni krov dosegne strehu kućice
+  _dormerFrame(it, base) {
+    const r = it.rotation || 0;
+    const ux = Math.cos(r), uz = Math.sin(r); // lokalni x u svijetu (x, z)
+    const fx = -Math.sin(r), fz = Math.cos(r); // lokalni +z (prema van)
+    const front = { x: it.x + fx * (it.d / 2), z: it.y + fz * (it.d / 2) };
+    const He = base + (it.h || 2.4); // streha kućice (svjetska y)
+    let back = 0.3;
+    for (let t = 0.05; t < 8; t += 0.05) {
+      const y = this._roofTop(front.x - fx * t, front.z - fz * t);
+      back = t;
+      if (y >= He) break;
+    }
+    return { ux, uz, fx, fz, front, He, back };
+  }
+
+  _dormerUniforms(levels) {
+    let n = 0;
+    for (const L of levels) {
+      if (!L || !L.attic) continue;
+      for (const it of L.items || []) {
+        if (it.shape !== 'dormer' || n >= 8) continue;
+        const F = this._dormerFrame(it, L.elevation || 0);
+        // središte = prednja strana; lz < 1.2 (preko prepusta), lz > -dubina
+        roofU.uDA.value[n].set(F.front.x, F.front.z, (it.w || 1.6) / 2, F.back);
+        roofU.uDB.value[n].set(F.fx, F.fz, 1.2, 0);
+        n++;
+      }
+    }
+    roofU.uDN.value = n;
+  }
+
+  _dormer(it, p) {
+    const base = p.elevation || 0;
+    const F = this._dormerFrame(it, base);
+    const g = new THREE.Group();
+    if (!this._passive) {
+      g.userData = { kind: 'item', id: it.id, data: it };
+      this.itemGroups.set(it.id, g);
+    }
+    // grupa u lokalnom okviru: x širina, z prema van; ishodište na prednjoj strani, y = pod etaže
+    g.position.set(F.front.x, 0, F.front.z);
+    g.rotation.y = -(it.rotation || 0);
+    const W = it.w || 1.6, He = F.He - base, back = F.back;
+    const knee = this._attic ? this._attic.knee : 1.2;
+    const pitch = 0.75; // ~37°
+    const Hr = He + (W / 2 + 0.25) * pitch;
+    const facade = this._facade ? facadeMat(this._facade.hi, this._facade.hiColor) : mat(0xece7df, { tex: 'plaster', roughness: 0.95 });
+    const inner = roofCut(mat(0xf7f5f0, { roughness: 0.95, double: true }).clone(), -0.21, 2);
+    // krov kućice ne smije se vidjeti ispod glavnog krova (iza kućice, u dolu)
+    const roofM = roofCut(mat(this._roofColor ?? 0xa5533a, { tex: 'roof', roughness: 0.85, double: true }).clone(), -0.01, 2);
+    const T = 0.14;
+    const roofAt = (lx, lz) => {
+      const x = F.front.x + F.ux * lx + F.fx * lz, z = F.front.z + F.uz * lx + F.fz * lz;
+      return this._roofTop(x, z) - base;
+    };
+    // bočni zidovi (obrazi): od glavnog krova do strehe kućice
+    for (const sx of [-1, 1]) {
+      const pts = [];
+      const steps = 24;
+      for (let i = 0; i <= steps; i++) {
+        const lz = -back * (i / steps);
+        pts.push([lz, Math.min(He, roofAt(sx * (W / 2 - T / 2), lz) - 0.22)]); // do obloge kosog stropa
+      }
+      const shape = new THREE.Shape();
+      shape.moveTo(0, Math.min(knee, pts[0][1]));
+      for (const [lz, y] of pts) shape.lineTo(-lz, y);
+      shape.lineTo(back, He);
+      shape.lineTo(0, He);
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false });
+      // oblik je u (z prema unutra, y); okreni u lokalni okvir
+      geo.rotateY(Math.PI / 2);
+      geo.translate(sx * (W / 2) - (sx > 0 ? T : 0), 0, 0);
+      const m = new THREE.Mesh(geo, [facade, facade]);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      g.add(m);
+    }
+    // prednji zid s prozorom i zabatom
+    const ww = Math.min(W - 0.5, 1.2), wy0 = Math.max(knee + 0.05, 0.9), wy1 = He - 0.15;
+    const fb = (x0, x1, y0, y1) => {
+      if (x1 - x0 < 0.01 || y1 - y0 < 0.01) return;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, T), facade);
+      b.position.set((x0 + x1) / 2, (y0 + y1) / 2, -T / 2);
+      b.castShadow = true;
+      g.add(b);
+    };
+    fb(-W / 2, -ww / 2, knee, He);
+    fb(ww / 2, W / 2, knee, He);
+    fb(-ww / 2, ww / 2, knee, wy0);
+    fb(-ww / 2, ww / 2, wy1, He);
+    const gab = new THREE.Shape();
+    gab.moveTo(-W / 2, He);
+    gab.lineTo(W / 2, He);
+    gab.lineTo(0, Hr - 0.05);
+    gab.closePath();
+    const gg = new THREE.ExtrudeGeometry(gab, { depth: T, bevelEnabled: false });
+    gg.translate(0, 0, -T);
+    g.add(new THREE.Mesh(gg, [facade, facade]));
+    // prozor
+    const frameM = mat(0xf7f7f5, { roughness: 0.5 });
+    const fr = (w, h, x, y) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.07), frameM);
+      b.position.set(x, y, -T / 2);
+      g.add(b);
+    };
+    fr(ww, 0.05, 0, wy0 + 0.025);
+    fr(ww, 0.05, 0, wy1 - 0.025);
+    fr(0.05, wy1 - wy0, -ww / 2 + 0.025, (wy0 + wy1) / 2);
+    fr(0.05, wy1 - wy0, ww / 2 - 0.025, (wy0 + wy1) / 2);
+    fr(0.04, wy1 - wy0, 0, (wy0 + wy1) / 2);
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(ww - 0.1, wy1 - wy0 - 0.1, 0.012), mat(0, { glass: true }));
+    gl.position.set(0, (wy0 + wy1) / 2, -T / 2);
+    g.add(gl);
+    // klupčica
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.06, 0.04, T + 0.08), mat(0xd9d4ca, { roughness: 0.6 }));
+    sill.position.set(0, wy0 - 0.02, -T / 2 + 0.02);
+    g.add(sill);
+    // krov kućice: dvije plohe od strehe do sljemena, od prepusta naprijed do glavnog krova
+    const ov = 0.3, L = back + ov + 0.6;
+    const half = W / 2 + 0.25;
+    const slopeLen = Math.hypot(half, Hr - (He - 0.05));
+    const ang = Math.atan2(Hr - (He - 0.05), half);
+    for (const sx of [-1, 1]) {
+      const pl = new THREE.Mesh(new THREE.BoxGeometry(slopeLen, 0.05, L), roofM);
+      pl.position.set((sx * half) / 2, (He - 0.05 + Hr) / 2, ov - L / 2);
+      pl.rotation.z = sx > 0 ? -ang : ang;
+      pl.castShadow = true;
+      pl.receiveShadow = true;
+      g.add(pl);
+      const ceil = new THREE.Mesh(new THREE.BoxGeometry(slopeLen - 0.1, 0.02, back), inner);
+      ceil.position.set((sx * (half - 0.25)) / 2, (He - 0.2 + Hr - 0.2) / 2 - 0.02, -back / 2);
+      ceil.rotation.z = sx > 0 ? -ang : ang;
+      g.add(ceil);
+    }
+    this._tgt.add(g);
   }
 
   // krovni prozor: okvir i staklo u ravnini krova iznad mjesta prozora (prati nagib plohe)
@@ -2362,6 +2536,7 @@ class Engine {
     // podrum se izvana ne vidi ispod trave
     if (this.ground) this.ground.visible = !(this.mode === 'orbit' && this.fy < -0.1);
     if (this.siteGroup) this.siteGroup.visible = this.ground.visible;
+    if (this.padGroup) this.padGroup.visible = this.ground.visible;
   }
 
   _buildWall(w, nodes, ends, openings) {
@@ -2712,6 +2887,8 @@ class Engine {
   // Sve je u koordinatama „uz ulicu” (a) i „prema ulici” (o): rub parcele prema ulici je na o = e.
   _buildSite(site, seedKey) {
     this.siteGroup = null;
+    this.padGroup = null;
+    if (!site || !site.slope) this._terrain(site || {}, null);
     this.nightMats = [];
     if (!site || !site.rect) {
       this.ground.material = mat(0xa9bb92, { tex: 'grass', roughness: 1 });
@@ -2907,7 +3084,110 @@ class Engine {
       hills.add(hill);
     }
     G.add(hills);
+    this._terrain(site, G);
     this._applyNight();
+  }
+
+  // nagib terena: smicanje cijele okoline i tla, ravna zaravan oko kuće s potpornim zidovima
+  _terrain(site, G) {
+    const k = site.slope || 0;
+    const ground = this.ground;
+    ground.matrixAutoUpdate = false;
+    if (!k || !site.pad) {
+      ground.matrix.makeTranslation(0, -0.01, 0);
+      ground.material = ground.material.userData?.padSrc || ground.material;
+      return;
+    }
+    const [px0, pz0, px1, pz1] = site.pad;
+    const [dx, dz] = site.down || [0, 1];
+    const cx = (px0 + px1) / 2, cz = (pz0 + pz1) / 2;
+    const gx = -k * dx, gz = -k * dz; // y raste uzbrdo
+    const S = (x, z) => gx * (x - cx) + gz * (z - cz);
+    const M = new THREE.Matrix4().set(1, 0, 0, 0, gx, 1, gz, -(gx * cx + gz * cz), 0, 0, 1, 0, 0, 0, 0, 1);
+    G.matrixAutoUpdate = false;
+    G.matrix.copy(M);
+    G.matrixWorldNeedsUpdate = true;
+    ground.matrix.copy(M).multiply(new THREE.Matrix4().makeTranslation(0, -0.01, 0));
+    padU.uPad.value.set(px0, pz0, px1, pz1);
+    const cache = new Map();
+    const cut = (m) => {
+      if (!m || m.userData?.padCut) return m;
+      if (!cache.has(m)) {
+        const c = padCut(m);
+        c.userData = { ...m.userData, padCut: true, padSrc: m };
+        cache.set(m, c);
+      }
+      return cache.get(m);
+    };
+    G.traverse((o) => {
+      if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map(cut) : cut(o.material);
+    });
+    ground.material = cut(ground.material.userData?.padSrc || ground.material);
+    // zaravan (travnjak na ±0) i potporni zidovi / pokos na rubu
+    const P = new THREE.Group();
+    G.parent.add(P);
+    this.padGroup = P;
+    const lawn = new THREE.Mesh(new THREE.BoxGeometry(px1 - px0, 0.01, pz1 - pz0), mat(0x8db567, { tex: 'lawn', roughness: 1 }));
+    scaleBoxUV(lawn.geometry, px1 - px0, 0.01, pz1 - pz0);
+    lawn.position.set(cx, -0.007, cz);
+    lawn.receiveShadow = true;
+    P.add(lawn);
+    const wallM = mat(0xb9b4aa, { tex: 'concrete', roughness: 0.95, double: true });
+    const capM = mat(0xa29d93, { roughness: 0.9 });
+    const edge = (x0, z0, x1, z1) => {
+      const s0 = S(x0, z0), s1 = S(x1, z1);
+      // dio zida po rubu: od ±0 do terena (iznad – potporni zid, ispod – zid zaravni)
+      const seg = (ax, az, bx, bz, sa, sb) => {
+        if (Math.abs(sa) < 0.03 && Math.abs(sb) < 0.03) return;
+        const geo = new THREE.BufferGeometry();
+        const v = [ax, 0, az, bx, 0, bz, bx, sb, bz, ax, sa, az];
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+        const L = Math.hypot(bx - ax, bz - az);
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, L, 0, L, sb, 0, sa], 2));
+        geo.setIndex([0, 1, 2, 0, 2, 3]);
+        geo.computeVertexNormals();
+        const m = new THREE.Mesh(geo, wallM);
+        m.castShadow = true;
+        m.receiveShadow = true;
+        P.add(m);
+        // kapa zida na višem rubu
+        const top = Math.max(sa, sb, 0) + 0.04;
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(L, 0.06, 0.22), capM);
+        cap.position.set((ax + bx) / 2, Math.max(0, Math.min(sa, sb) > 0 ? (sa + sb) / 2 : 0) + 0.03, (az + bz) / 2);
+        cap.rotation.y = -Math.atan2(bz - az, bx - ax);
+        if (Math.min(sa, sb) >= 0 || Math.max(sa, sb) <= 0) {
+          cap.position.y = (Math.max(sa, 0) + Math.max(sb, 0)) / 2 + 0.03;
+          // nagnuti vrh zida prati teren
+          cap.rotation.z = Math.atan2(Math.max(sb, 0) - Math.max(sa, 0), L);
+          P.add(cap);
+        }
+        void top;
+      };
+      if (s0 * s1 < 0) {
+        const t = s0 / (s0 - s1);
+        const mx = x0 + (x1 - x0) * t, mz = z0 + (z1 - z0) * t;
+        seg(x0, z0, mx, mz, s0, 0);
+        seg(mx, mz, x1, z1, 0, s1);
+      } else seg(x0, z0, x1, z1, s0, s1);
+    };
+    edge(px0, pz0, px1, pz0);
+    edge(px1, pz0, px1, pz1);
+    edge(px1, pz1, px0, pz1);
+    edge(px0, pz1, px0, pz0);
+    // staza od vrata do ruba zaravni (prilaz izvan zaravni je na nagibu)
+    if (site.door) {
+      const [sx, sz] = { S: [0, 1], N: [0, -1], E: [1, 0], W: [-1, 0] }[site.street] || [0, 1];
+      const [qx, qz] = site.door;
+      const len = sx ? (sx > 0 ? px1 - qx : qx - px0) : (sz > 0 ? pz1 - qz : qz - pz0);
+      if (len > 0.1) {
+        const w = sx ? len : 1.2, d = sz ? len : 1.2;
+        const path = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), mat(0xbdb8ae, { tex: 'paving', roughness: 0.9 }));
+        scaleBoxUV(path.geometry, w, 0.02, d);
+        path.position.set(qx + (sx * len) / 2, 0.002, qz + (sz * len) / 2);
+        path.receiveShadow = true;
+        P.add(path);
+      }
+    }
   }
 
   _fence(G, p, q, type, fh) {
@@ -3062,6 +3342,7 @@ class Engine {
     const t = Math.tan(THREE.MathUtils.degToRad(clamp(style.pitch || 30, 5, 60)));
     const ov = clamp(style.overhang ?? 0.5, 0, 1.5);
     const color = style.color ? rgb(style.color) : 0xa5533a;
+    this._roofColor = color;
     const WT = 0.15; // pola debljine vanjskog zida (obris je po osi zida)
     const roofMat = roofCut(mat(color, { tex: 'roof', roughness: 0.85 }).clone(), 0, 1);
     const innerMat = roofCut(mat(0xf7f5f0, { roughness: 0.95, side: 'back' }).clone(), -0.2, 1);

@@ -644,6 +644,8 @@ class Site {
     this.street = 'S',
     this.surroundings = 'suburb',
     this.driveway = true,
+    this.slope = 0,
+    this.slopeDir = 'street',
   });
 
   /// Širina (istok–zapad) i dubina (sjever–jug) parcele u m; 0 = automatski oko kuće.
@@ -665,6 +667,10 @@ class Site {
   /// Prilaz od ulaza u parcelu do kuće.
   bool driveway;
 
+  /// Nagib terena u % (0 = ravno) i smjer pada: street | back | left | right (gledano s ulice).
+  double slope;
+  String slopeDir;
+
   Map<String, dynamic> toJson() => {
         'width': width,
         'depth': depth,
@@ -675,6 +681,8 @@ class Site {
         'street': street,
         'surroundings': surroundings,
         'driveway': driveway,
+        if (slope > 0) 'slope': slope,
+        if (slope > 0) 'slopeDir': slopeDir,
       };
 
   factory Site.fromJson(Map<String, dynamic> j) {
@@ -689,12 +697,13 @@ class Site {
       street: (j['street'] as String?) ?? 'S',
       surroundings: (j['surroundings'] as String?) ?? 'suburb',
       driveway: j['driveway'] != false,
+      slope: d('slope', 0),
+      slopeDir: (j['slopeDir'] as String?) ?? 'street',
     );
   }
 }
 
 
-/// Izvedbe otvora po vrsti (id, naziv).
 /// Vrste fasadne obloge.
 const facadeKinds = <String, String>{
   'plaster': 'Žbuka (u boji)',
@@ -704,6 +713,7 @@ const facadeKinds = <String, String>{
   'concrete': 'Vidljivi beton',
 };
 
+/// Izvedbe otvora po vrsti (id, naziv).
 List<(String, String)> openingStyles(OpeningType t) => switch (t) {
       OpeningType.door => const [('', 'Krilna'), ('double', 'Dvokrilna'), ('sliding', 'Klizna'), ('pocket', 'Klizna u zid'), ('folding', 'Harmonika')],
       OpeningType.window => const [('', 'Krilni'), ('sliding', 'Klizni'), ('fixed', 'Fiksni')],

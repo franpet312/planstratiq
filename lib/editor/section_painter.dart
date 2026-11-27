@@ -38,6 +38,7 @@ class SectionGeometry {
   final levels = <(double, double, String)>[]; // kota poda, visina, naziv
   final roofOuter = <List<Offset>>[];
   final roofInner = <List<Offset>>[];
+  final terrain = <Offset>[]; // (s, z) teren duž crte
   double sMin = 0, sMax = 1, zMin = -0.6, zMax = 3;
   double length = 1;
 }
@@ -70,7 +71,7 @@ List<(double, double)> _inside(Offset p, Offset u, List<Offset> poly) {
   return out;
 }
 
-SectionGeometry buildSection(Plan plan, SectionLine sec, RoofShape? roof) {
+SectionGeometry buildSection(Plan plan, SectionLine sec, RoofShape? roof, {double Function(Offset)? terrainAt}) {
   final g = SectionGeometry();
   final d = sec.b - sec.a;
   final len = d.distance;
@@ -81,6 +82,29 @@ SectionGeometry buildSection(Plan plan, SectionLine sec, RoofShape? roof) {
   final o = sec.flip ? sec.b : sec.a;
   var lo = double.infinity, hi = -double.infinity;
   final top = plan.levels.isEmpty ? null : plan.levels.reduce((a, b) => a.elevation >= b.elevation ? a : b);
+
+  // otvori u pločama: stubišta s etaže ispod probijaju ploču etaže iznad
+  final holes = <Level, List<(double, double)>>{};
+  for (final lvl in plan.levels) {
+    final up = levelAbove(plan, lvl);
+    if (up == null) continue;
+    for (final it in lvl.items) {
+      if (!stairShapes.contains(it.shape)) continue;
+      holes.putIfAbsent(up, () => []).addAll(_inside(o, u, stairOutline(it)));
+    }
+  }
+  List<(double, double)> minus((double, double) iv, List<(double, double)> hs) {
+    var out = [iv];
+    for (final (h0, h1) in hs) {
+      out = [
+        for (final (a, b) in out) ...[
+          if (h0 > a) (a, math.min(b, h0)),
+          if (h1 < b) (math.max(a, h1), b),
+        ]
+      ].where((e) => e.$2 - e.$1 > 1e-3).toList();
+    }
+    return out;
+  }
 
   for (final lvl in plan.levels) {
     final z0 = lvl.elevation;
@@ -122,7 +146,9 @@ SectionGeometry buildSection(Plan plan, SectionLine sec, RoofShape? roof) {
       final poly = [for (final id in r.nodeIds) np(id)];
       if (poly.length < 3) continue;
       for (final (s0, s1) in _inside(o, u, poly)) {
-        g.slabs.add(_Cut(s0, s1, z0 - slab, z0));
+        for (final (a0, a1) in minus((s0, s1), holes[lvl] ?? const [])) {
+          g.slabs.add(_Cut(a0, a1, z0 - slab, z0));
+        }
         if (s1 - s0 > 1.2) g.labels.add(((s0 + s1) / 2, z0 + 1.25, r.name));
         lo = math.min(lo, s0);
         hi = math.max(hi, s1);
@@ -223,6 +249,12 @@ SectionGeometry buildSection(Plan plan, SectionLine sec, RoofShape? roof) {
   }
   g.sMin = lo - 1.0;
   g.sMax = hi + 1.0;
+  for (var s = g.sMin; s <= g.sMax + 1e-6; s += 0.05) {
+    final z = terrainAt?.call(o + u * s) ?? 0;
+    g.terrain.add(Offset(s, z));
+    zLow = math.min(zLow, z);
+    zTop = math.max(zTop, z);
+  }
   g.zMin = zLow - 0.8;
   g.zMax = zTop + 0.6;
   g.length = len;
@@ -244,14 +276,21 @@ void paintSection(Canvas canvas, Rect area, SectionGeometry g, {double? pxPerM, 
     ..strokeWidth = 1
     ..color = const Color(0xFF26292B);
 
-  // teren
-  final ground = Paint()..color = const Color(0xFFEDE6D8);
-  canvas.drawRect(Rect.fromPoints(P(g.sMin, 0), P(g.sMax, g.zMin)), ground);
+  // teren (prati nagib izvan zaravni)
+  final terr = g.terrain.isEmpty ? [Offset(g.sMin, 0), Offset(g.sMax, 0)] : g.terrain;
+  final groundPath = Path()..moveTo(P(terr.first.dx, g.zMin).dx, P(terr.first.dx, g.zMin).dy);
+  for (final t in terr) {
+    final q = P(t.dx, t.dy);
+    groundPath.lineTo(q.dx, q.dy);
+  }
+  groundPath.lineTo(P(terr.last.dx, g.zMin).dx, P(terr.last.dx, g.zMin).dy);
+  groundPath.close();
+  canvas.drawPath(groundPath, Paint()..color = const Color(0xFFEDE6D8));
   final soil = Paint()
     ..color = const Color(0xFFB4A68A)
     ..strokeWidth = 0.8;
-  for (var s = g.sMin; s < g.sMax; s += 0.35) {
-    final a = P(s, 0);
+  for (var i = 0; i < terr.length; i += 7) {
+    final a = P(terr[i].dx, terr[i].dy);
     canvas.drawLine(a + const Offset(0, 3), a + const Offset(6, 9), soil);
   }
 
@@ -342,9 +381,25 @@ void paintSection(Canvas canvas, Rect area, SectionGeometry g, {double? pxPerM, 
   }
 
   // teren crta
-  canvas.drawLine(P(g.sMin, 0), P(g.sMax, 0), Paint()
-    ..color = const Color(0xFF4E4636)
-    ..strokeWidth = 1.6);
+  final tl = Path()..moveTo(P(terr.first.dx, terr.first.dy).dx, P(terr.first.dx, terr.first.dy).dy);
+  for (final t in terr.skip(1)) {
+    final q = P(t.dx, t.dy);
+    tl.lineTo(q.dx, q.dy);
+  }
+  canvas.drawPath(
+      tl,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..color = const Color(0xFF4E4636)
+        ..strokeWidth = 1.6);
+  // potporni zidovi na rubu zaravni (skok terena)
+  for (var i = 0; i + 1 < terr.length; i++) {
+    final a = terr[i], b = terr[i + 1];
+    if ((a.dy - b.dy).abs() > 0.08) {
+      final x = P(a.dx, 0).dx;
+      canvas.drawRect(Rect.fromLTRB(x - 2.5, P(0, math.max(a.dy, b.dy)).dy, x + 2.5, P(0, math.min(a.dy, b.dy) - 0.3).dy), Paint()..color = const Color(0xFF7C7871));
+    }
+  }
 
   TextPainter tp(String t, double size, {Color color = Pal.ink, FontWeight w = FontWeight.w500}) =>
       TextPainter(text: TextSpan(text: t, style: AppText.narrow(size: size, color: color, weight: w)), textDirection: TextDirection.ltr)

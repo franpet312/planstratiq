@@ -146,6 +146,7 @@ const List<CatalogItem> legacyCatalog = [
   CatalogItem(id: 'shoe_cabinet', name: 'Ormarić za cipele', category: catHall, zone: _i, shape: 'dresser', w: 0.80, d: 0.30, h: 1.00, color: 0xFFEDE7DF, price: 120),
   CatalogItem(id: 'hall_wardrobe', name: 'Garderober za predsoblje', category: catHall, zone: _i, shape: 'wardrobe', w: 1.20, d: 0.40, h: 2.00, color: 0xFFD9C7B0, price: 260),
   CatalogItem(id: 'stairs', name: 'Stubište, ravno', category: catHall, zone: _i, shape: 'stairs', w: 1.00, d: 3.60, h: 2.80, color: 0xFFB98B5E, price: 3500),
+  CatalogItem(id: 'dormer', name: 'Krovna kućica (frčkica)', category: catHall, zone: _i, shape: 'dormer', w: 1.6, d: 2.0, h: 2.4, color: 0xFFECE7DF, price: 4500),
   CatalogItem(id: 'roof_window', name: 'Krovni prozor (potkrovlje)', category: catHall, zone: _i, shape: 'roof_window', w: 0.78, d: 1.18, h: 0.10, color: 0xFF5A5F63, price: 650),
 
   // Vrt i terasa

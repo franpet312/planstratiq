@@ -11,6 +11,8 @@ import 'package:web/web.dart' as web;
 import '../models/catalog.dart';
 import '../models/catalog_gen.dart';
 import '../models/clearance.dart';
+import '../models/headroom.dart';
+import '../models/plumbing.dart';
 import '../models/collision.dart';
 import '../models/geometry.dart';
 import '../models/materials.dart';
@@ -579,7 +581,7 @@ class PlanController extends ChangeNotifier {
     } else if (c.zone == CatalogZone.interior && !floorShapes.contains(c.shape)) {
       final onWall = c.shape == 'wall_lamp' ||
           electricWall.containsKey(c.shape) ||
-          const {'radiator', 'towel_radiator', 'ac_indoor', 'boiler'}.contains(c.shape);
+          const {'radiator', 'towel_radiator', 'ac_indoor', 'boiler', 'drain_stack', 'water_manifold'}.contains(c.shape);
       final w = wallNear(p, tol: onWall ? 1.5 : c.d / 2 + 0.45);
       if (w != null) {
         final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
@@ -1408,6 +1410,8 @@ class PlanController extends ChangeNotifier {
   void updateSite(void Function(Site s) f) => mutate(() => f(plan.site));
 
   void setInsulation(String v) => mutate(() => plan.insulation = v);
+  void setClimate(String v) => mutate(() => plan.climate = v);
+  void setHeatSource(String v) => mutate(() => plan.heatSource = v);
 
   // --------------------------------------------------------- međuspremnik (Ctrl+C / Ctrl+V)
 
@@ -1599,7 +1603,7 @@ class PlanController extends ChangeNotifier {
   PlanStats get stats => _stats ??= _computeStats();
 
   /// Provjera prolaza i otvaranja na aktivnoj etaži.
-  List<ClearanceIssue> get issues => _issues ??= checkClearances(plan, ceilingAt: isAttic ? ceilingAt : null);
+  List<ClearanceIssue> get issues => _issues ??= [...checkClearances(plan, ceilingAt: isAttic ? ceilingAt : null), ...checkStairs(plan, roof: roofShape), ...checkPlumbing(plan)];
 
   // --------------------------------------------------------- potkrovlje
   RoofShape? _roof;

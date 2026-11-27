@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
+import '../models/plumbing.dart';
 import '../models/catalog.dart';
 import '../models/clearance.dart';
 import '../models/collision.dart';
@@ -112,6 +113,7 @@ class PlanPainter extends CustomPainter {
     _rooms(canvas);
     _ceilingZones(canvas);
     _items(canvas, floor: true);
+    _drains(canvas);
     _items(canvas, floor: false);
     _walls(canvas);
     _openings(canvas);
@@ -665,6 +667,48 @@ class PlanPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------- namještaj
+  // odvodnja: trase od sanitarija do vertikale (isprekidano) i vertikale s drugih etaža
+  void _drains(Canvas canvas) {
+    if (st.preview) return;
+    final here = {for (final it in plan.items) if (it.shape == 'drain_stack') it.id};
+    final ghost = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0xFF8A6A3A);
+    for (final l in plan.levels) {
+      for (final it in l.items) {
+        if (it.shape != 'drain_stack' || here.contains(it.id)) continue;
+        final c = s(it.pos);
+        canvas.drawCircle(c, math.max(4, 0.06 * scale), ghost);
+        canvas.drawCircle(c, math.max(1.5, 0.02 * scale), Paint()..color = const Color(0xFF8A6A3A));
+      }
+    }
+    final runs = drainRuns(plan);
+    if (runs.isEmpty) return;
+    final over = {for (final i in st.issues) i.itemId};
+    for (final r in runs) {
+      final bad = over.contains(r.item.id);
+      final p = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r.dn >= 110 ? 2.4 : 1.5
+        ..color = bad ? const Color(0xFFC0392B) : const Color(0xFF8A6A3A);
+      for (final (a, b) in [(r.from, r.corner), (r.corner, r.to)]) {
+        final pa = s(a), pb = s(b);
+        final len = (pb - pa).distance;
+        if (len < 1) continue;
+        final n = (len / 5).floor();
+        for (var i = 0; i < n; i += 2) {
+          canvas.drawLine(Offset.lerp(pa, pb, i / n)!, Offset.lerp(pa, pb, math.min(1.0, (i + 1) / n))!, p);
+        }
+      }
+      if (r.length > 0.6 && scale > 40) {
+        final m = s(Offset.lerp(r.from, r.corner, 0.5)!);
+        _text(canvas, 'Ø${r.dn} · ${r.length.toStringAsFixed(1).replaceAll('.', ',')} m', m + const Offset(0, -8),
+            AppText.narrow(size: 10, color: p.color), halo: true);
+      }
+    }
+  }
+
   void _items(Canvas canvas, {required bool floor}) {
     for (final it in plan.items) {
       if (floorShapes.contains(it.shape) != floor) continue;
@@ -1209,6 +1253,34 @@ class ItemSymbols {
           textDirection: TextDirection.ltr,
         )..layout();
         tb.paint(c, Offset(-tb.width / 2, -tb.height / 2));
+      case 'drain_stack':
+        box(r, 1);
+        c.drawCircle(Offset.zero, math.min(w, d) * 0.3, line);
+        c.drawCircle(Offset.zero, math.min(w, d) * 0.12, Paint()..color = const Color(0xFF8A6A3A));
+      case 'floor_drain':
+        c.drawRect(r, fillOf(const Color(0xFFB9BDC0), 0.6));
+        c.drawRect(r, line);
+        if (w > d * 2) {
+          for (var x = r.left + 3; x < r.right - 2; x += 4) {
+            ln(Offset(x, r.top + 1), Offset(x, r.bottom - 1), thin);
+          }
+        } else {
+          ln(r.topLeft, r.bottomRight, thin);
+          ln(r.topRight, r.bottomLeft, thin);
+          c.drawCircle(Offset.zero, math.min(w, d) * 0.2, line);
+        }
+      case 'water_manifold':
+        box(r, 1);
+        final tv = TextPainter(
+          text: TextSpan(text: 'V', style: AppText.narrow(size: math.max(8, math.min(w, d * 3) * 0.3), weight: FontWeight.w700, color: const Color(0xFF2F6FA8))),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tv.paint(c, Offset(-tv.width / 2, -tv.height / 2));
+      case 'manhole':
+        c.drawRect(r, fillOf(color, 0.55));
+        c.drawRect(r, line);
+        c.drawCircle(Offset.zero, math.min(w, d) * 0.35, line);
+        ln(Offset(-w * 0.2, 0), Offset(w * 0.2, 0), thin);
       case 'wood_stove':
         box(r, 2);
         c.drawCircle(Offset(0, -d * 0.15), math.min(w, d) * 0.16, line);

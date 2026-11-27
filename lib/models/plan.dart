@@ -484,6 +484,12 @@ class Plan {
   /// Toplinska izolacija kuće (za okvirnu potrebnu snagu grijanja): new | good | average | poor.
   String insulation = 'good';
 
+  /// Klimatsko područje (za godišnju potrošnju): continental | coastal.
+  String climate = 'continental';
+
+  /// Grijanje: gas | heatpump | electric | wood | pellet | oil.
+  String heatSource = 'gas';
+
   /// Etaža ispod aktivne (za prozirni prikaz na tlocrtu), ako postoji.
   Level? get levelBelow => active > 0 ? levels[active - 1] : null;
 
@@ -554,6 +560,8 @@ class Plan {
         'roofStyle': {'type': roofType, 'pitch': roofPitch, 'overhang': roofOverhang, 'color': roofColor, 'turn': roofTurn},
         'site': site.toJson(),
         'insulation': insulation,
+        'climate': climate,
+        'heatSource': heatSource,
         'active': active,
         'levels': [for (final l in levels) l.toJson(includeImage: includeImage)],
       };
@@ -582,6 +590,8 @@ class Plan {
       plan.roofTurn = _b(rs['turn']);
     }
     if (j['insulation'] is String) plan.insulation = j['insulation'] as String;
+    if (j['climate'] is String) plan.climate = j['climate'] as String;
+    if (j['heatSource'] is String) plan.heatSource = j['heatSource'] as String;
     if (j['site'] is Map) plan.site = Site.fromJson(Map<String, dynamic>.from(j['site'] as Map));
     return plan;
   }

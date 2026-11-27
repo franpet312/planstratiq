@@ -916,6 +916,37 @@ function buildItem(it, g, loader) {
       b(0.08, 0.05, 0.01, 0, yc - H * 0.25, -D / 2 + 2 * r + 0.004, 0x333333);
       break;
     }
+    case 'drain_stack': {
+      // instalacijski kanal (obloženi gips) od poda do stropa s revizijskim otvorom
+      const C = it.ceil ?? 2.57;
+      b(W, C, D, 0, C / 2, 0, color, { roughness: 0.9 });
+      b(0.16, 0.16, 0.006, 0, 0.55, D / 2 + 0.003, 0xe2e2df, { roughness: 0.6 });
+      b(0.03, 0.01, 0.008, 0, 0.6, D / 2 + 0.007, 0x9a9a9a, metal);
+      break;
+    }
+    case 'floor_drain': {
+      b(W, 0.006, D, 0, 0.003, 0, color, metal);
+      const n = Math.max(2, Math.round(Math.max(W, D) / 0.025));
+      for (let i = 1; i < n; i++) {
+        const f = -0.5 + i / n;
+        if (W >= D) b(0.006, 0.002, D * 0.7, f * W, 0.007, 0, 0x1a1a1a);
+        else b(W * 0.7, 0.002, 0.006, 0, 0.007, f * D, 0x1a1a1a);
+      }
+      break;
+    }
+    case 'water_manifold': {
+      const y0 = 0.35;
+      b(W, H, D, 0, y0 + H / 2, 0, color, { roughness: 0.5 });
+      b(W - 0.04, H - 0.04, 0.004, 0, y0 + H / 2, D / 2 + 0.002, darker(color, 0.04), { roughness: 0.5 });
+      b(0.05, 0.015, 0.012, W / 2 - 0.06, y0 + H / 2, D / 2 + 0.008, 0x888888, metal);
+      for (const dx of [-W * 0.3, -W * 0.1, W * 0.1, W * 0.3]) cyl(0.012, 0.012, y0, dx, y0 / 2, 0, 0xc9c9c9, 8, metal);
+      break;
+    }
+    case 'manhole': {
+      b(W, 0.05, D, 0, 0.025, 0, color, { roughness: 0.95 });
+      cyl(Math.min(W, D) * 0.36, Math.min(W, D) * 0.36, 0.012, 0, 0.056, 0, 0x3a3a3a, 32, metal);
+      break;
+    }
     case 'wood_stove': {
       b(W, H * 0.12, D, 0, H * 0.06, 0, darker(color, 0.2));
       b(W, H * 0.78, D, 0, H * 0.12 + H * 0.39, 0, color, { roughness: 0.6 });
@@ -2158,7 +2189,7 @@ class Engine {
     const surfaces = (p.items || []).filter((q) => SURFACES.has(q.shape));
     for (let it of p.items || []) {
       if (it.shape === 'roof_window') { this._roofWindow(it, p); continue; }
-      if (CEILING.has(it.shape) || it.shape === 'ac_indoor' || it.shape === 'wood_stove') it = { ...it, ceil: maxH - FLOOR };
+      if (CEILING.has(it.shape) || it.shape === 'ac_indoor' || it.shape === 'wood_stove' || it.shape === 'drain_stack') it = { ...it, ceil: maxH - FLOOR };
       if (it.shape === 'table_lamp') {
         // stolna lampa stoji na stolu/komodi ispod sebe
         let elev = 0;

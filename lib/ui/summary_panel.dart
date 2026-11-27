@@ -5,6 +5,7 @@ import '../app/theme.dart';
 import '../models/geometry.dart';
 import '../models/heating.dart';
 import '../models/materials.dart';
+import '../models/plumbing.dart';
 import '../models/shopping.dart';
 import '../state/plan_controller.dart';
 import 'common.dart';
@@ -94,6 +95,7 @@ class SummaryPanel extends StatelessWidget {
       ),
       ..._climate(),
       ..._electric(),
+      ..._plumbing(),
       ..._shopping(context),
       const SectionTitle('Gradnja'),
       StatRow('Ukupna duljina zidova', '${fmtM(st.wallLength)} m'),
@@ -134,6 +136,7 @@ class SummaryPanel extends StatelessWidget {
       StatRow('Potrebno grijanje (cijela kuća)', fmtKw(need)),
       StatRow('Ugrađeno', fmtKw(have), strong: have >= need * 0.95),
       if (fhArea > 0) StatRow('Podno grijanje, ${fmtM2(fhArea)}', fmtEur(fhArea * floorHeatingPricePerM2)),
+      ..._energy(),
       if (missing.isNotEmpty) ...[
         const SizedBox(height: 6),
         for (final r in missing.take(8))
@@ -149,6 +152,90 @@ class SummaryPanel extends StatelessWidget {
             ]),
           ),
       ],
+    ];
+  }
+
+  List<Widget> _energy() {
+    final e = energyEstimate(c.plan);
+    if (e == null) return const [];
+    final src = heatSources[c.plan.heatSource] ?? heatSources['gas']!;
+    final mine = e.costs[c.plan.heatSource] ?? 0;
+    final sorted = e.costs.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
+    return [
+      const SizedBox(height: 14),
+      Text('Godišnja potrošnja (okvirno)', style: AppText.ui(size: 13, weight: FontWeight.w700)),
+      const SizedBox(height: 6),
+      Row(children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            value: c.plan.climate,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Područje', isDense: true),
+            items: [for (final k in climates.entries) DropdownMenuItem(value: k.key, child: Text(k.value.$1))],
+            onChanged: (v) {
+              if (v != null) c.setClimate(v);
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            value: c.plan.heatSource,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Grijanje', isDense: true),
+            items: [for (final k in heatSources.entries) DropdownMenuItem(value: k.key, child: Text(k.value.$1, overflow: TextOverflow.ellipsis))],
+            onChanged: (v) {
+              if (v != null) c.setHeatSource(v);
+            },
+          ),
+        ),
+      ]),
+      const SizedBox(height: 10),
+      Row(children: [
+        Container(
+          width: 46,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: Color(e.clsColor), borderRadius: BorderRadius.circular(4)),
+          child: Text(e.cls, style: AppText.ui(size: 18, weight: FontWeight.w800, color: Colors.white)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text('Okvirni energetski razred: ${e.perM2.round()} kWh/m² godišnje za grijanje (${fmtM2(e.area)} grijane površine).',
+              style: AppText.ui(size: 12.5, height: 1.35)),
+        ),
+      ]),
+      const SizedBox(height: 8),
+      StatRow('Grijanje', fmtKwh(e.heatKwh)),
+      StatRow('Topla voda', fmtKwh(e.waterKwh)),
+      StatRow('${src.$1} – godišnje', fmtEur(mine), strong: true),
+      StatRow('… mjesečno (prosjek)', fmtEur(mine / 12)),
+      if (e.coolKwh > 0) StatRow('Klima ljeti (struja)', fmtEur(e.coolCost)),
+      StatRow('CO₂ godišnje', '${(e.co2 / 1000).toStringAsFixed(1).replaceAll('.', ',')} t'),
+      const SizedBox(height: 6),
+      Text('Usporedba izvora topline (grijanje + topla voda):', style: AppText.ui(size: 12, color: Pal.muted)),
+      for (final s in sorted)
+        StatRow(heatSources[s.key]!.$1, fmtEur(s.value), strong: s.key == c.plan.heatSource),
+      const SizedBox(height: 4),
+      Text('Procjena iz projektnog opterećenja i stupanj-dana, s prosječnim cijenama energenata. '
+          'Nije energetski certifikat – za njega treba ovlašteni certifikator.',
+          style: AppText.ui(size: 11.5, color: Pal.muted, height: 1.35)),
+    ];
+  }
+
+  List<Widget> _plumbing() {
+    final (n, len, cost) = plumbingTotals(c.plan);
+    final stacks = c.plan.levels.expand((l) => l.items).where((it) => it.shape == 'drain_stack').length;
+    if (n == 0 && stacks == 0) return const [];
+    return [
+      const SectionTitle('Vodovod i odvodnja'),
+      StatRow('Vertikale odvoda', '$stacks'),
+      StatRow('Priključci sanitarija', '$n'),
+      StatRow('Odvodne cijevi (okvirno)', '${len.toStringAsFixed(1).replaceAll('.', ',')} m'),
+      StatRow('Okvirno (cijevi i priključci)', fmtEur(cost), strong: true),
+      const SizedBox(height: 4),
+      Text('Trase se crtaju na tlocrtu od svakog potrošača do najbliže vertikale; crveno je predaleko.',
+          style: AppText.ui(size: 11.5, color: Pal.muted, height: 1.35)),
     ];
   }
 

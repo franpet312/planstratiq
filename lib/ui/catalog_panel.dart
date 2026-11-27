@@ -148,10 +148,11 @@ const _categoryIcons = <String, IconData>{
   catLight: Icons.light_outlined,
   catElectric: Icons.electrical_services_outlined,
   catHeating: Icons.thermostat_outlined,
+  catPlumbing: Icons.plumbing_outlined,
   catGarden: Icons.deck_outlined,
   catYard: Icons.yard_outlined,
 };
-const _categoryOrder = [catLiving, catBed, catKitchen, catBath, catWork, catHall, catLight, catElectric, catHeating, catGarden, catYard];
+const _categoryOrder = [catLiving, catBed, catKitchen, catBath, catWork, catHall, catLight, catElectric, catHeating, catPlumbing, catGarden, catYard];
 
 enum _Sort { recommended, priceUp, priceDown, name }
 

@@ -87,6 +87,7 @@ const catYard = 'Dvorište';
 const catLight = 'Rasvjeta';
 const catElectric = 'Električne instalacije';
 const catHeating = 'Grijanje i hlađenje';
+const catPlumbing = 'Vodovod i odvodnja';
 
 const _i = CatalogZone.interior;
 const _e = CatalogZone.exterior;
@@ -174,4 +175,4 @@ const List<CatalogItem> legacyCatalog = [
 
 
 /// Oblici koji leže na podu (ne zauzimaju prostor, imaju niži prioritet odabira).
-const floorShapes = {'rug', 'rug_round', 'deck', 'pool', 'path', 'balcony', 'balcony_rail', 'balcony_wall'};
+const floorShapes = {'rug', 'rug_round', 'deck', 'pool', 'path', 'balcony', 'balcony_rail', 'balcony_wall', 'floor_drain', 'manhole'};

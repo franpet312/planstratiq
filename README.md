@@ -33,6 +33,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 **Etaže**
 - Podrum, prizemlje i katovi: svaka etaža ima svoje zidove, prostorije i namještaj; kota poda računa se sama (svijetla visina + 25 cm ploče).
 - Novi kat preuzima vanjske zidove etaže ispod; na tlocrtu se etaža ispod vidi prozirno (plavo), a kutovi joj služe za hvatanje.
+- **Podrum**: vanjski zidovi su beton (ili odabrana donja obloga), prozori ispod razine terena dobiju betonski svjetlarnik s rešetkom; kad se gleda podrum, tlo se sakrije, a razina terena ostane kao prozirna ploha. Dodavanje i brisanje podruma ne pomiče prizemlje (prizemlje je uvijek na ±0; stari projekti se sami poprave).
 - Stubište (ravno, L s podestom ili zavojito) postavljeno u prizemlju automatski probija otvor u ploči kata u obliku stubišta; u 3D šetnji (prvo i treće lice) stubama se hoda gore-dolje između etaža.
 - **Provjera stubišta**: upozorenje kad je kosi strop potkrovlja iznad stuba niži od 2 m, kad na katu iznad otvora stoji namještaj ili prolazi zid, kad stubište ne vodi nikamo i kad je prestrmo ili preblago (pravilo koraka 2h + b, broj i visina stepenica).
 - **Potkrovlje** („Dodaj potkrovlje” u izborniku etaža): obodni zidovi su koljenski zid (zadano 1,2 m), krov počinje na njegovom vrhu, a strop je kosi – bijela obloga ispod krova. Unutarnji pregradni zidovi idu do kosog stropa i sami se odrežu po krovu (zabatni oblik).
@@ -60,6 +61,9 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - **Rasvjeta** (kategorija „Rasvjeta”): klasični luster s kristalima, LED prsten, viseće lampe (pojedinačne i niz od tri iznad stola), plafonjera, zidna, stolna, podna i lučna podna lampa. Sve svijetle u 3D-u i pale se/gase (E, klik, dvoklik). Stropna rasvjeta visi s pravog stropa etaže, zidna se sama prisloni uz zid, a stolna lampa stoji na stolu ili komodi ispod sebe.
 - **Sudaranje**: namještaj ne ulazi u zidove ni u drugi namještaj – pri povlačenju klizi uz prepreku (stolice se smiju podvući pod stol, tepisi i terase leže ispod svega, lusteri vise iznad stola, stolna lampa smije na stol ili komodu, ali ne u kauč, a lučnoj lampi smeta samo baza). Isključuje se u svojstvima objekta.
 - **Balkoni**: ploča s ogradom (staklena, metalna ili zidana) uz vanjski zid. Dodaje se iz kataloga (sama se prisloni uz zid s vanjske strane) ili jednim klikom iz svojstava vanjskog zida / balkonskih vrata – ako zid nema balkonska vrata, dodaju se.
+- **Terase**: kamene ploče, drveni pod ili vanjske pločice uz vanjski zid (ispred vrata), po želji s nadstrešnicom (crijep ili staklo) ili pergolom iste veličine – iz svojstava vanjskog zida ili iz kataloga (Vrt i terasa).
+- **Kamini i dimnjaci**: klasični kameni kamin (ložište s drvima i vatrom, polica, ispust do stropa) i ugradbeni moderni kamin sa staklom; zidani dimnjak. Iznad kamina, peći na drva ili dimnjaka sam se gradi dimnjak kroz sve etaže iznad i kroz krov (s kapom i dimovodnim kapama).
+- **Namještaj**: kauči, kutne garniture, kreveti i stolice imaju zaobljene presvlake, sjedeće i naslonske jastuke, ukrasne jastuke, tapecirano uzglavlje; stolovi okvir ispod ploče. Stubišta imaju nosače, gazišta s prepustom i ogradu sa stupićima i drvenim rukohvatom.
 
 **3D**
 - Zidovi s otvorima, fasada, podovi s teksturama (parket, laminat, pločice, kamen, beton, tepison), nebo, sjene.
@@ -70,6 +74,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 - **Otvaranje i paljenje**: vrata, prozori i balkonska vrata, ormari, ladice, hladnjak, perilice i pećnica otvaraju se, a lampe, TV i kamin pale. U šetnji tipka E ili klik (na mobitelu dodir), izvana dvoklik. Zatvorena vrata ne propuštaju, a u šetnji se ne prolazi ni kroz namještaj ni kroz ogradu balkona.
 - Tri načina pogleda: **izvana** (orbit), **treće lice** (animirani lik hoda kućom, kamera ga prati i ne prolazi kroz zidove; povlačenje mišem okreće kameru, kotačić mijenja udaljenost) i **prvo lice**.
 - **Šetnja u prvom licu**: W A S D + miš, ili na mobitelu lijevi palac za hodanje i desni za gledanje; ne prolazi se kroz zidove, kroz vrata da. Položaj osobe vidi se uživo na tlocrtu. Brzi skok u prostoriju.
+- Traka „Idi u” lista se kotačićem miša ili povlačenjem; nakon odabira prostorije odmah se hoda tipkama (W A S D, strelice lijevo/desno okreću pogled), bez dodatnog klika u prikaz.
 
 **Zidovi prostorija**
 - Svaka prostorija ima svoju boju zidova i oblogu: pločice (bijele, metro, sive 30×60, zelene), drvena obloga, cigla, dekorativni beton ili tapeta – do 1,2 / 1,5 / 2,1 m ili cijeli zid, iznad obloge boja. Obloge ulaze u troškovnik.
@@ -77,11 +82,14 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 **Fasada i prozori**
 - Fasada: žbuka u boji, kamen, fasadna opeka, drvena obloga ili vidljivi beton; donji dio prizemlja posebno (cokl, kamen, opeka, beton – 30 cm, 50 cm, 1 m ili cijelo prizemlje); zabati i potkrovlje u drvu, kamenu, opeci ili žbuci.
 - Škure (grilje) i rolete na svakom prozoru i balkonskim vratima, u boji po izboru – u 3D-u se otvaraju i zatvaraju (E, klik, dvoklik). Prozori imaju vanjsku klupčicu s prepustom.
+- **Boja stolarije** za cijelu kuću (bijela, krem, siva, antracit, crna, tamni orah, zlatni hrast, tamno zelena) i posebno za pojedini prozor ili vrata.
+- Fasada je jednolika preko svih katova (međukatna ploča se ne vidi kao traka), a zabat je u ravnini zida.
 
 **Parcela i okolina**
 - Kuća stoji na parceli (automatski oko kuće ili zadane širine i dubine) s ograđenim travnjakom: drvena, metalna, žičana ograda, živica ili zid, s ulazom i prilazom do ulaznih vrata.
 - Ispred je ulica s pločnicima, rubnjacima, uličnom rasvjetom i drvoredom.
 - Okolina po izboru: **susjedstvo** (susjedne kuće sa svojim vrtovima), **selo** (polja, rijetke kuće, puno drveća) ili **grad** (stambene zgrade); u daljini brežuljci.
+- Susjedne kuće (i zgrade u gradu) mogu se isključiti – ostaju ulica, polja i drveće.
 - Na tlocrtu se vidi rub parcele, ulica i površina parcele.
 - **Teren s nagibom** (0–25 %, pada prema ulici, od ulice, lijevo ili desno): okolina, ulica, ograda i susjedi prate nagib, kuća stoji na ravnoj zaravni 1,5 m oko zidova s potpornim zidom prema višem i zidom zaravni prema nižem terenu; nagib se vidi i u presjeku.
 

@@ -11,6 +11,7 @@ import '../state/imported_catalog.dart';
 import '../state/retail_catalog.dart';
 import '../state/plan_controller.dart';
 import '../viewer/engine_bridge.dart';
+import 'common.dart';
 import 'web_files.dart';
 
 const shapeIcons = <String, IconData>{

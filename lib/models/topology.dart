@@ -52,6 +52,53 @@ List<double> edgeHalfThickness(Plan plan, List<String> ids) {
   ];
 }
 
+/// Obris prostorije po licima zidova (unutarnje mjere), bez kolinearnih točaka.
+List<Offset> roomInnerPolygon(Plan plan, Room r) {
+  final poly = plan.roomPolygon(r);
+  final n = poly.length;
+  if (n < 3) return poly;
+  final half = edgeHalfThickness(plan, r.nodeIds);
+  // za svaki brid: pomaknuti pravac (točka, smjer) prema unutra
+  final lines = <(Offset, Offset)>[];
+  for (var i = 0; i < n; i++) {
+    final a = poly[i], b = poly[(i + 1) % n];
+    final d = b - a;
+    final len = d.distance;
+    if (len < 1e-6) continue;
+    final u = d / len;
+    var nrm = Offset(-u.dy, u.dx);
+    if (!pointInPolygon((a + b) / 2 + nrm * 0.01, poly)) nrm = -nrm;
+    lines.add((a + nrm * half[i], u));
+  }
+  // spoji kolinearne
+  final merged = <(Offset, Offset)>[];
+  for (final l in lines) {
+    if (merged.isNotEmpty) {
+      final p = merged.last;
+      if (cross(p.$2, l.$2).abs() < 1e-6 && cross(p.$2, l.$1 - p.$1).abs() < 1e-4) continue;
+    }
+    merged.add(l);
+  }
+  if (merged.length > 2) {
+    final f = merged.first, l = merged.last;
+    if (cross(f.$2, l.$2).abs() < 1e-6 && cross(f.$2, l.$1 - f.$1).abs() < 1e-4) merged.removeLast();
+  }
+  final m = merged.length;
+  final out = <Offset>[];
+  for (var i = 0; i < m; i++) {
+    final (p1, d1) = merged[(i - 1 + m) % m];
+    final (p2, d2) = merged[i];
+    final den = cross(d1, d2);
+    if (den.abs() < 1e-9) {
+      out.add(p2);
+    } else {
+      final t = cross(p2 - p1, d2) / den;
+      out.add(p1 + d1 * t);
+    }
+  }
+  return out;
+}
+
 /// Neto (svijetla) površina prostorije – unutar lica zidova.
 double roomNetArea(Plan plan, Room r) =>
     offsetArea(plan.roomPolygon(r), edgeHalfThickness(plan, r.nodeIds), inward: true);

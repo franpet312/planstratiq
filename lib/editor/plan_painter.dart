@@ -34,6 +34,7 @@ class PlanPaintState {
     this.roomStart,
     this.roomEnd,
     this.measureA,
+    this.sectionA,
     this.measureB,
     this.calibA,
     this.placing,
@@ -44,7 +45,11 @@ class PlanPaintState {
     this.issues = const [],
     this.ceilingAt,
     this.usableArea,
+    this.dims = true,
   });
+
+  /// Detaljne kote: unutarnje mjere prostorija, lanci otvora i oznake širina/visina otvora.
+  final bool dims;
 
   /// Potkrovlje: svijetla visina kosog stropa u točki (null = nije potkrovlje).
   final double? Function(Offset)? ceilingAt;
@@ -76,6 +81,7 @@ class PlanPaintState {
   final Offset? roomStart;
   final Offset? roomEnd;
   final Offset? measureA;
+  final Offset? sectionA;
   final Offset? measureB;
   final Offset? calibA;
   final CatalogItem? placing;
@@ -119,6 +125,10 @@ class PlanPainter extends CustomPainter {
     _openings(canvas);
     if (!st.preview) {
       _exteriorDimensions(canvas);
+      if (st.dims) {
+        _roomDimensions(canvas);
+        _openingDimensions(canvas);
+      }
       _selectedWallDimension(canvas);
     }
     _roomLabels(canvas);
@@ -652,6 +662,140 @@ class PlanPainter extends CustomPainter {
     }
   }
 
+  /// Položaji oznaka „A” na krajevima crte presjeka (u px).
+  static List<Offset> sectionMarks(SectionLine sec, double scale, Offset pan) {
+    final a = sec.a * scale + pan, b = sec.b * scale + pan;
+    final d = b - a;
+    final l = d.distance;
+    if (l < 1) return [a, b];
+    final u = d / l;
+    return [a - u * 14, b + u * 14];
+  }
+
+  // crta presjeka A–A: debela na krajevima, crta-točka između, strelice u smjeru pogleda
+  void _sectionLine(Canvas canvas) {
+    if (st.preview) return;
+    if (st.tool == Tool.section && st.sectionA != null && st.cursor != null) {
+      final p = Paint()
+        ..color = Pal.accent
+        ..strokeWidth = 1.6;
+      canvas.drawLine(s(st.sectionA!), s(st.cursor!), p);
+      canvas.drawCircle(s(st.sectionA!), 4, p);
+    }
+    final sec = plan.section;
+    if (sec == null) return;
+    final a = s(sec.a), b = s(sec.b);
+    final d = b - a;
+    final l = d.distance;
+    if (l < 4) return;
+    final u = d / l;
+    final heavy = Paint()
+      ..color = Pal.ink
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.butt;
+    final thin = Paint()
+      ..color = Pal.ink
+      ..strokeWidth = 0.9;
+    final end = math.min(22.0, l / 4);
+    canvas.drawLine(a, a + u * end, heavy);
+    canvas.drawLine(b - u * end, b, heavy);
+    // crta-točka
+    var t = end + 4;
+    while (t < l - end - 4) {
+      final t2 = math.min(t + 14, l - end - 4);
+      canvas.drawLine(a + u * t, a + u * t2, thin);
+      t = t2 + 4;
+      if (t < l - end - 4) canvas.drawCircle(a + u * t, 0.9, Paint()..color = Pal.ink);
+      t += 4;
+    }
+    // strelice pogleda
+    final v = sec.view;
+    for (final p in [a + u * (end / 2), b - u * (end / 2)]) {
+      final tip = p + v * 16;
+      canvas.drawLine(p, tip, Paint()
+        ..color = Pal.ink
+        ..strokeWidth = 1.4);
+      final side = Offset(-v.dy, v.dx);
+      final path = Path()
+        ..moveTo(tip.dx + v.dx * 4, tip.dy + v.dy * 4)
+        ..lineTo(tip.dx - v.dx * 4 + side.dx * 4, tip.dy - v.dy * 4 + side.dy * 4)
+        ..lineTo(tip.dx - v.dx * 4 - side.dx * 4, tip.dy - v.dy * 4 - side.dy * 4)
+        ..close();
+      canvas.drawPath(path, Paint()..color = Pal.ink);
+    }
+    for (final m in sectionMarks(sec, scale, st.pan)) {
+      canvas.drawCircle(m, 10, Paint()..color = Colors.white);
+      canvas.drawCircle(m, 10, Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = Pal.ink);
+      _text(canvas, 'A', m, AppText.narrow(size: 12, weight: FontWeight.w700), halo: false);
+    }
+  }
+
+  // unutarnje mjere prostorija (po licima zidova), malo uvučeno od zida
+  void _roomDimensions(Canvas canvas) {
+    if (scale < 30) return;
+    const col = Color(0xFF5B6B7A);
+    for (final r in plan.rooms) {
+      final poly = roomInnerPolygon(plan, r);
+      final n = poly.length;
+      if (n < 3) continue;
+      for (var i = 0; i < n; i++) {
+        final a = poly[i], b = poly[(i + 1) % n];
+        final len = (b - a).distance;
+        if (len * scale < 55 || len < 0.3) continue;
+        final u = (b - a) / len;
+        var nrm = Offset(-u.dy, u.dx);
+        if (!pointInPolygon((a + b) / 2 + nrm * 0.02, poly)) nrm = -nrm;
+        // _dimLine crta prema „outward” – ovdje je to prema unutra
+        _dimLine(canvas, a, b, nrm, 11, fmtM(len), color: col, extension: false);
+      }
+    }
+  }
+
+  // lanac kota uz vanjske zidove (zid – otvor – zid) i oznake otvora š/v (cm), kod prozora i parapet
+  void _openingDimensions(Canvas canvas) {
+    if (scale < 30) return;
+    for (final w in plan.walls) {
+      final ops = plan.openings.where((o) => o.wallId == w.id).toList();
+      if (ops.isEmpty) continue;
+      final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+      final len = (b - a).distance;
+      if (len < 0.1) continue;
+      final u = (b - a) / len;
+      final info = _info[w.id];
+      final inward = info?.inward ?? Offset(-u.dy, u.dx);
+      if (info != null && info.sides == 1 && info.inward != null) {
+        final cuts = <double>[0, len];
+        for (final o in ops) {
+          cuts.add((o.t * len - o.width / 2).clamp(0, len).toDouble());
+          cuts.add((o.t * len + o.width / 2).clamp(0, len).toDouble());
+        }
+        cuts.sort();
+        for (var i = 0; i + 1 < cuts.length; i++) {
+          final s0 = cuts[i], s1 = cuts[i + 1];
+          if ((s1 - s0) < 0.05) continue;
+          _dimLine(canvas, a + u * s0, a + u * s1, -inward, w.thickness / 2 * scale + 9, fmtM(s1 - s0),
+              color: const Color(0xFF5B6B7A), extension: false);
+        }
+      }
+      for (final o in ops) {
+        if (o.type == OpeningType.passage) continue;
+        final c = a + u * (o.t * len);
+        final at = s(c) + inward * (w.thickness / 2 * scale + 12);
+        final txt = '${(o.width * 100).round()}/${(o.height * 100).round()}'
+            '${o.type == OpeningType.window ? '  p ${(o.sill * 100).round()}' : ''}';
+        var ang = math.atan2(u.dy, u.dx);
+        if (ang > math.pi / 2 + 0.01) ang -= math.pi;
+        if (ang < -math.pi / 2 - 0.01) ang += math.pi;
+        final tp = _layout(txt, AppText.narrow(size: 10, color: const Color(0xFF2F6FA8), weight: FontWeight.w600));
+        if (tp.width > o.width * scale * 1.9) continue;
+        _paintText(canvas, tp, at, angle: ang, halo: true);
+      }
+    }
+  }
+
   void _selectedWallDimension(Canvas canvas) {
     for (final w in plan.walls) {
       final sel = st.selection == Selection(SelKind.wall, w.id) || st.hover == Selection(SelKind.wall, w.id);
@@ -946,6 +1090,7 @@ class PlanPainter extends CustomPainter {
           halo: true);
       _text(canvas, fmtM2(wm * hm), r.center + const Offset(0, 9), AppText.narrow(size: 12, color: Pal.accentDeep), halo: true);
     }
+    _sectionLine(canvas);
     if (st.tool == Tool.measure && st.measureA != null) {
       final b = st.measureB ?? st.cursor;
       if (b != null) {

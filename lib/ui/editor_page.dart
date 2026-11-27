@@ -592,7 +592,7 @@ class _EditorPageState extends State<EditorPage> {
   Widget _editorArea() => Stack(children: [
         Positioned.fill(child: PlanEditor(key: editorKey, c: c, onEmptyAction: _emptyAction, zoom: zoom)),
         Positioned(left: 12, top: 12, child: _ToolDock(c: c, onCancel: () => editorKey.currentState?.cancelTool())),
-        Positioned(left: 12, bottom: 12, child: _ZoomControls(editorKey: editorKey, zoom: zoom)),
+        Positioned(left: 12, bottom: 12, child: _ZoomControls(editorKey: editorKey, zoom: zoom, c: c)),
         Positioned(bottom: 64, left: 72, right: 12, child: Center(child: _ToolHint(c: c))),
         if (c.plan.isEmpty && c.plan.image == null && c.tool == Tool.select)
           Positioned.fill(child: Center(child: _EmptyState(onAction: _emptyAction))),
@@ -725,6 +725,7 @@ class _ToolDock extends StatelessWidget {
         const Padding(padding: EdgeInsets.symmetric(vertical: 3), child: SizedBox(width: 24, child: Divider())),
         t(Tool.measure, Icons.straighten, 'Mjerenje udaljenosti  M'),
         t(Tool.note, Icons.sticky_note_2_outlined, 'Bilješka na tlocrtu  N'),
+        t(Tool.section, Icons.vertical_split_outlined, 'Presjek kuće: dvije točke  S'),
         if (c.plan.image != null) t(Tool.calibrate, Icons.photo_size_select_small, 'Mjerilo nacrta'),
       ]),
     );
@@ -748,6 +749,7 @@ class _ToolHint extends StatelessWidget {
       Tool.measure => 'Klikni dvije točke da izmjeriš udaljenost. Treći klik počinje novo mjerenje.',
       Tool.calibrate => 'Klikni dvije točke na nacrtu čiju stvarnu udaljenost znaš, npr. početak i kraj kotiranog zida.',
       Tool.note => 'Klikni na tlocrt gdje želiš bilješku i upiši tekst. Bilješku poslije možeš povući.',
+      Tool.section => 'Klikni dvije točke kroz kuću – nastane crta presjeka A–A i otvori se presjek. Poslije ga otvaraš klikom na oznaku A.',
       Tool.place => 'Klikni gdje želiš postaviti: ${c.placing?.name ?? ''}. Uz zid se sam okrene. Shift+klik postavlja više komada.',
     };
     if (text == null) return const SizedBox.shrink();
@@ -774,8 +776,9 @@ class _ToolHint extends StatelessWidget {
 }
 
 class _ZoomControls extends StatelessWidget {
-  const _ZoomControls({required this.editorKey, required this.zoom});
+  const _ZoomControls({required this.editorKey, required this.zoom, required this.c});
   final GlobalKey<PlanEditorState> editorKey;
+  final PlanController c;
   final ValueNotifier<double> zoom;
 
   @override
@@ -792,6 +795,12 @@ class _ZoomControls extends StatelessWidget {
         IconBtn(icon: Icons.remove, tooltip: 'Udalji  −', size: 32, onTap: () => ed?.zoomBy(1 / 1.25)),
         IconBtn(icon: Icons.add, tooltip: 'Približi  +', size: 32, onTap: () => ed?.zoomBy(1.25)),
         IconBtn(icon: Icons.fit_screen_outlined, tooltip: 'Cijeli tlocrt  0', size: 32, onTap: () => ed?.fit()),
+        IconBtn(
+            icon: Icons.straighten,
+            tooltip: c.showDims ? 'Sakrij detaljne kote' : 'Prikaži detaljne kote (prostorije, otvori)',
+            size: 32,
+            active: c.showDims,
+            onTap: () => c.setShowDims(!c.showDims)),
         const SizedBox(width: 8),
         Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(

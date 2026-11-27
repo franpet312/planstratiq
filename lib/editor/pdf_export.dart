@@ -13,6 +13,7 @@ import '../models/shopping.dart';
 import '../state/plan_controller.dart';
 import 'plan_export.dart';
 import 'plan_painter.dart';
+import 'section_painter.dart';
 
 /// Izvoz projekta u PDF: naslovnica, tlocrt svake etaže u mjerilu, popis prostorija i troškovnik.
 ///
@@ -30,12 +31,13 @@ class PdfOptions {
     this.rooms = true,
     this.costs = true,
     this.shopping = true,
+    this.section = true,
   });
   Paper paper;
 
   /// Nazivnik mjerila (50, 100, 200…); 0 = automatski najveće mjerilo koje stane.
   int scale;
-  bool cover, plans, rooms, costs, shopping;
+  bool cover, plans, rooms, costs, shopping, section;
 }
 
 @JS('psqPdf')
@@ -264,6 +266,7 @@ class _Pdf {
     y += 6;
     final toc = <String>[
       if (o.plans) for (final l in c.plan.levels) 'Tlocrt – ${l.name}',
+      if (o.section && c.plan.section != null) 'Presjek A–A',
       if (o.rooms) 'Popis prostorija',
       if (o.costs) 'Okvirni troškovnik',
       if (o.shopping) 'Popis za kupnju',
@@ -386,10 +389,30 @@ class _Pdf {
         planPage(i);
       }
     }
+    if (o.section && c.plan.section != null) sectionPage();
     if (o.rooms) roomsPages();
     if (o.costs) costPages();
     if (o.shopping) shoppingPages();
     if (pages.isEmpty) coverPage();
+  }
+
+  // ---------------------------------------------------------------- presjek
+  void sectionPage() {
+    final sec = c.plan.section!;
+    final g = buildSection(c.plan, sec, c.roofShape);
+    final sw = g.sMax - g.sMin, zh = g.zMax - g.zMin;
+    final size = landscape;
+    final aw = size.$1 - 15 - 10 - 12 - 24, ah = size.$2 - 20 - 18 - 12 - 12;
+    final den = o.scale != 0 ? o.scale : _standardScales.firstWhere((d) => sw * 1000 / d <= aw && zh * 1000 / d <= ah, orElse: () => 1000);
+    final p = newPage(size, 'Presjek A–A');
+    final area = frame(p, 'Presjek A–A', scaleLabel: '1:$den');
+    final cv = p.canvas;
+    final areaPx = Rect.fromLTRB(area.left * _vpm, area.top * _vpm, area.right * _vpm, area.bottom * _vpm);
+    cv.save();
+    cv.clipRect(area);
+    cv.scale(1 / _vpm);
+    paintSection(cv, areaPx, g, pxPerM: 1000 / den * _vpm);
+    cv.restore();
   }
 
   void shoppingPages() {

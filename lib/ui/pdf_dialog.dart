@@ -80,6 +80,8 @@ Future<void> showPdfDialog(BuildContext context, PlanController c) async {
             check('Naslovnica', '3D prikaz, ključne površine i sadržaj', o.cover, (v) => o.cover = v),
             check('Tlocrti', c.plan.levels.length > 1 ? 'Svaka etaža na svom listu, s kotama' : 'S kotama i grafičkim mjerilom', o.plans,
                 (v) => o.plans = v),
+            if (c.plan.section != null)
+              check('Presjek A–A', 'Vertikalni presjek po crti s tlocrta, s kotama visina', o.section, (v) => o.section = v),
             check('Popis prostorija', 'Neto površine, opsezi i podovi', o.rooms, (v) => o.rooms = v),
             check('Okvirni troškovnik', 'Podovi, bojanje i namještaj', o.costs, (v) => o.costs = v),
             check('Popis za kupnju', 'Namještaj po trgovinama, s količinama', o.shopping, (v) => o.shopping = v),
@@ -98,7 +100,7 @@ Future<void> showPdfDialog(BuildContext context, PlanController c) async {
         actions: [
           TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('Odustani')),
           FilledButton.icon(
-            onPressed: busy || !(o.cover || o.plans || o.rooms || o.costs || o.shopping) ? null : run,
+            onPressed: busy || !(o.cover || o.plans || o.section || o.rooms || o.costs || o.shopping) ? null : run,
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
             label: const Text('Izradi PDF'),
           ),

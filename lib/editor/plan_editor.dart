@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app/theme.dart';
+import '../ui/section_dialog.dart';
 import '../models/catalog.dart';
 import '../models/geometry.dart';
 import '../models/plan.dart';
@@ -61,6 +62,7 @@ class PlanEditorState extends State<PlanEditor> {
   Offset? roomStart;
   Offset? roomEnd;
   Offset? measureA;
+  Offset? sectionA;
   Offset? measureB;
   Offset? calibA;
   String typed = '';
@@ -146,6 +148,7 @@ class PlanEditorState extends State<PlanEditor> {
     roomEnd = null;
     measureA = null;
     measureB = null;
+    sectionA = null;
     calibA = null;
     typed = '';
     guides = [];
@@ -321,6 +324,19 @@ class PlanEditorState extends State<PlanEditor> {
         } else {
           measureB = p;
         }
+      case Tool.section:
+        final p = _snap(w);
+        if (sectionA == null) {
+          sectionA = p;
+        } else if ((p - sectionA!).distance > 0.3) {
+          final a = sectionA!;
+          sectionA = null;
+          c.mutate(() => plan.section = SectionLine(a, p));
+          c.setTool(Tool.select);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) showSectionDialog(context, c);
+          });
+        }
       case Tool.calibrate:
         _calibClick(w);
       case Tool.note:
@@ -394,6 +410,16 @@ class PlanEditorState extends State<PlanEditor> {
   }
 
   void _selectDown(PointerDownEvent e, Offset w) {
+    // oznake presjeka A na krajevima crte otvaraju presjek
+    final sec = plan.section;
+    if (sec != null) {
+      for (final q in PlanPainter.sectionMarks(sec, scale, pan)) {
+        if ((q - e.localPosition).distance < 14) {
+          showSectionDialog(context, c);
+          return;
+        }
+      }
+    }
     // ručice odabranog objekta: rotacija i promjena veličine (kutovi)
     if (c.selection.kind == SelKind.item) {
       final it = plan.itemById(c.selection.id);
@@ -748,6 +774,7 @@ class PlanEditorState extends State<PlanEditor> {
         LogicalKeyboardKey.keyP => Tool.window,
         LogicalKeyboardKey.keyM => Tool.measure,
         LogicalKeyboardKey.keyN => Tool.note,
+        LogicalKeyboardKey.keyS => Tool.section,
         _ => null,
       };
       if (t != null) {
@@ -822,6 +849,7 @@ class PlanEditorState extends State<PlanEditor> {
           roomEnd: roomEnd,
           measureA: measureA,
           measureB: measureB,
+          sectionA: sectionA,
           calibA: calibA,
           placing: c.tool == Tool.place ? c.placing : null,
           guides: guides,
@@ -831,6 +859,7 @@ class PlanEditorState extends State<PlanEditor> {
           issues: c.showIssues ? c.issues : const [],
           ceilingAt: c.isAttic ? c.ceilingAt : null,
           usableArea: c.isAttic ? c.usableArea : null,
+          dims: c.showDims,
         );
         return DragTarget<CatalogItem>(
           onMove: (d) {

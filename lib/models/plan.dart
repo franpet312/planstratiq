@@ -481,6 +481,9 @@ class Plan {
   /// Parcela i okolina kuće.
   Site site = Site();
 
+  /// Crta presjeka A–A na tlocrtu (zajednička svim etažama), ili null.
+  SectionLine? section;
+
   /// Toplinska izolacija kuće (za okvirnu potrebnu snagu grijanja): new | good | average | poor.
   String insulation = 'good';
 
@@ -559,6 +562,7 @@ class Plan {
         'roof': roof,
         'roofStyle': {'type': roofType, 'pitch': roofPitch, 'overhang': roofOverhang, 'color': roofColor, 'turn': roofTurn},
         'site': site.toJson(),
+        if (section != null) 'section': section!.toJson(),
         'insulation': insulation,
         'climate': climate,
         'heatSource': heatSource,
@@ -593,6 +597,7 @@ class Plan {
     if (j['climate'] is String) plan.climate = j['climate'] as String;
     if (j['heatSource'] is String) plan.heatSource = j['heatSource'] as String;
     if (j['site'] is Map) plan.site = Site.fromJson(Map<String, dynamic>.from(j['site'] as Map));
+    if (j['section'] is Map) plan.section = SectionLine.fromJson(Map<String, dynamic>.from(j['section'] as Map));
     return plan;
   }
 
@@ -672,6 +677,26 @@ List<(String, String)> openingStyles(OpeningType t) => switch (t) {
 
 
 /// Bilješka na tlocrtu (npr. „polica po mjeri”, „pitati majstora za odvod”).
+/// Crta presjeka: od [a] do [b]; pogled je prema lijevoj strani smjera a→b (ili desnoj ako je [flip]).
+class SectionLine {
+  SectionLine(this.a, this.b, {this.flip = false});
+  Offset a, b;
+  bool flip;
+
+  /// Smjer pogleda (jedinični vektor u tlocrtu).
+  Offset get view {
+    final d = b - a;
+    final l = d.distance;
+    if (l < 1e-9) return const Offset(0, 1);
+    final n = Offset(d.dy / l, -d.dx / l);
+    return flip ? -n : n;
+  }
+
+  Map<String, dynamic> toJson() => {'ax': a.dx, 'ay': a.dy, 'bx': b.dx, 'by': b.dy, 'flip': flip};
+  factory SectionLine.fromJson(Map<String, dynamic> j) =>
+      SectionLine(Offset(_d(j['ax'], 0), _d(j['ay'], 0)), Offset(_d(j['bx'], 1), _d(j['by'], 0)), flip: j['flip'] == true);
+}
+
 class Note {
   Note({required this.id, required this.pos, required this.text, this.color = 0xFFFFE58A});
   final String id;

@@ -21,7 +21,7 @@ import '../models/roof.dart';
 import '../models/room_walls.dart';
 import '../models/topology.dart';
 
-enum Tool { select, wall, room, door, window, balcony, passage, measure, calibrate, place, note }
+enum Tool { select, wall, room, door, window, balcony, passage, measure, calibrate, place, note, section }
 
 extension ToolX on Tool {
   OpeningType? get openingType => switch (this) {
@@ -1690,6 +1690,13 @@ class PlanController extends ChangeNotifier {
     return m;
   }
   List<ClearanceIssue>? _issues;
+
+  /// Detaljne kote na tlocrtu (unutarnje mjere, otvori).
+  bool showDims = true;
+  void setShowDims(bool v) {
+    showDims = v;
+    notifyListeners();
+  }
 
   /// Prikaži upozorenja o prolazima na tlocrtu.
   bool showIssues = true;

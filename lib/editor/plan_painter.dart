@@ -1582,6 +1582,60 @@ class ItemSymbols {
       case 'rug':
         c.drawRect(r, fillOf(color, 0.45));
         c.drawRect(r.deflate(m(0.06)), thin);
+      case 'terrace':
+      case 'terrace_wood':
+      case 'terrace_tile':
+        c.drawRect(r, fillOf(color, 0.35));
+        c.drawRect(r, line);
+        // fuge ploča / daske
+        final step = shape == 'terrace_wood' ? math.max(3.0, w / 20) : math.max(6.0, w / 8);
+        for (var x = r.left + step; x < r.right - 1; x += step) {
+          ln(Offset(x, r.top), Offset(x, r.bottom), thin);
+        }
+        if (shape != 'terrace_wood') {
+          for (var y = r.top + step; y < r.bottom - 1; y += step) {
+            ln(Offset(r.left, y), Offset(r.right, y), thin);
+          }
+        }
+      case 'terrace_roof':
+      case 'terrace_glass':
+      case 'pergola':
+        // nadstrešnica je iznad presjeka: isprekidani obris, stupovi sprijeda
+        final tp = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Pal.ink;
+        for (final (a, b) in [(r.topLeft, r.topRight), (r.topRight, r.bottomRight), (r.bottomRight, r.bottomLeft), (r.bottomLeft, r.topLeft)]) {
+          final len = (b - a).distance;
+          final nn = math.max(2, (len / 6).floor());
+          for (var i = 0; i < nn; i += 2) {
+            c.drawLine(Offset.lerp(a, b, i / nn)!, Offset.lerp(a, b, math.min(1.0, (i + 1) / nn))!, tp);
+          }
+        }
+        final ps = math.max(3.0, math.min(w, d) * 0.05);
+        for (final x in [r.left + ps, r.right - ps]) {
+          c.drawRect(Rect.fromCenter(center: Offset(x, r.bottom - ps), width: ps * 1.6, height: ps * 1.6), Paint()..color = Pal.ink);
+        }
+        if (shape == 'pergola') {
+          for (var x = r.left + 6; x < r.right; x += math.max(6.0, w / 10)) {
+            ln(Offset(x, r.top), Offset(x, r.bottom), thin);
+          }
+        }
+      case 'chimney':
+        // zidani dimnjak: puni okvir i šrafirana dimovodna cijev
+        box(r, 1);
+        final inner = r.deflate(math.min(w, d) * 0.22);
+        c.drawRect(inner, line);
+        c.save();
+        c.clipRect(inner);
+        for (var x = inner.left - inner.height; x < inner.right; x += 3) {
+          c.drawLine(Offset(x, inner.bottom), Offset(x + inner.height, inner.top), thin);
+        }
+        c.restore();
+      case 'fireplace_modern':
+        box(r, 1);
+        c.drawRect(Rect.fromLTRB(r.left + w * 0.1, r.bottom - d * 0.45, r.right - w * 0.1, r.bottom), line);
+        ln(Offset(r.left + w * 0.1, r.bottom - d * 0.2), Offset(r.right - w * 0.1, r.bottom - d * 0.2), thin);
       case 'fireplace':
         box(r, 1);
         final p = Path()

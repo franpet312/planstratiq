@@ -559,8 +559,8 @@ class PlanController extends ChangeNotifier {
   PlacedItem placeItemSmart(CatalogItem c, Offset p) {
     var rot = 0.0;
     var pos = p;
-    if (balconyShapes.contains(c.shape)) {
-      // balkon se prisloni uz vanjsku stranu najbližeg zida
+    if (balconyShapes.contains(c.shape) || terraceShapes.contains(c.shape) || terraceRoofShapes.contains(c.shape)) {
+      // balkon/terasa se prisloni uz vanjsku stranu najbližeg zida
       final w = wallNear(p, tol: c.d + 1.2);
       if (w != null) {
         final (q, n) = _outsideOf(w, p);
@@ -662,6 +662,39 @@ class PlanController extends ChangeNotifier {
       out = it;
     });
     return out;
+  }
+
+  /// Terasa uz vanjski zid (ispred vrata ako ih ima), po želji s nadstrešnicom ili pergolom iste veličine.
+  void addTerrace(String wallId, {String familyId = 'terasa_kamen', String? roofFamily}) {
+    final w = plan.wallById(wallId);
+    if (w == null) return;
+    mutate(() {
+      final a = plan.nodePos(w.a), b = plan.nodePos(w.b);
+      final len = (b - a).distance;
+      if (len < 1.5) return;
+      final ops = plan.openings.where((o) => o.wallId == w.id).toList();
+      final door = ops.where((o) => o.type == OpeningType.balcony || o.type == OpeningType.door).firstOrNull;
+      final t = door?.t ?? 0.5;
+      final model = catalogModels.firstWhere((m) => m.family.id == familyId);
+      final base = model.variants[model.variants.length ~/ model.family.sizes.length]; // druga veličina
+      final width = math.min(len, math.max(base.w, (door?.width ?? 1.6) + 2.0)).clamp(2.0, 8.0).toDouble();
+      final along = a + (b - a) * t;
+      final (q, n) = _outsideOf(w, along + const Offset(0.001, 0.001));
+      final depth = base.d;
+      final rot = math.atan2(-n.dx, n.dy);
+      final pos = q + n * (w.thickness / 2 + depth / 2);
+      final it = placeItem(base, pos, rotation: rot);
+      it.w = roundTo(width, 0.05);
+      it.name = '${model.family.name} ${(it.w * 100).round()} × ${(depth * 100).round()}';
+      if (roofFamily != null) {
+        final rm = catalogModels.firstWhere((m) => m.family.id == roofFamily);
+        final rv = rm.variants[rm.variants.length ~/ rm.family.sizes.length];
+        final r = placeItem(rv, pos, rotation: rot);
+        r.w = it.w;
+        r.d = depth;
+        r.name = '${rm.family.name} ${(r.w * 100).round()} × ${(depth * 100).round()}';
+      }
+    });
   }
 
   void setNodePos(String id, Offset p) => plan.nodes[id]?.pos = p;

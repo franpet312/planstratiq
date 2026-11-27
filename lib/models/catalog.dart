@@ -176,4 +176,4 @@ const List<CatalogItem> legacyCatalog = [
 
 
 /// Oblici koji leže na podu (ne zauzimaju prostor, imaju niži prioritet odabira).
-const floorShapes = {'rug', 'rug_round', 'deck', 'pool', 'path', 'balcony', 'balcony_rail', 'balcony_wall', 'floor_drain', 'manhole'};
+const floorShapes = {'rug', 'rug_round', 'deck', 'pool', 'path', 'balcony', 'balcony_rail', 'balcony_wall', 'floor_drain', 'manhole', 'terrace', 'terrace_wood', 'terrace_tile'};

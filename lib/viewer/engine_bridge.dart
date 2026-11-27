@@ -203,6 +203,8 @@ class Engine3D {
         h = plan.baseHeight;
       }
     }
+    // podrum je ispod terena: vanjski zidovi su beton (ako nije odabrana druga donja obloga)
+    if (l.elevation < -0.5 && base == 'none') return {'hi': hi, 'hiColor': hiColor, 'lo': 'concrete', 'loColor': null, 'h': 99};
     final baseColor = base == 'plaster' ? _darken(plan.facadeColor, 0.25) : null;
     return {'hi': hi, 'hiColor': hiColor, 'lo': base == 'none' ? hi : base, 'loColor': baseColor ?? (base == 'none' ? hiColor : null), 'h': h};
   }

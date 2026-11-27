@@ -231,7 +231,9 @@ const families = <Family>[
   Family(id: 'el_lan', name: 'Mrežna utičnica (LAN)', category: catElectric, shape: 'lan_socket', sizes: [(0.08, 0.05, 0.08)], price: 45, colors: _elec, styled: false),
   Family(id: 'el_svjetlo', name: 'Rasvjetno mjesto (strop)', category: catElectric, shape: 'light_point', sizes: [(0.12, 0.12, 0.04)], price: 40, colors: _elec, styled: false),
   Family(id: 'stolna_lampa', name: 'Stolna lampa', category: catLight, shape: 'table_lamp', sizes: [(0.3, 0.3, 0.5), (0.4, 0.4, 0.62)], price: 35, colors: _shade, styled: false),
-  Family(id: 'kamin', name: 'Kamin', category: catLiving, shape: 'fireplace', sizes: [(1.0, 0.45, 1.0), (1.2, 0.5, 1.1), (1.6, 0.5, 1.1)], price: 1500, colors: _stone, styled: false),
+  Family(id: 'kamin', name: 'Kamin, klasični (kameni)', category: catLiving, shape: 'fireplace', sizes: [(1.0, 0.45, 1.0), (1.2, 0.5, 1.1), (1.6, 0.5, 1.1)], price: 1500, colors: _stone, styled: false),
+  Family(id: 'kamin_moderni', name: 'Kamin, ugradbeni moderni', category: catLiving, shape: 'fireplace_modern', sizes: [(1.4, 0.5, 1.2), (1.8, 0.55, 1.2), (2.4, 0.6, 1.2)], price: 3200, colors: const [NamedColor('bijela žbuka', 0xFFEEEBE5), NamedColor('siva', 0xFF8C8F8A), NamedColor('antracit', 0xFF3A3D40)], styled: false),
+  Family(id: 'dimnjak', name: 'Dimnjak, zidani (kroz katove i krov)', category: catHeating, shape: 'chimney', sizes: [(0.45, 0.45, 2.6), (0.6, 0.45, 2.6), (0.75, 0.45, 2.6)], price: 900, colors: const [NamedColor('žbuka', 0xFFEEEBE5), NamedColor('opeka', 0xFFB5654A)], styled: false),
   Family(id: 'biljka', name: 'Sobna biljka', category: catLiving, shape: 'plant', sizes: [(0.4, 0.4, 0.8), (0.5, 0.5, 1.2), (0.7, 0.7, 1.7)], price: 40, colors: _green, styled: false),
 
   // ---------------------------------------------------------------- spavaća
@@ -298,6 +300,12 @@ const families = <Family>[
   Family(id: 'rostilj', name: 'Roštilj', category: catGarden, shape: 'grill', sizes: [(0.8, 0.5, 1.05), (1.2, 0.6, 1.1), (1.5, 0.65, 1.15)], price: 300, colors: _appliance, zone: _e, styled: false),
   Family(id: 'bazen', name: 'Bazen', category: catGarden, shape: 'pool', sizes: [(5, 3, 0.3), (6, 3, 0.3), (8, 4, 0.3), (10, 5, 0.3)], price: 12000, colors: _pool, zone: _e, styled: false),
   Family(id: 'terasa', name: 'Terasa od dasaka', category: catGarden, shape: 'deck', sizes: [(3, 2, 0.12), (4, 3, 0.12), (5, 4, 0.12), (6, 4, 0.12)], price: 1000, colors: _wood, zone: _e, styled: false),
+  Family(id: 'terasa_kamen', name: 'Terasa, kamene ploče', category: catGarden, shape: 'terrace', sizes: [(3.0, 2.5, 0.03), (4.0, 3.0, 0.03), (5.0, 3.5, 0.03), (6.0, 4.0, 0.03)], price: 2200, colors: _stone, zone: _e, styled: false),
+  Family(id: 'terasa_drvo', name: 'Terasa, drveni pod', category: catGarden, shape: 'terrace_wood', sizes: [(3.0, 2.5, 0.05), (4.0, 3.0, 0.05), (5.0, 3.5, 0.05), (6.0, 4.0, 0.05)], price: 2600, colors: _wood, zone: _e, styled: false),
+  Family(id: 'terasa_plocice', name: 'Terasa, vanjske pločice', category: catGarden, shape: 'terrace_tile', sizes: [(3.0, 2.5, 0.03), (4.0, 3.0, 0.03), (5.0, 3.5, 0.03), (6.0, 4.0, 0.03)], price: 2400, colors: _stone, zone: _e, styled: false),
+  Family(id: 'nadstresnica', name: 'Natkrivena terasa (crijep)', category: catGarden, shape: 'terrace_roof', sizes: [(3.0, 2.5, 2.7), (4.0, 3.0, 2.7), (5.0, 3.5, 2.7), (6.0, 4.0, 2.7)], price: 3800, colors: _wood, zone: _e, styled: false),
+  Family(id: 'nadstresnica_staklo', name: 'Natkrivena terasa (staklo)', category: catGarden, shape: 'terrace_glass', sizes: [(3.0, 2.5, 2.7), (4.0, 3.0, 2.7), (5.0, 3.5, 2.7), (6.0, 4.0, 2.7)], price: 4500, colors: _lightMetal, zone: _e, styled: false),
+  Family(id: 'pergola', name: 'Pergola (drvene letvice)', category: catGarden, shape: 'pergola', sizes: [(3.0, 2.5, 2.7), (4.0, 3.0, 2.7), (5.0, 3.5, 2.7), (6.0, 4.0, 2.7)], price: 2100, colors: _wood, zone: _e, styled: false),
   Family(id: 'balkon', name: 'Balkon, staklena ograda', category: catGarden, shape: 'balcony', sizes: [(2.0, 1.2, 1.0), (3.0, 1.5, 1.0), (4.0, 1.8, 1.0), (5.0, 2.0, 1.0)], price: 2400, colors: _stone, zone: _e, styled: false),
   Family(id: 'balkon_metal', name: 'Balkon, metalna ograda', category: catGarden, shape: 'balcony_rail', sizes: [(2.0, 1.2, 1.0), (3.0, 1.5, 1.0), (4.0, 1.8, 1.0), (5.0, 2.0, 1.0)], price: 1800, colors: _stone, zone: _e, styled: false),
   Family(id: 'balkon_zid', name: 'Balkon, zidana ograda', category: catGarden, shape: 'balcony_wall', sizes: [(2.0, 1.2, 1.0), (3.0, 1.5, 1.0), (4.0, 1.8, 1.0), (5.0, 2.0, 1.0)], price: 2000, colors: _stone, zone: _e, styled: false),

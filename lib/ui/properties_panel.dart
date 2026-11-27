@@ -129,6 +129,25 @@ class PropertiesPanel extends StatelessWidget {
               label: Text(label),
             ),
         ]),
+        const SectionTitle('Terasa'),
+        Text('Terasa u razini poda uz ovaj zid (ispred vrata ako ih ima). Nadstrešnica ili pergola dodaju se iste veličine.',
+            style: AppText.ui(size: 12, color: Pal.muted, height: 1.35)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final (fam, roof, label) in const [
+            ('terasa_kamen', null, 'Kamene ploče'),
+            ('terasa_drvo', null, 'Drveni pod'),
+            ('terasa_plocice', null, 'Pločice'),
+            ('terasa_kamen', 'nadstresnica', 'Natkrivena (crijep)'),
+            ('terasa_plocice', 'nadstresnica_staklo', 'Natkrivena (staklo)'),
+            ('terasa_drvo', 'pergola', 'S pergolom'),
+          ])
+            OutlinedButton.icon(
+              onPressed: () => c.addTerrace(w.id, familyId: fam, roofFamily: roof),
+              icon: Icon(roof == null ? Icons.deck_outlined : Icons.roofing_outlined, size: 18),
+              label: Text(label),
+            ),
+        ]),
       ],
     ];
   }

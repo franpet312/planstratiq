@@ -598,6 +598,42 @@ function buildItem(it, g, loader) {
     part(pv, 'ry', -dir * open);
     return pv;
   };
+  // ograda stubišta: stupići na točkama (gornja ploha gazišta) i rukohvat 90 cm iznad
+  const railing = (pts, c = 0x3a3a3a, everyN = 1) => {
+    const top = pts.map((p) => new THREE.Vector3(p.x, p.y + 0.9, p.z));
+    pts.forEach((p, i) => {
+      if (i % everyN && i !== pts.length - 1) return;
+      cyl(0.012, 0.012, 0.9, p.x, p.y + 0.45, p.z, c, 6, { metalness: 0.6, roughness: 0.35 });
+    });
+    for (let i = 1; i < top.length; i++) {
+      const a = top[i - 1], b2 = top[i];
+      const len = a.distanceTo(b2);
+      if (len < 0.01) continue;
+      const rr = cyl(0.022, 0.022, len, (a.x + b2.x) / 2, (a.y + b2.y) / 2, (a.z + b2.z) / 2, 0x6b4a33, 8, { roughness: 0.5 });
+      rr.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b2.clone().sub(a).normalize());
+    }
+  };
+  // mekani (zaobljeni) kvadar: jastuci, presvlake, madraci – rubovi zaobljeni polumjerom r
+  const soft = (w, h, d, x, y, z, c = color, r = 0.035, opts = { roughness: 1 }) => {
+    r = Math.min(r, w / 2 - 0.002, h / 2 - 0.002, d / 2 - 0.002);
+    if (r < 0.004) return b(w, h, d, x, y, z, c, opts);
+    const iw = w - 2 * r, ih = h - 2 * r;
+    const sh = new THREE.Shape();
+    sh.moveTo(-iw / 2, -ih / 2);
+    sh.lineTo(iw / 2, -ih / 2);
+    sh.lineTo(iw / 2, ih / 2);
+    sh.lineTo(-iw / 2, ih / 2);
+    sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: Math.max(0.001, d - 2 * r), bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: 3, curveSegments: 4 });
+    geo.translate(0, 0, -(d - 2 * r) / 2);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat(c, opts));
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    tgt.add(m);
+    return m;
+  };
   // šuplji korpus (stranice, strop, dno, leđa) – da se pri otvaranju vidi unutrašnjost
   const carcass = (w, h, d, c = color, inC = inside) => {
     const t = 0.02;
@@ -668,14 +704,27 @@ function buildItem(it, g, loader) {
       if (it.shape === 'bed' && it.legs) lift(0.12, W - 0.1, D - 0.1);
       const levels = it.shape === 'bunk' ? [0, 1.1] : [0];
       for (const y0 of levels) {
-        b(W, 0.3, D, 0, y0 + 0.15, 0);
-        b(W - 0.06, 0.2, D - 0.12, 0, y0 + 0.4, 0.04, 0xf4f1ea, { roughness: 1 });
-        b(W - 0.08, 0.06, D * 0.58, 0, y0 + 0.53, D * 0.2, lighter(color, 0.55), { roughness: 1 });
+        // okvir kreveta, madrac, pokrivač s prebačenim rubom, jastuci
+        soft(W, 0.28, D, 0, y0 + 0.14, 0, color, 0.03, { roughness: 0.8 });
+        soft(W - 0.06, 0.22, D - 0.12, 0, y0 + 0.39, 0.04, 0xf4f1ea, 0.06);
+        const duvet = lighter(color, 0.55);
+        soft(W - 0.02, 0.08, D * 0.62, 0, y0 + 0.5, D * 0.18, duvet, 0.04);
+        soft(W - 0.01, 0.03, D * 0.18, 0, y0 + 0.535, -D * 0.1, lighter(duvet, 0.35), 0.015); // preklopljeni rub
+        for (const sx of [-1, 1]) soft(0.04, 0.32, D * 0.62, sx * (W / 2 - 0.005), y0 + 0.4, D * 0.18, duvet, 0.02); // pokrivač pada preko ruba
         const pw = Math.min(0.62, W * 0.42);
-        for (const sx of W > 1.2 ? [-1, 1] : [0]) b(pw, 0.13, 0.38, sx * W * 0.23, y0 + 0.57, -D / 2 + 0.32, 0xffffff, { roughness: 1 });
+        for (const sx of W > 1.2 ? [-1, 1] : [0]) {
+          const pil = soft(pw, 0.14, 0.4, sx * W * 0.23, y0 + 0.57, -D / 2 + 0.33, 0xffffff, 0.06);
+          pil.rotation.x = -0.25;
+        }
+        if (W > 1.2) soft(W * 0.3, 0.12, 0.12, 0, y0 + 0.6, -D / 2 + 0.5, lighter(color, 0.2), 0.05); // ukrasni jastuk
       }
       const hb = it.shape === 'bunk' ? H : Math.min(H, 1.1);
-      b(W, hb, 0.08, 0, hb / 2, -D / 2 + 0.04);
+      if (it.shape === 'bunk') b(W, hb, 0.08, 0, hb / 2, -D / 2 + 0.04);
+      else {
+        // tapecirano uzglavlje s kopčama
+        soft(W + 0.04, hb, 0.1, 0, hb / 2, -D / 2 + 0.05, darker(color, 0.05), 0.04);
+        for (let x = -W / 2 + 0.25; x < W / 2 - 0.15; x += 0.3) for (const yy of [hb * 0.62, hb * 0.82]) cyl(0.012, 0.012, 0.01, x, yy, -D / 2 + 0.103, darker(color, 0.3), 8).rotation.x = Math.PI / 2;
+      }
       if (it.shape === 'bunk') for (const sx of [-1, 1]) b(0.06, H, 0.06, sx * (W / 2 - 0.03), H / 2, D / 2 - 0.03);
       break;
     }
@@ -683,28 +732,44 @@ function buildItem(it, g, loader) {
       const lh = lift(it.legs ? 0.1 : 0.0001, W - 0.1, D - 0.15);
       const Hs = H - lh;
       const sh = 0.2;
-      b(W, sh, D, 0, sh / 2, 0, darker(color, 0.12));
+      soft(W, sh, D, 0, sh / 2, 0, darker(color, 0.12), 0.03);
       const arm = Math.min(0.18, W * 0.2);
       const seatW = W - arm * 2;
       const n = Math.max(1, Math.round(seatW / 0.7));
+      const cw = seatW / n;
+      // leđa (okvir), sjedeći i naslonski jastuci
+      soft(W, Hs - sh, 0.16, 0, sh + (Hs - sh) / 2, -D / 2 + 0.08, color, 0.05);
       for (let i = 0; i < n; i++) {
-        const cw = seatW / n;
-        b(cw - 0.015, 0.17, D - 0.26, -seatW / 2 + cw * (i + 0.5), sh + 0.085, 0.11, lighter(color, 0.08), { roughness: 1 });
+        const x = -seatW / 2 + cw * (i + 0.5);
+        soft(cw - 0.012, 0.17, D - 0.3, x, sh + 0.085, 0.12, lighter(color, 0.08), 0.05);
+        const back = soft(cw - 0.02, Math.min(0.45, Hs - sh - 0.15), 0.17, x, sh + 0.17 + Math.min(0.45, Hs - sh - 0.15) / 2, -D / 2 + 0.24, lighter(color, 0.04), 0.07);
+        back.rotation.x = -0.12;
       }
-      b(W, Hs - sh, 0.22, 0, sh + (Hs - sh) / 2, -D / 2 + 0.11);
-      for (const sx of [-1, 1]) b(arm, Math.min(0.62, Hs - 0.18), D, sx * (W / 2 - arm / 2), Math.min(0.62, Hs - 0.18) / 2, 0);
+      for (const sx of [-1, 1]) soft(arm, Math.min(0.62, Hs - 0.18), D, sx * (W / 2 - arm / 2), Math.min(0.62, Hs - 0.18) / 2, 0, color, 0.06);
+      // ukrasni jastuci uz naslone za ruke
+      if (seatW > 1.0) {
+        for (const sx of [-1, 1]) {
+          const pc = soft(0.4, 0.4, 0.12, sx * (seatW / 2 - 0.25), sh + 0.38, -D / 2 + 0.38, lighter(color, 0.35), 0.06);
+          pc.rotation.set(-0.3, sx * 0.25, sx * 0.1);
+        }
+      }
       break;
     }
     case 'sofa_corner': {
       const lh = lift(it.legs ? 0.1 : 0.0001, W - 0.1, D - 0.1);
       const sd = Math.min(0.95, D), cw = Math.min(0.95, W), sh = 0.22;
-      b(W, sh, sd, 0, sh / 2, -D / 2 + sd / 2, darker(color, 0.12));
-      b(cw, sh, D - sd, W / 2 - cw / 2, sh / 2, -D / 2 + sd + (D - sd) / 2, darker(color, 0.12));
-      b(W - 0.4, 0.17, sd - 0.24, -0.1, sh + 0.085, -D / 2 + 0.22 + (sd - 0.24) / 2, lighter(color, 0.08), { roughness: 1 });
-      b(cw - 0.24, 0.17, D - sd, W / 2 - 0.22 - (cw - 0.24) / 2, sh + 0.085, -D / 2 + sd + (D - sd) / 2, lighter(color, 0.08), { roughness: 1 });
-      b(W, H - lh - sh, 0.22, 0, sh + (H - lh - sh) / 2, -D / 2 + 0.11);
-      b(0.22, H - lh - sh, D, W / 2 - 0.11, sh + (H - lh - sh) / 2, 0);
-      b(0.18, 0.5, sd, -W / 2 + 0.09, 0.25, -D / 2 + sd / 2);
+      soft(W, sh, sd, 0, sh / 2, -D / 2 + sd / 2, darker(color, 0.12), 0.03);
+      soft(cw, sh, D - sd, W / 2 - cw / 2, sh / 2, -D / 2 + sd + (D - sd) / 2, darker(color, 0.12), 0.03);
+      const nS = Math.max(1, Math.round((W - 0.4) / 0.7)), sw = (W - 0.4) / nS;
+      for (let i = 0; i < nS; i++) soft(sw - 0.012, 0.17, sd - 0.24, -W / 2 + 0.18 + sw * (i + 0.5), sh + 0.085, -D / 2 + 0.22 + (sd - 0.24) / 2, lighter(color, 0.08), 0.05);
+      soft(cw - 0.24, 0.17, D - sd - 0.01, W / 2 - 0.22 - (cw - 0.24) / 2, sh + 0.085, -D / 2 + sd + (D - sd) / 2, lighter(color, 0.08), 0.05);
+      soft(W, H - lh - sh, 0.22, 0, sh + (H - lh - sh) / 2, -D / 2 + 0.11, color, 0.05);
+      soft(0.22, H - lh - sh, D, W / 2 - 0.11, sh + (H - lh - sh) / 2, 0, color, 0.05);
+      soft(0.18, 0.5, sd, -W / 2 + 0.09, 0.25, -D / 2 + sd / 2, color, 0.06);
+      for (const [x, z, ry] of [[-W / 2 + 0.45, -D / 2 + 0.36, 0.2], [W / 2 - 0.4, -D / 2 + 0.36, -0.6]]) {
+        const pc = soft(0.42, 0.42, 0.12, x, sh + 0.4, z, lighter(color, 0.35), 0.06);
+        pc.rotation.set(-0.3, ry, 0);
+      }
       break;
     }
     case 'table':
@@ -716,8 +781,11 @@ function buildItem(it, g, loader) {
         b(W, 0.04, D, 0, H - 0.02, 0);
         b(Math.max(0.12, W * 0.18), H - 0.04, Math.max(0.12, D * 0.5), 0, (H - 0.04) / 2, 0, legColor === 0xc9a77c ? darker(color, 0.15) : legColor);
       } else {
-        b(W, 0.04, D, 0, H - 0.02, 0);
-        legs(W, D, H - 0.04, 0.06, 0.05);
+        soft(W, 0.04, D, 0, H - 0.02, 0, color, 0.012, { roughness: 0.55 });
+        // okvir ispod ploče (cargi)
+        for (const sz of [-1, 1]) b(W - 0.2, 0.08, 0.025, 0, H - 0.08, sz * (D / 2 - 0.08), darker(color, 0.08));
+        for (const sx of [-1, 1]) b(0.025, 0.08, D - 0.2, sx * (W / 2 - 0.08), H - 0.08, 0, darker(color, 0.08));
+        legs(W, D, H - 0.04, 0.07, 0.05);
       }
       break;
     }
@@ -729,10 +797,18 @@ function buildItem(it, g, loader) {
     }
     case 'chair': {
       const seat = Math.min(0.46, H * 0.5);
-      b(W, 0.05, D, 0, seat, 0);
+      soft(W, 0.05, D, 0, seat, 0, color, 0.015, { roughness: 0.7 });
+      soft(W - 0.05, 0.03, D - 0.06, 0, seat + 0.035, 0.01, lighter(color, 0.12), 0.012); // jastučić sjedala
       if (legType === 'plinth') b(0.05, seat - 0.025, 0.05, 0, (seat - 0.025) / 2, 0, 0x555555, metal);
       else legs(W, D, seat - 0.025, 0.03, 0.035);
-      b(W, H - seat, 0.04, 0, seat + (H - seat) / 2, -D / 2 + 0.02);
+      // naslon: dvije stražnje letve i zaobljena ploča, lagano nagnut
+      const bh = H - seat;
+      for (const sx of [-1, 1]) {
+        const st = b(0.03, bh, 0.03, sx * (W / 2 - 0.03), seat + bh / 2, -D / 2 + 0.03);
+        st.rotation.x = -0.08;
+      }
+      const bp = soft(W - 0.02, bh * 0.45, 0.03, 0, seat + bh * 0.72, -D / 2 + 0.01, color, 0.012, { roughness: 0.7 });
+      bp.rotation.x = -0.1;
       break;
     }
     case 'stool': {
@@ -1294,13 +1370,63 @@ function buildItem(it, g, loader) {
       break;
     }
     case 'fireplace': {
-      b(W, H, D, 0, H / 2, 0, color, { tex: 'stone' });
-      b(W * 0.55, H * 0.5, 0.05, 0, H * 0.3, D / 2 - 0.02, 0x141414);
-      const fire = b(W * 0.45, 0.12, 0.03, 0, H * 0.13, D / 2 - 0.01, 0xff8a3d, { emissive: 0xff6a1a, emissiveIntensity: 1.2 });
-      fire.material = fire.material.clone();
-      parts.push({ mat: fire.material, emi: 1.2 });
+      // klasični kamin: kameni okvir, ložište s drvima i vatrom, polica, ispust do stropa
+      const fw = W * 0.56, fh = Math.min(H * 0.62, 0.75), pw = (W - fw) / 2;
+      b(W + 0.3, 0.06, D + 0.3, 0, 0.03, 0.15, 0x9a958d, { tex: 'stone', roughness: 0.8 }); // podložna ploča
+      for (const sx of [-1, 1]) b(pw, H, D, sx * (W / 2 - pw / 2), 0.06 + H / 2 - 0.03, 0, color, { tex: 'stone' });
+      b(fw, H - fh - 0.06, D, 0, 0.06 + fh + (H - fh - 0.06) / 2, 0, color, { tex: 'stone' });
+      b(fw, fh, 0.04, 0, 0.06 + fh / 2, -D / 2 + 0.1, 0x161412); // stražnja stijena ložišta
+      for (const sx of [-1, 1]) b(0.03, fh, D - 0.12, sx * (fw / 2 - 0.015), 0.06 + fh / 2, 0.04, 0x262220);
+      b(fw, 0.03, D - 0.12, 0, 0.06 + fh - 0.015, 0.04, 0x262220);
+      // drva
+      for (const [x, y, rz] of [[-0.08, 0.12, 0.1], [0.08, 0.12, -0.1], [0, 0.18, 0]]) {
+        const log = cyl(0.045, 0.05, fw * 0.6, x, y, -0.02, 0x5a3b22, 10, { roughness: 1 });
+        log.rotation.z = Math.PI / 2 + rz;
+      }
+      const flame = mat(0xff8a3d, { emissive: 0xff6a1a, emissiveIntensity: 1.4 });
+      const fl = flame.clone();
+      for (const [x, h] of [[-0.1, 0.22], [0.04, 0.3], [0.13, 0.2]]) {
+        const c = new THREE.Mesh(new THREE.ConeGeometry(0.06, h, 8), fl);
+        c.position.set(x, 0.2 + h / 2, 0);
+        tgt.add(c);
+      }
+      parts.push({ mat: fl, emi: 1.4 });
       interactive('vatru', 1, true);
-      b(W + 0.1, 0.06, D + 0.06, 0, H + 0.03, 0, 0xd8d2c8);
+      soft(W + 0.2, 0.07, D + 0.08, 0, 0.06 + H + 0.035, 0.02, 0xd8d2c8, 0.015, { roughness: 0.6 }); // polica
+      // ispust (dimnjak) do stropa
+      const C = it.ceil ?? 2.57;
+      if (C > H + 0.2) b(W * 0.7, C - H - 0.13, D * 0.85, 0, 0.06 + H + 0.07 + (C - H - 0.13) / 2, -D * 0.075, 0xeeebe5, { roughness: 0.95 });
+      break;
+    }
+    case 'fireplace_modern': {
+      // ugradbeni kamin: žbukani blok do stropa, široko vodoravno ložište sa staklom
+      const C = it.ceil ?? 2.57;
+      const fy = 0.45, fh = Math.min(0.5, H * 0.35), fw = W * 0.8;
+      b(W, fy, D, 0, fy / 2, 0, color, { roughness: 0.9 });
+      b(W, C - fy - fh, D, 0, fy + fh + (C - fy - fh) / 2, 0, color, { roughness: 0.9 });
+      for (const sx of [-1, 1]) b((W - fw) / 2, fh, D, sx * (W / 2 - (W - fw) / 4), fy + fh / 2, 0, color, { roughness: 0.9 });
+      b(fw, fh, 0.03, 0, fy + fh / 2, -D / 2 + 0.08, 0x121110);
+      b(fw, 0.02, D - 0.1, 0, fy + 0.01, 0.02, 0x2a2725);
+      const fl = mat(0xff9a4d, { emissive: 0xff6a1a, emissiveIntensity: 1.3 }).clone();
+      for (let i = 0; i < 7; i++) {
+        const h = 0.12 + ((i * 37) % 10) / 60;
+        const c = new THREE.Mesh(new THREE.ConeGeometry(0.05, h, 6), fl);
+        c.position.set(-fw / 2 + 0.1 + (i * (fw - 0.2)) / 6, fy + 0.03 + h / 2, -0.02);
+        tgt.add(c);
+      }
+      parts.push({ mat: fl, emi: 1.3 });
+      interactive('vatru', 1, true);
+      const fg = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, 0.008), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, roughness: 0.05 }));
+      fg.position.set(0, fy + fh / 2, D / 2 - 0.004);
+      tgt.add(fg);
+      b(W + 0.04, 0.04, D + 0.04, 0, fy - 0.02, 0, darker(color, 0.4), { roughness: 0.5 });
+      break;
+    }
+    case 'chimney': {
+      // zidani dimnjak u prostoriji (od poda do stropa); kroz katove i krov ide sam
+      const C = it.ceil ?? 2.57;
+      b(W, C, D, 0, C / 2, 0, color, { roughness: 0.95 });
+      b(0.14, 0.14, 0.01, 0, 0.45, D / 2 + 0.005, 0x9a9a9a, metal); // vratašca za čišćenje
       break;
     }
     case 'stairs_l': {
@@ -1325,11 +1451,12 @@ function buildItem(it, g, loader) {
         b(run2 + 0.02, 0.04, g.fw, W / 2 - g.fw - run2 * (j - 0.5), y - 0.02, zs, color);
         b(0.02, rise - 0.04, g.fw, W / 2 - g.fw - run2 * (j - 1), y - rise / 2 - 0.02, zs, 0xf2f0ec);
       }
-      // rukohvati na unutarnjoj strani krakova
-      const r1 = b(0.04, 0.04, Math.hypot(g.L1, n1 * rise), W / 2 - g.fw + 0.03, (n1 * rise) / 2 + 0.9, D / 2 - g.L1 / 2, 0x333333);
-      r1.rotation.x = Math.atan2(n1 * rise, g.L1);
-      const r2 = b(Math.hypot(g.L2, (n - n1) * rise), 0.04, 0.04, W / 2 - g.fw - g.L2 / 2, n1 * rise + ((n - n1) * rise) / 2 + 0.9, -D / 2 + g.fw - 0.03, 0x333333);
-      r2.rotation.z = -Math.atan2((n - n1) * rise, g.L2);
+      // ograda na unutarnjoj strani krakova (stupići na svakom gazištu i rukohvat)
+      const p1 = [], p2 = [];
+      for (let j = 1; j <= n1; j++) p1.push({ x: W / 2 - g.fw + 0.04, y: j * rise, z: D / 2 - run1 * (j - 0.5) });
+      p1.push({ x: W / 2 - g.fw + 0.04, y: n1 * rise, z: -D / 2 + g.fw - 0.04 });
+      for (let j = 1; j <= n - n1; j++) p2.push({ x: W / 2 - g.fw - run2 * (j - 0.5), y: (n1 + j) * rise, z: -D / 2 + g.fw - 0.04 });
+      railing([...p1, ...p2], 0x3a3a3a, 1);
       break;
     }
     case 'stairs_spiral': {
@@ -1363,13 +1490,21 @@ function buildItem(it, g, loader) {
     case 'stairs': {
       const steps = Math.max(3, Math.round(H / 0.175));
       const run = D / steps;
+      const pts = [];
       for (let i = 0; i < steps; i++) {
         const y = ((i + 1) * H) / steps;
-        b(W, 0.04, run + 0.02, 0, y - 0.02, D / 2 - run * (i + 0.5), color);
-        b(W, H / steps - 0.04, 0.02, 0, y - H / steps / 2 - 0.02, D / 2 - run * i, 0xf2f0ec);
+        const zc = D / 2 - run * (i + 0.5);
+        b(W - 0.08, 0.045, run + 0.03, 0, y - 0.0225, zc + 0.015, color, { roughness: 0.6 }); // gazište s prepustom
+        b(W - 0.08, H / steps - 0.045, 0.02, 0, y - H / steps / 2 - 0.0225, D / 2 - run * i, 0xf2f0ec);
+        pts.push({ x: W / 2 - 0.08, y, z: zc });
       }
-      const rail = b(0.04, 0.04, Math.hypot(D, H), W / 2 - 0.03, H / 2 + 0.9, 0, 0x333333);
-      rail.rotation.x = Math.atan2(H, D);
+      // obrazi (nosači) s obje strane
+      const ang = Math.atan2(H, D), sl = Math.hypot(D, H);
+      for (const sx of [-1, 1]) {
+        const st = b(0.04, 0.26, sl, sx * (W / 2 - 0.02), H / 2 + 0.02, 0, darker(color, 0.15), { roughness: 0.6 });
+        st.rotation.x = ang;
+      }
+      railing(pts, 0x3a3a3a, 1);
       break;
     }
     case 'bath': {
@@ -1452,6 +1587,73 @@ function buildItem(it, g, loader) {
       b(W + 0.6, 0.06, 0.3, 0, 0.03, D / 2 + 0.15, rim, { tex: 'stone' });
       b(0.3, 0.06, D, -W / 2 - 0.15, 0.03, 0, rim, { tex: 'stone' });
       b(0.3, 0.06, D, W / 2 + 0.15, 0.03, 0, rim, { tex: 'stone' });
+      break;
+    }
+    case 'terrace':
+    case 'terrace_wood':
+    case 'terrace_tile': {
+      // terasa uz kuću: ploča u razini poda, stražnja strana (-z) uz zid, rubnjak sprijeda i sa strana
+      const T = Math.max(0.03, H);
+      const tex = it.shape === 'terrace_wood' ? null : it.shape === 'terrace_tile' ? 'stone' : 'paving';
+      b(W, T - 0.012, D, 0, (T - 0.012) / 2 - 0.005, 0, 0x9c978e, { roughness: 1 });
+      if (tex) {
+        const top = b(W, 0.012, D, 0, T - 0.006, 0, color, { tex, roughness: 0.9 });
+        scaleBoxUV(top.geometry, W, 0.012, D);
+      } else {
+        const n = Math.max(2, Math.round(W / 0.145));
+        for (let i = 0; i < n; i++) b(W / n - 0.006, 0.025, D - 0.02, -W / 2 + (i + 0.5) * (W / n), T - 0.0125, 0, i % 3 ? color : lighter(color, 0.07), { roughness: 0.75 });
+      }
+      // rubnjak
+      const curb = 0xb7b2a8;
+      b(W + 0.1, T + 0.02, 0.08, 0, (T + 0.02) / 2 - 0.02, D / 2 + 0.04, curb, { roughness: 0.95 });
+      for (const sx of [-1, 1]) b(0.08, T + 0.02, D, sx * (W / 2 + 0.04), (T + 0.02) / 2 - 0.02, 0, curb, { roughness: 0.95 });
+      break;
+    }
+    case 'terrace_roof':
+    case 'terrace_glass':
+    case 'pergola': {
+      // nadstrešnica terase: stupovi sprijeda, greda uz zid i sprijeda, rogovi s blagim padom prema van
+      const wood = it.shape === 'terrace_glass' ? darker(color, 0) : color;
+      const Hb = H, Hf = H - D * 0.1; // visina uz zid i sprijeda
+      const nPosts = Math.max(2, Math.ceil(W / 3.5) + 1);
+      for (let i = 0; i < nPosts; i++) {
+        const x = -W / 2 + 0.07 + (i * (W - 0.14)) / (nPosts - 1);
+        b(0.12, Hf, 0.12, x, Hf / 2, D / 2 - 0.08, wood, { roughness: 0.7 });
+        b(0.2, 0.04, 0.2, x, 0.02, D / 2 - 0.08, 0x8a8a86, { roughness: 0.6, metalness: 0.4 });
+      }
+      b(W + 0.1, 0.18, 0.1, 0, Hf + 0.09, D / 2 - 0.08, wood, { roughness: 0.7 });
+      b(W, 0.16, 0.08, 0, Hb + 0.08, -D / 2 + 0.04, wood, { roughness: 0.7 });
+      const ang = Math.atan2(Hb - Hf, D);
+      const L = Math.hypot(D + 0.25, Hb - Hf);
+      const nr = Math.max(2, Math.round(W / 0.65) + 1);
+      for (let i = 0; i < nr; i++) {
+        const x = -W / 2 + 0.04 + (i * (W - 0.08)) / (nr - 1);
+        const r = b(0.07, 0.14, L, x, (Hb + Hf) / 2 + 0.25, 0.12, wood, { roughness: 0.7 });
+        r.rotation.x = ang;
+      }
+      const yTop = (Hb + Hf) / 2 + 0.33;
+      if (it.shape === 'terrace_roof') {
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(W + 0.3, 0.05, L + 0.1), mat(it.roofColor ?? 0xa5533a, { tex: 'roof', roughness: 0.85 }));
+        scaleBoxUV(roof.geometry, W + 0.3, 0.05, L + 0.1);
+        roof.position.set(0, yTop, 0.12);
+        roof.rotation.x = ang;
+        roof.castShadow = true;
+        roof.receiveShadow = true;
+        tgt.add(roof);
+      } else if (it.shape === 'terrace_glass') {
+        const gl = new THREE.Mesh(new THREE.BoxGeometry(W + 0.2, 0.012, L), new THREE.MeshPhysicalMaterial({ color: 0xdfeaf0, roughness: 0.05, transparent: true, opacity: 0.35, metalness: 0 }));
+        gl.position.set(0, yTop - 0.02, 0.12);
+        gl.rotation.x = ang;
+        tgt.add(gl);
+      } else {
+        // pergola: letvice poprijeko
+        const nl = Math.max(3, Math.round(L / 0.25));
+        for (let i = 0; i < nl; i++) {
+          const zz = -D / 2 + 0.1 + (i * (D + 0.1)) / (nl - 1);
+          const yy = Hb - (zz + D / 2) * Math.tan(ang) + 0.36;
+          b(W + 0.2, 0.05, 0.04, 0, yy, zz, wood, { roughness: 0.7 });
+        }
+      }
       break;
     }
     case 'deck': {
@@ -2213,6 +2415,7 @@ class Engine {
     this._roofUniforms();
     this._dormerUniforms([p, ...(p.others || [])]);
     // ostale etaže (samo za prikaz, bez odabira i sudara)
+    const built = [];
     for (const L of p.others || []) {
       const g = new THREE.Group();
       g.position.y = L.elevation || 0;
@@ -2221,6 +2424,7 @@ class Engine {
       this._passive = true;
       this._buildLevel(L);
       this.levelGroups.push({ g, above: (L.elevation || 0) > this.fy + 0.01 });
+      built.push({ L, g });
     }
     // aktivna etaža
     const lv = new THREE.Group();
@@ -2229,11 +2433,81 @@ class Engine {
     this._tgt = lv;
     this._passive = false;
     this._buildLevel(p);
+    built.push({ L: p, g: lv });
+    this._chimneys(built, p);
     this._tgt = this.world;
     this._passive = false;
     this._buildSite(p.site, p.projectId);
     this._applyVisibility();
     this._updateSelectionHelper();
+  }
+
+  // dimnjaci: od kamina, peći ili zidanog dimnjaka kroz sve etaže iznad i kroz krov
+  _chimneys(built, p) {
+    const SRC = new Set(['fireplace', 'fireplace_modern', 'wood_stove', 'chimney']);
+    // dio iznad krova je u svjetskim koordinatama i skriva se zajedno s krovom
+    let roofG = null;
+    if (this.roofs && this.roofs.length) {
+      roofG = new THREE.Group();
+      this.world.add(roofG);
+      this.roofs.push(roofG);
+    }
+    const top = built.reduce((a, b) => ((b.L.elevation || 0) > (a.L.elevation || 0) ? b : a), built[0]);
+    const brick = mat(0xffffffff, { tex: 'brick', roughness: 0.9 });
+    const plaster = this._facade ? facadeMat(this._facade.hi, this._facade.hiColor) : mat(0xece7df, { tex: 'plaster', roughness: 0.95 });
+    const inner = mat(0xf2efe9, { roughness: 0.95 });
+    for (const { L } of built) {
+      for (const it of L.items || []) {
+        if (!SRC.has(it.shape)) continue;
+        // položaj dimovodne cijevi
+        const r = it.rotation || 0;
+        const back = it.shape === 'fireplace' || it.shape === 'fireplace_modern' ? -(it.d || 0.5) / 2 + 0.25 : 0;
+        const x = it.x - Math.sin(r) * back, z = it.y + Math.cos(r) * back;
+        const w = it.shape === 'chimney' ? it.w : 0.5, d = it.shape === 'chimney' ? it.d : 0.5;
+        const e0 = L.elevation || 0;
+        const col = (g, y0, y1, m) => {
+          if (y1 - y0 < 0.02) return;
+          const box = new THREE.Mesh(new THREE.BoxGeometry(w, y1 - y0, d), m);
+          box.position.set(x, (y0 + y1) / 2, z);
+          box.rotation.y = -r;
+          box.castShadow = true;
+          box.receiveShadow = true;
+          g.add(box);
+          return box;
+        };
+        // etaže iznad: stup dimnjaka kroz ploču do stropa
+        for (const { L: K, g } of built) {
+          const ek = K.elevation || 0;
+          if (ek <= e0 + 0.5 || K.attic) continue;
+          col(g, -0.25, (K.wallHeight || 2.6) + (K.slabAbove ? 0.25 : 0), inner);
+        }
+        // iznad krova (ili iznad ravnog krova najviše etaže)
+        const tl = top.L;
+        const base = p.roofLevel ? p.roofLevel.y : (tl.elevation || 0) + (tl.wallHeight || 2.6);
+        let roofY = this._roofTop(x, z);
+        if (!Number.isFinite(roofY) || roofY < base) roofY = base + 0.3;
+        const yTop = roofY + 0.9;
+        const g = roofG || this.world;
+        const startY = tl.attic ? (tl.elevation || 0) : base - 0.3;
+        const stack = col(g, startY, yTop, tl.attic ? plaster : brick);
+        if (stack && tl.attic) {
+          // u potkrovlju ožbukan, iznad krova opeka
+          col(g, roofY - 0.05, yTop, brick);
+        }
+        // kapa i dvije dimovodne kape
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, 0.07, d + 0.12), mat(0x8f8b84, { roughness: 0.9 }));
+        cap.position.set(x, yTop + 0.035, z);
+        cap.rotation.y = -r;
+        cap.castShadow = true;
+        g.add(cap);
+        for (const k of [-1, 1]) {
+          const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.25, 12), mat(0xa0522d, { roughness: 0.8 }));
+          pot.position.set(x + Math.cos(r) * k * w * 0.22, yTop + 0.19, z + Math.sin(r) * k * w * 0.22);
+          pot.castShadow = true;
+          g.add(pot);
+        }
+      }
+    }
   }
 
   _buildLevel(p) {
@@ -2242,6 +2516,7 @@ class Engine {
     this._facade = p.facade || null;
     this._slabAbove = p.slabAbove ? 0.25 : 0;
     this._joinery = p.joinery ?? null;
+    this._elev = p.elevation || 0;
     // smjerovi zidova iz svakog čvora
     const dirs = {};
     for (const w of p.walls || []) {
@@ -2285,7 +2560,7 @@ class Engine {
     for (let it of p.items || []) {
       if (it.shape === 'roof_window') { this._roofWindow(it, p); continue; }
       if (it.shape === 'dormer') { this._dormer(it, p); continue; }
-      if (CEILING.has(it.shape) || it.shape === 'ac_indoor' || it.shape === 'wood_stove' || it.shape === 'drain_stack') it = { ...it, ceil: maxH - FLOOR };
+      if (CEILING.has(it.shape) || ['ac_indoor', 'wood_stove', 'drain_stack', 'fireplace', 'fireplace_modern', 'chimney'].includes(it.shape)) it = { ...it, ceil: maxH - FLOOR };
       if (it.shape === 'table_lamp') {
         // stolna lampa stoji na stolu/komodi ispod sebe
         let elev = 0;
@@ -2547,8 +2822,16 @@ class Engine {
     }
     for (const c of this.ceilings) c.visible = this.mode === 'walk' && !hiddenAbove ? true : this.mode === 'walk';
     for (const r of this.roofs) r.visible = this.mode !== 'third' && !hiddenAbove;
-    // podrum se izvana ne vidi ispod trave
+    // podrum se izvana ne vidi ispod trave: tlo se tada sakrije, a razina terena ostane kao prozirna ploha
     if (this.ground) this.ground.visible = !(this.mode === 'orbit' && this.fy < -0.1);
+    if (!this.groundGhost && this.ground) {
+      const gg = new THREE.Mesh(new THREE.CircleGeometry(60, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7d9a5a, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }));
+      gg.position.y = 0.001;
+      gg.renderOrder = 5;
+      this.scene.add(gg);
+      this.groundGhost = gg;
+    }
+    if (this.groundGhost) this.groundGhost.visible = !!this.ground && !this.ground.visible;
     if (this.siteGroup) this.siteGroup.visible = this.ground.visible;
     if (this.padGroup) this.padGroup.visible = this.ground.visible;
   }
@@ -2725,6 +3008,29 @@ class Engine {
           I = this._register(o.id, sashes, { noun, def: 0 }, partsW);
         }
         if (side !== 0 && o.shade) this._shade(o, g, s, e, o.sill, topY, T, sideN0);
+        // podrum: prozor ispod razine terena dobije svjetlarnik (betonsko okno s rešetkom)
+        if (side !== 0 && this._elev < -0.5 && o.sill + o.height > -this._elev - 1.2) {
+          const ground = -this._elev; // razina terena u koordinatama etaže
+          const y0 = Math.max(0, o.sill - 0.15);
+          if (ground > y0 + 0.1) {
+            const ext = -sideN0, dep = 0.65, wellW = e - s + 0.3, t = 0.12;
+            const conc = mat(0xb9b4aa, { tex: 'concrete', roughness: 0.95 });
+            const add = (w2, h2, d2, x, y, z, m) => {
+              const mm = new THREE.Mesh(new THREE.BoxGeometry(w2, h2, d2), m);
+              mm.position.set(x, y, z);
+              mm.castShadow = true;
+              mm.receiveShadow = true;
+              g.add(mm);
+            };
+            const zf = ext * (T / 2 + dep), cx = (s + e) / 2, hh = ground - y0 + 0.05;
+            add(wellW + 2 * t, hh, t, cx, y0 + hh / 2, zf + ext * t / 2, conc);
+            for (const sx of [-1, 1]) add(t, hh, dep, cx + sx * (wellW / 2 + t / 2), y0 + hh / 2, ext * (T / 2 + dep / 2), conc);
+            add(wellW, 0.06, dep, cx, y0, ext * (T / 2 + dep / 2), conc);
+            // rešetka na razini terena
+            const grate = mat(0x4a4d50, { roughness: 0.4, metalness: 0.6 });
+            for (let k = 0; k <= Math.round(wellW / 0.06); k++) add(0.012, 0.03, dep, s - 0.15 + k * 0.06, ground + 0.03, ext * (T / 2 + dep / 2), grate);
+          }
+        }
       } else {
         box(s, s + 0.04, 0, topY, frameMat, T + 0.02);
         box(e - 0.04, e, 0, topY, frameMat, T + 0.02);

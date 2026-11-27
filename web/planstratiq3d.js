@@ -2198,6 +2198,14 @@ class Engine {
     if (!p) return;
     this.roofClip = [];
     this._tgt = this.world;
+    // visina terena (nagib) za objekte u dvorištu izvan zaravni oko kuće
+    const st = p.site;
+    this._terrainAt = null;
+    if (st && st.slope && st.pad) {
+      const [px0, pz0, px1, pz1] = st.pad, [dx, dz] = st.down || [0, 1];
+      const cx = (px0 + px1) / 2, cz = (pz0 + pz1) / 2;
+      this._terrainAt = (x, z) => (x > px0 && x < px1 && z > pz0 && z < pz1 ? 0 : -st.slope * (dx * (x - cx) + dz * (z - cz)));
+    }
     if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, { ...(p.roofStyle || {}), attic: p.roofLevel.attic });
     this._roofUniforms();
     this._dormerUniforms([p, ...(p.others || [])]);
@@ -2284,6 +2292,7 @@ class Engine {
       }
       const g = new THREE.Group();
       g.position.set(it.x, onFloor(it) ? FLOOR : 0, it.y);
+      if (this._terrainAt && Math.abs(p.elevation || 0) < 0.05) g.position.y += this._terrainAt(it.x, it.y);
       g.rotation.y = -(it.rotation || 0);
       if (!this._passive) {
         g.userData = { kind: 'item', id: it.id, data: it };

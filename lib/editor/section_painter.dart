@@ -200,6 +200,8 @@ SectionGeometry buildSection(Plan plan, SectionLine sec, RoofShape? roof, {doubl
         continue;
       }
       if (isFloorLike(it.shape) && !balconyShapes.contains(it.shape)) continue;
+      // objekti u dvorištu stoje na terenu (nagib izvan zaravni)
+      if (lvl.elevation.abs() < 0.05 && terrainAt != null) base += terrainAt(it.pos);
       g.items.add((_Cut(s0, s1, z0 + base, z0 + base + math.min(h, lvl.height)), it.color));
     }
     if (any) g.levels.add((z0, lvl.attic ? lvl.kneeWall : lvl.height, lvl.name));

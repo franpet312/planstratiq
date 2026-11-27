@@ -101,6 +101,7 @@ kroz svoj budući dom u 3D-u. Radi u pregledniku, bez instalacije.
 |---|---|
 | V / W / R | Odabir / zidovi / prostorija |
 | D / P / M | Vrata / prozor / mjerenje |
+| N / S | Bilješka / presjek kuće |
 | brojke + Enter | Točna duljina zida dok crtaš |
 | Ctrl+Z / Ctrl+Y | Poništi / ponovi |
 | Ctrl+P | Izvoz u PDF |
@@ -124,7 +125,7 @@ flutter pub get
 flutter run -d chrome
 ```
 
-Svaki push na `main` automatski se gradi i objavljuje na GitHub Pages (`.github/workflows/deploy.yml`).
+Svaki push na `main` automatski se gradi i objavljuje na GitHub Pages (`.github/workflows/deploy.yml`). Gotova aplikacija sprema se i na granu `web-build` (za automatske provjere u pregledniku).
 
 ## Arhitektura
 
@@ -164,5 +165,5 @@ web/
 1. **Bolje prepoznavanje nacrta**: kosi zidovi, ispravljanje perspektive fotografija, izbor stranice PDF-a, prepoznavanje naziva prostorija (OCR).
 2. **Veći katalog trgovaca**: puni asortiman i 3D modeli traže partnerski/affiliate feed (naziv, šifra, mjere, cijena, link, GLB model); aplikacija je spremna (`retailer`, `productUrl`, `price`, `modelUrl`).
 3. **Korisnički računi** i projekti u oblaku (npr. Supabase/Firebase).
-4. Složeniji krovovi, teren i nagib parcele, ograda po rubu parcele.
-5. PDF izvoz s presjecima i specifikacijom; WebXR za VR šetnju.
+4. Složeniji krovovi (mansardni, krovne kućice s ravnim krovom), teren s više nagiba.
+5. Specifikacija stolarije i instalacija u PDF-u; WebXR za VR šetnju.

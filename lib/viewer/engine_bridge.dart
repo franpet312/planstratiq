@@ -126,6 +126,8 @@ class Engine3D {
       'roofLevel': {
         'y': top.elevation + (top.attic ? top.kneeWall : top.height),
         'attic': top.attic,
+        // pola debljine najdebljeg vanjskog zida najviše etaže (lice zabata = lice zida)
+        'wt': top.walls.isEmpty ? 0.15 : top.walls.map((w) => w.thickness).reduce((a, b) => a > b ? a : b) / 2,
         'outlines': [
           for (final o in topOutlines) [for (final p in o) [p.dx, p.dy]]
         ],
@@ -156,6 +158,7 @@ class Engine3D {
       'fenceH': s.fenceHeight,
       'env': s.surroundings,
       'driveway': s.driveway,
+      'neighbors': s.neighbors,
       if (s.slope > 0) ...{
         'slope': s.slope / 100,
         'down': [c.slopeDown().dx, c.slopeDown().dy],
@@ -247,6 +250,8 @@ class Engine3D {
         'attic': plan.level.attic && li == plan.levels.length - 1 && plan.roof,
         'kneeWall': plan.level.kneeWall,
         'facade': _facadeJson(plan, li),
+        'joinery': plan.joineryColor,
+        'slabAbove': plan.levels.any((o) => o.elevation > plan.levels[li].elevation + 0.5),
         'nodes': {for (final n in plan.nodes.values) n.id: {'x': n.pos.dx, 'y': n.pos.dy}},
         'walls': [
           for (final w in plan.walls) {...w.toJson(), 'inside': inside[w.id] ?? 0, 'sides': _wallSides(c, w)}

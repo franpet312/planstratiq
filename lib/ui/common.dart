@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -237,4 +238,53 @@ class StatRow extends StatelessWidget {
               style: AppText.narrow(size: strong ? 15 : 13.5, weight: strong ? FontWeight.w700 : FontWeight.w500, color: muted ? Pal.muted : Pal.ink)),
         ]),
       );
+}
+
+/// Vodoravna traka koja se može listati kotačićem miša (i povlačenjem mišem ako je [drag]).
+/// Flutter na webu inače vodoravne liste ne lista kotačićem ni mišem.
+class HStrip extends StatefulWidget {
+  const HStrip({super.key, required this.builder, this.drag = true});
+  final Widget Function(ScrollController controller) builder;
+  final bool drag;
+
+  @override
+  State<HStrip> createState() => _HStripState();
+}
+
+class _HStripState extends State<HStrip> {
+  final _ctl = ScrollController();
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child = widget.builder(_ctl);
+    if (widget.drag) {
+      child = ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(dragDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+          PointerDeviceKind.stylus,
+        }),
+        child: child,
+      );
+    }
+    return Listener(
+      onPointerSignal: (e) {
+        if (e is! PointerScrollEvent || !_ctl.hasClients) return;
+        final pos = _ctl.position;
+        if (pos.maxScrollExtent <= 0) return;
+        final d = e.scrollDelta.dy.abs() > e.scrollDelta.dx.abs() ? e.scrollDelta.dy : e.scrollDelta.dx;
+        GestureBinding.instance.pointerSignalResolver.register(e, (_) {
+          _ctl.jumpTo((_ctl.offset + d).clamp(0.0, pos.maxScrollExtent));
+        });
+      },
+      child: Scrollbar(controller: _ctl, thumbVisibility: false, child: child),
+    );
+  }
 }

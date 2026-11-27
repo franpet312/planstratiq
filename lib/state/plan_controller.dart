@@ -1989,6 +1989,8 @@ class PlanController extends ChangeNotifier {
         }
         plan.active = prev;
       }
+      // nova etaža odmah dobije svoju kotu (podrum ispod, kat iznad) – prizemlje ostaje na ±0
+      lvl.elevation = above ? ref.elevation + ref.height + slabThickness : ref.elevation - lvl.height - slabThickness;
       if (above) {
         plan.levels.add(lvl);
       } else {
@@ -2005,9 +2007,28 @@ class PlanController extends ChangeNotifier {
     if (plan.levels.length <= 1) return;
     mutate(() {
       final a = plan.active;
+      final wasGround = i == plan.groundIndex;
+      final g0 = plan.levels[plan.groundIndex];
       plan.levels.removeAt(i);
       plan.active = (a > i ? a - 1 : (a == i ? i - 1 : a)).clamp(0, plan.levels.length - 1);
-      plan.restackLevels();
+      if (wasGround) {
+        // obrisano prizemlje: etaža iznad (ili prva preostala) postaje prizemlje na ±0
+        final ng = plan.levels.indexWhere((l) => l.elevation > 0);
+        final k = ng >= 0 ? ng : plan.levels.length - 1;
+        final dz = plan.levels[k].elevation;
+        for (final l in plan.levels) {
+          l.elevation -= dz;
+        }
+      } else {
+        // prizemlje ostaje gdje je bilo
+        final dz = g0.elevation;
+        if (dz.abs() > 0.05) {
+          for (final l in plan.levels) {
+            l.elevation -= dz;
+          }
+        }
+      }
+      plan.normalizeGround();
       selection = Selection.none;
     });
     bgImage = null;

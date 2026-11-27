@@ -591,7 +591,7 @@ class _EditorPageState extends State<EditorPage> {
 
   Widget _editorArea() => Stack(children: [
         Positioned.fill(child: PlanEditor(key: editorKey, c: c, onEmptyAction: _emptyAction, zoom: zoom)),
-        Positioned(left: 12, top: 12, child: _ToolDock(c: c, onCancel: () => editorKey.currentState?.cancelTool())),
+        Positioned(left: 12, top: 12, bottom: 64, child: Align(alignment: Alignment.topLeft, child: _ToolDock(c: c, onCancel: () => editorKey.currentState?.cancelTool()))),
         Positioned(left: 12, bottom: 12, child: _ZoomControls(editorKey: editorKey, zoom: zoom, c: c)),
         Positioned(bottom: 64, left: 72, right: 12, child: Center(child: _ToolHint(c: c))),
         if (c.plan.isEmpty && c.plan.image == null && c.tool == Tool.select)
@@ -712,8 +712,9 @@ class _ToolDock extends StatelessWidget {
             },
           ),
         );
+    // na niskom prozoru se traka alata lista (kotačić ili povlačenje)
     return FloatPanel(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         t(Tool.select, Icons.near_me_outlined, 'Odabir i pomicanje  V'),
         const Padding(padding: EdgeInsets.symmetric(vertical: 3), child: SizedBox(width: 24, child: Divider())),
         t(Tool.room, Icons.crop_square, 'Prostorija: povuci pravokutnik  R'),
@@ -727,7 +728,7 @@ class _ToolDock extends StatelessWidget {
         t(Tool.note, Icons.sticky_note_2_outlined, 'Bilješka na tlocrtu  N'),
         t(Tool.section, Icons.vertical_split_outlined, 'Presjek kuće: dvije točke  S'),
         if (c.plan.image != null) t(Tool.calibrate, Icons.photo_size_select_small, 'Mjerilo nacrta'),
-      ]),
+      ])),
     );
   }
 }

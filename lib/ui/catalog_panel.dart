@@ -395,7 +395,8 @@ class _CatalogPanelState extends State<CatalogPanel> {
           height: 92,
           child: ListenableBuilder(
             listenable: Thumbnails.instance,
-            builder: (context, _) => ListView.separated(
+            builder: (context, _) => HStrip(drag: false, builder: (ctl) => ListView.separated(
+              controller: ctl,
               scrollDirection: Axis.horizontal,
               itemCount: recent.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
@@ -427,7 +428,7 @@ class _CatalogPanelState extends State<CatalogPanel> {
                   ),
                 );
               },
-            ),
+            )),
           ),
         ),
       ],
@@ -583,7 +584,8 @@ class _CatalogPanelState extends State<CatalogPanel> {
 
   Widget _chipRow(List<Widget> chips) => SizedBox(
         height: 40,
-        child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.fromLTRB(14, 6, 14, 2), children: chips),
+        child: HStrip(
+            builder: (ctl) => ListView(controller: ctl, scrollDirection: Axis.horizontal, padding: const EdgeInsets.fromLTRB(14, 6, 14, 2), children: chips)),
       );
 
   Widget _footer() {
@@ -784,7 +786,8 @@ class _CatalogPanelState extends State<CatalogPanel> {
         height: 168,
         child: ListenableBuilder(
           listenable: Thumbnails.instance,
-          builder: (context, _) => ListView.separated(
+          builder: (context, _) => HStrip(drag: false, builder: (ctl) => ListView.separated(
+            controller: ctl,
             scrollDirection: Axis.horizontal,
             itemCount: alts.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
@@ -792,7 +795,7 @@ class _CatalogPanelState extends State<CatalogPanel> {
               width: 118,
               child: _ModelCard(entry: alts[i], selected: false, onTap: () => _openEntry(alts[i])),
             ),
-          ),
+          )),
         ),
       ),
     ];

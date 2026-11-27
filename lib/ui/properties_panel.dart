@@ -207,6 +207,15 @@ class PropertiesPanel extends StatelessWidget {
             ChoiceChip(label: Text(label), selected: o.style == id, onSelected: (_) => c.updateOpening(o.id, style: id)),
         ]),
       ],
+      if (o.type != OpeningType.passage) ...[
+        const SectionTitle('Boja stolarije'),
+        Swatches(
+          colors: joineryColors,
+          names: joineryNames,
+          value: o.frameColor ?? c.plan.joineryColor,
+          onPick: (v) => c.mutate(() => o.frameColor = v == c.plan.joineryColor ? null : v),
+        ),
+      ],
       if (o.type == OpeningType.window || o.type == OpeningType.balcony) ...[
         const SectionTitle('Zaštita od sunca'),
         Wrap(spacing: 6, runSpacing: 6, children: [
@@ -584,6 +593,15 @@ class PropertiesPanel extends StatelessWidget {
       const SizedBox(height: 6),
       chips([('suburb', 'Susjedstvo'), ('countryside', 'Selo'), ('city', 'Grad'), ('none', 'Bez okoline')], st.surroundings,
           (v) => c.updateSite((s) => s.surroundings = v)),
+      if (st.surroundings != 'none')
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text('Susjedne kuće', style: AppText.ui(size: 13)),
+          subtitle: Text(st.neighbors ? 'Okolo su susjedi' : 'Samo tvoja kuća – polja, drveće i ulica ostaju', style: AppText.ui(size: 11.5, color: Pal.muted)),
+          value: st.neighbors,
+          onChanged: (v) => c.updateSite((s) => s.neighbors = v),
+        ),
       const SizedBox(height: 10),
       Text('Ulica je s ove strane parcele', style: AppText.ui(size: 12, color: Pal.muted)),
       const SizedBox(height: 6),
@@ -667,8 +685,17 @@ class PropertiesPanel extends StatelessWidget {
       const SizedBox(height: 4),
       kinds(p.gableKind, const {'same': 'Isto kao fasada', 'wood': 'Drvena obloga', 'stone': 'Kamen', 'brick': 'Opeka', 'plaster': 'Žbuka'},
           (v) => c.mutate(() => p.gableKind = v)),
+      const SizedBox(height: 10),
+      Text('Stolarija (okviri prozora i vrata)', style: AppText.ui(size: 12.5, weight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      Swatches(
+        colors: joineryColors,
+        names: joineryNames,
+        value: p.joineryColor,
+        onPick: (v) => c.mutate(() => p.joineryColor = v),
+      ),
       const SizedBox(height: 6),
-      Text('Škure i rolete biraju se na svakom prozoru (klikni prozor).', style: AppText.ui(size: 12, color: Pal.muted)),
+      Text('Škure, rolete i boja pojedinog prozora biraju se na prozoru (klikni prozor).', style: AppText.ui(size: 12, color: Pal.muted)),
     ];
   }
 

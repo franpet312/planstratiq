@@ -1672,7 +1672,7 @@ class Engine {
     const codeOf = (e) => e.code || keyCodes[e.key] || keyCodes[(e.key || '').toLowerCase()] || '';
     window.addEventListener('keydown', (e) => {
       const code = codeOf(e);
-      const fp = this.mode === 'walk' && this.fpv.isLocked;
+      const fp = this.mode === 'walk' && (this.fpv.isLocked || (this.kbd && moveKeys.has(code) && !e.ctrlKey && !e.metaKey));
       const tp = this.mode === 'third' && this.kbd && moveKeys.has(code) && !e.ctrlKey && !e.metaKey;
       if ((fp || (this.mode === 'third' && this.kbd)) && (code === 'KeyE' || e.key === 'e' || e.key === 'E') && !e.ctrlKey && !e.metaKey) {
         if (!e.repeat) this._interact();
@@ -1920,6 +1920,9 @@ class Engine {
 
   walkTo(x, y) {
     if (this.mode === 'orbit') this.setMode('walk');
+    // odmah se može hodati tipkama (bez dodatnog klika u prostoriju)
+    this.kbd = true;
+    this.keys.clear();
     if (this.mode === 'third') {
       const v = this._bestView(x, y);
       this._placeAvatar(v.x, v.z, Math.atan2(v.dx, v.dz));
@@ -2206,7 +2209,7 @@ class Engine {
       const cx = (px0 + px1) / 2, cz = (pz0 + pz1) / 2;
       this._terrainAt = (x, z) => (x > px0 && x < px1 && z > pz0 && z < pz1 ? 0 : -st.slope * (dx * (x - cx) + dz * (z - cz)));
     }
-    if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, { ...(p.roofStyle || {}), attic: p.roofLevel.attic });
+    if (p.roof && p.roofLevel) this._buildRoofs({ outlines: p.roofLevel.outlines }, p.roofLevel.y, { ...(p.roofStyle || {}), attic: p.roofLevel.attic, wt: p.roofLevel.wt });
     this._roofUniforms();
     this._dormerUniforms([p, ...(p.others || [])]);
     // ostale etaže (samo za prikaz, bez odabira i sudara)
@@ -2237,6 +2240,8 @@ class Engine {
     const nodes = p.nodes || {};
     this._attic = p.attic ? { knee: p.kneeWall || 1.2, y: p.elevation || 0 } : null;
     this._facade = p.facade || null;
+    this._slabAbove = p.slabAbove ? 0.25 : 0;
+    this._joinery = p.joinery ?? null;
     // smjerovi zidova iz svakog čvora
     const dirs = {};
     for (const w of p.walls || []) {
@@ -2564,6 +2569,8 @@ class Engine {
       roofOff = (w.inside || 0) !== 0 ? -0.01 : -0.2;
       H = Math.max(H, this._roofTopOver(A, B) - this._attic.y + 0.05);
     } else if (this._attic && (w.inside || 0) !== 0) H = this._attic.knee;
+    // vanjski zid ide kroz međukatnu ploču do poda etaže iznad – fasada bez trake između katova
+    if (!this._attic && (w.inside || 0) !== 0 && this._slabAbove) H += this._slabAbove;
     const clipCache = new Map();
     const cl = (m) => {
       if (roofOff == null || !m) return m;
@@ -2639,11 +2646,14 @@ class Engine {
     const gaps = [];
     let cur = -ea;
     let solidStart = -ea;
-    const frameMat = mat(0xf7f7f5, { roughness: 0.5 });
+    let frameMat = mat(0xf7f7f5, { roughness: 0.5 });
     const sillMat = mat(0xd9d4ca, { roughness: 0.6 });
+    const sillIn = mat(0xf4f2ee, { roughness: 0.5 });
     const glassMat = mat(0, { glass: true });
     const sideN0 = side === 0 ? 1 : side;
     for (const o of ops) {
+      // boja stolarije: po otvoru, inače zadana za kuću
+      frameMat = mat(o.frameColor ?? this._joinery ?? 0xf7f7f5, { roughness: 0.45 });
       const s = Math.max(o.s, cur), e = Math.min(o.e, L + eb);
       if (e <= s) continue;
       box(cur, s, 0, H);
@@ -2655,7 +2665,7 @@ class Engine {
       if (o.type === 'window' || o.type === 'balcony') {
         if (o.sill > 0) {
           box(s, e, 0, o.sill - 0.04);
-          box(s, e, o.sill - 0.04, o.sill, frameMat, T * 0.55, sideN0 * T * 0.225); // unutarnja klupčica
+          box(s, e, o.sill - 0.04, o.sill, sillIn, T * 0.55, sideN0 * T * 0.225); // unutarnja klupčica
           if (side !== 0) {
             // vanjska klupčica (kamen/lim) s prepustom i okapnicom
             box(s - 0.03, e + 0.03, o.sill - 0.05, o.sill - 0.01, sillMat, T * 0.5 + 0.05, -sideN0 * (T * 0.25 + 0.025));
@@ -2812,7 +2822,7 @@ class Engine {
     }
     box(cur, L + eb, 0, H);
     solids.push([solidStart, L + eb]);
-    if (roofOff != null) g.traverse((o) => { if (o.isMesh && o.material?.userData?.roofOff != null) o.customDepthMaterial = roofDepth(roofOff); });
+    if (roofOff != null) g.traverse((o) => { if (o.isMesh && o.material?.userData?.roofOff != null) o.customDepthMaterial = roofDepth(Math.min(roofOff, -0.3)); });
     this._tgt.add(g);
     if (this._passive) return;
     this.wallGroups.set(w.id, g);
@@ -2874,8 +2884,10 @@ class Engine {
       if (Math.abs(elev) <= 0.05) mk(pts, slabMat, 0.004, { holes: p.holes });
       else {
         // međukatna ploča (25 cm) – vidi se izvana između etaža; otvor za stubište
-        curPts = pts;
-        const geo = new THREE.ExtrudeGeometry(withHoles(this._shapeFrom(pts), p.holes), { depth: 0.25 - 0.006, bevelEnabled: false }).rotateX(-Math.PI / 2);
+        // ploča je malo uvučena: rub je skriven u vanjskim zidovima etaže ispod
+        const inset = this._offsetPoly(pts, -0.03);
+        curPts = inset;
+        const geo = new THREE.ExtrudeGeometry(withHoles(this._shapeFrom(inset), p.holes), { depth: 0.25 - 0.006, bevelEnabled: false }).rotateX(-Math.PI / 2);
         const m = new THREE.Mesh(geo, mat(0xd8d2c8, { tex: 'plaster', roughness: 0.95 }));
         m.position.y = -0.25 + 0.004; // dno 4 mm iznad stropa etaže ispod, vrh 2 mm ispod poda
         m.castShadow = true;
@@ -3036,7 +3048,7 @@ class Engine {
           houses.push({ a0: a, a1: a + 24, o0: e + 30 + r() * 30, o1: e + 60 + r() * 20, front: e + 30, across: true, farm: true });
         }
       }
-      for (const h of houses) this._neighbor(G, h, toW, ang, r, env, trees, free);
+      if (site.neighbors !== false) for (const h of houses) this._neighbor(G, h, toW, ang, r, env, trees, free);
       if (env === 'countryside') {
         // polja
         const cols = [0xc9b66a, 0x9db86b, 0xb58e5a, 0x8fae5c];
@@ -3049,7 +3061,7 @@ class Engine {
         }
       }
     }
-    if (env === 'city') {
+    if (env === 'city' && site.neighbors !== false) {
       // stambene zgrade uokolo
       const facade = mat(0xe3ddd3, { tex: 'facadeWin', roughness: 0.9 });
       const blocks = [];
@@ -3352,7 +3364,7 @@ class Engine {
     const ov = clamp(style.overhang ?? 0.5, 0, 1.5);
     const color = style.color ? rgb(style.color) : 0xa5533a;
     this._roofColor = color;
-    const WT = 0.15; // pola debljine vanjskog zida (obris je po osi zida)
+    const WT = style.wt || 0.15; // pola debljine vanjskog zida (obris je po osi zida)
     const roofMat = roofCut(mat(color, { tex: 'roof', roughness: 0.85 }).clone(), 0, 1);
     const innerMat = roofCut(mat(0xf7f5f0, { roughness: 0.95, side: 'back' }).clone(), -0.2, 1);
     const fasciaMat = mat(darker(color, 0.35), { roughness: 0.8 });
@@ -4233,8 +4245,15 @@ class Engine {
     let f = 0, s = 0;
     if (k.has('KeyW') || k.has('ArrowUp')) f += 1;
     if (k.has('KeyS') || k.has('ArrowDown')) f -= 1;
-    if (k.has('KeyD') || k.has('ArrowRight')) s += 1;
-    if (k.has('KeyA') || k.has('ArrowLeft')) s -= 1;
+    const free = !this.fpv.isLocked; // miš slobodan: strelice lijevo/desno okreću pogled
+    if (k.has('KeyD') || (!free && k.has('ArrowRight'))) s += 1;
+    if (k.has('KeyA') || (!free && k.has('ArrowLeft'))) s -= 1;
+    if (free && (k.has('ArrowLeft') || k.has('ArrowRight'))) {
+      const turn = (k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0);
+      const e = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(this.camera.quaternion);
+      e.y += turn * dt * 1.8;
+      this.camera.quaternion.setFromEuler(e);
+    }
     f -= this.touch.vz;
     s += this.touch.vx;
     if (Math.abs(f) < 0.05 && Math.abs(s) < 0.05) return false;
@@ -4318,8 +4337,15 @@ class Engine {
     let f = 0, s = 0;
     if (k.has('KeyW') || k.has('ArrowUp')) f += 1;
     if (k.has('KeyS') || k.has('ArrowDown')) f -= 1;
-    if (k.has('KeyD') || k.has('ArrowRight')) s += 1;
-    if (k.has('KeyA') || k.has('ArrowLeft')) s -= 1;
+    const free = !this.fpv.isLocked; // miš slobodan: strelice lijevo/desno okreću pogled
+    if (k.has('KeyD') || (!free && k.has('ArrowRight'))) s += 1;
+    if (k.has('KeyA') || (!free && k.has('ArrowLeft'))) s -= 1;
+    if (free && (k.has('ArrowLeft') || k.has('ArrowRight'))) {
+      const turn = (k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0);
+      const e = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(this.camera.quaternion);
+      e.y += turn * dt * 1.8;
+      this.camera.quaternion.setFromEuler(e);
+    }
     f -= this.touch.vz;
     s += this.touch.vx;
     const fx = -Math.sin(tp.yaw), fz = -Math.cos(tp.yaw);
@@ -4395,8 +4421,9 @@ class Engine {
       this.indoor.intensity = 0;
       this.ambient.intensity = 0.25 * (1 - 0.7 * (this.night || 0));
     } else if (this.mode === 'walk') {
-      const active = this.fpv.isLocked || this.touch.move || this.touch.look;
-      if (this.fpv.isLocked || this.touch.move) this._walk(dt);
+      const kb = this.kbd && this.keys.size > 0; // hodanje tipkama i bez zaključanog miša (nakon „Idi u”)
+      const active = this.fpv.isLocked || this.touch.move || this.touch.look || kb;
+      if (this.fpv.isLocked || this.touch.move || kb) this._walk(dt);
       if (active) this._emitPose(false);
       const nn = this.night || 0;
       this.indoor.intensity = 2.2 * (1 - 0.75 * nn);
@@ -4420,7 +4447,7 @@ const engine = new Engine();
 const prev = window.Planstratiq3D || {};
 const api = {
   ready: true,
-  wantsKeys: () => !!(engine && ((engine.mode === 'third' && engine.kbd) || (engine.mode === 'walk' && engine.fpv && engine.fpv.isLocked))),
+  wantsKeys: () => !!(engine && ((engine.mode === 'third' && engine.kbd) || (engine.mode === 'walk' && engine.fpv && (engine.fpv.isLocked || engine.kbd)))),
   mount: (el) => engine.mount(el),
   setPlan: (json) => engine.setPlan(json),
   setMode: (mode) => engine.setMode(mode),

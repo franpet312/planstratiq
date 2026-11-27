@@ -96,6 +96,7 @@ class Opening {
     this.style = '',
     this.shade = '',
     this.shadeColor,
+    this.frameColor,
   });
 
   factory Opening.preset(String wallId, OpeningType type, double t) {
@@ -130,6 +131,9 @@ class Opening {
   String shade;
   int? shadeColor;
 
+  /// Boja stolarije ovog otvora (null = boja stolarije kuće).
+  int? frameColor;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'wallId': wallId,
@@ -143,6 +147,7 @@ class Opening {
         if (style.isNotEmpty) 'style': style,
         if (shade.isNotEmpty) 'shade': shade,
         if (shadeColor != null) 'shadeColor': shadeColor,
+        if (frameColor != null) 'frameColor': frameColor,
       };
 
   factory Opening.fromJson(Map<String, dynamic> j) => Opening(
@@ -158,6 +163,7 @@ class Opening {
         style: (j['style'] as String?) ?? '',
         shade: (j['shade'] as String?) ?? '',
         shadeColor: (j['shadeColor'] as num?)?.toInt(),
+        frameColor: (j['frameColor'] as num?)?.toInt(),
       );
 }
 
@@ -505,6 +511,9 @@ class Plan {
   double baseHeight = 0.5;
   String gableKind = 'same';
 
+  /// Boja stolarije (okviri prozora i vrata) za cijelu kuću.
+  int joineryColor = 0xFFF7F7F5;
+
   /// Klimatsko područje (za godišnju potrošnju): continental | coastal.
   String climate = 'continental';
 
@@ -521,6 +530,23 @@ class Plan {
       if (levels[i].elevation.abs() < levels[best].elevation.abs()) best = i;
     }
     return best;
+  }
+
+  /// Popravi prizemlje: prizemlje mora biti na ±0. Ako je podrum dobio kotu 0 (stari projekti)
+  /// ili nijedna etaža nije na ±0 (obrisano prizemlje/podrum), prizemlje je prva etaža koja nije podrum.
+  void normalizeGround() {
+    if (levels.isEmpty) return;
+    var g = groundIndex;
+    final isBasement = levels[g].name.toLowerCase().startsWith('podrum');
+    if (isBasement && g + 1 < levels.length) g = g + 1;
+    if (isBasement || levels[g].elevation.abs() > 0.05) {
+      final dz = levels[g].elevation;
+      for (final l in levels) {
+        l.elevation -= dz;
+      }
+      if (isBasement) levels[g].elevation = 0;
+    }
+    restackLevels();
   }
 
   /// Ponovno izračunaj visine etaža (prizemlje ostaje na svojoj visini).
@@ -583,7 +609,7 @@ class Plan {
         if (section != null) 'section': section!.toJson(),
         'insulation': insulation,
         'climate': climate,
-        'facade': {'kind': facadeKind, 'color': facadeColor, 'base': baseKind, 'baseH': baseHeight, 'gable': gableKind},
+        'facade': {'kind': facadeKind, 'color': facadeColor, 'base': baseKind, 'baseH': baseHeight, 'gable': gableKind, 'joinery': joineryColor},
         'heatSource': heatSource,
         'active': active,
         'levels': [for (final l in levels) l.toJson(includeImage: includeImage)],
@@ -621,10 +647,12 @@ class Plan {
       plan.baseKind = (f['base'] as String?) ?? 'none';
       plan.baseHeight = _d(f['baseH'], 0.5);
       plan.gableKind = (f['gable'] as String?) ?? 'same';
+      plan.joineryColor = (f['joinery'] as num?)?.toInt() ?? 0xFFF7F7F5;
     }
     if (j['heatSource'] is String) plan.heatSource = j['heatSource'] as String;
     if (j['site'] is Map) plan.site = Site.fromJson(Map<String, dynamic>.from(j['site'] as Map));
     if (j['section'] is Map) plan.section = SectionLine.fromJson(Map<String, dynamic>.from(j['section'] as Map));
+    plan.normalizeGround();
     return plan;
   }
 
@@ -646,6 +674,7 @@ class Site {
     this.driveway = true,
     this.slope = 0,
     this.slopeDir = 'street',
+    this.neighbors = true,
   });
 
   /// Širina (istok–zapad) i dubina (sjever–jug) parcele u m; 0 = automatski oko kuće.
@@ -671,6 +700,9 @@ class Site {
   double slope;
   String slopeDir;
 
+  /// Susjedne kuće/zgrade oko parcele (može se isključiti, okolina ostaje).
+  bool neighbors;
+
   Map<String, dynamic> toJson() => {
         'width': width,
         'depth': depth,
@@ -683,6 +715,7 @@ class Site {
         'driveway': driveway,
         if (slope > 0) 'slope': slope,
         if (slope > 0) 'slopeDir': slopeDir,
+        if (!neighbors) 'neighbors': false,
       };
 
   factory Site.fromJson(Map<String, dynamic> j) {
@@ -699,10 +732,15 @@ class Site {
       driveway: j['driveway'] != false,
       slope: d('slope', 0),
       slopeDir: (j['slopeDir'] as String?) ?? 'street',
+      neighbors: j['neighbors'] != false,
     );
   }
 }
 
+
+/// Boje stolarije (PVC/alu/drvo).
+const joineryColors = [0xFFF7F7F5, 0xFFE9E4D8, 0xFF8C8F8A, 0xFF3A3D40, 0xFF1F1F1F, 0xFF5C3B28, 0xFFB07A45, 0xFF2F4A3A];
+const joineryNames = ['Bijela', 'Krem', 'Siva', 'Antracit', 'Crna', 'Tamni orah', 'Zlatni hrast', 'Tamno zelena'];
 
 /// Vrste fasadne obloge.
 const facadeKinds = <String, String>{

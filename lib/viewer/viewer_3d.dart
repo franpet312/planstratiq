@@ -267,7 +267,8 @@ class _Viewer3DState extends State<Viewer3D> {
             child: Center(
               child: FloatPanel(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                child: SingleChildScrollView(
+                child: HStrip(builder: (ctl) => SingleChildScrollView(
+                  controller: ctl,
                   scrollDirection: Axis.horizontal,
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Padding(
@@ -286,7 +287,7 @@ class _Viewer3DState extends State<Viewer3D> {
                         ),
                       ),
                   ]),
-                ),
+                )),
               ),
             ),
           ),

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <base href="/planstratiq/">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Planstratiq – nacrtaj tlocrt, opremi ga namještajem i prošeći kroz svoj budući dom u 3D-u.">
+  <meta name="theme-color" content="#0e6b66">
+  <title>Planstratiq</title>
+
+  <!-- Three.js r170, lokalna kopija (web/vendor/three, MIT licenca) – aplikacija ne ovisi o vanjskom CDN-u -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.min.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+
+  <!-- Privremeni "stub": bilježi pozive dok se 3D modul ne učita -->
+  <script>
+    (function () {
+      const q = [];
+      const later = (name) => function () { q.push([name, Array.from(arguments)]); };
+      window.Planstratiq3D = {
+        _q: q, ready: false, onEvent: null,
+        mount: later('mount'), setPlan: later('setPlan'), setMode: later('setMode'),
+        setSelection: later('setSelection'), setOptions: later('setOptions'), frame: later('frame'), walkTo: later('walkTo'),
+        screenshot: () => null, thumbnail: () => null, groundPoint: () => null,
+      };
+    })();
+  </script>
+  <!-- Dijeljenje projekta poveznicom: JSON -> gzip -> base64url -->
+  <script>
+    window.psqShare = {
+      // podaci iz poveznice uhvaćeni prije pokretanja Fluttera (koji koristi # za navigaciju)
+      pending: (location.hash.indexOf('#p=') === 0) ? location.hash.substring(3) : null,
+      async pack(str) {
+        const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
+        const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      },
+      async unpack(b64) {
+        b64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+        return await new Response(stream).text();
+      },
+    };
+  </script>
+  <script type="module" src="planstratiq3d.js"></script>
+  <script src="psqdetect.js" defer></script>
+  <script src="psqpdf.js" defer></script>
+  <script src="psqstore.js"></script>
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #eff2f0; }
+  </style>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
